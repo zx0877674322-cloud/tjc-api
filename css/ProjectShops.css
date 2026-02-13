@@ -1,0 +1,451 @@
+/* --- Variables & Reset --- */
+:root {
+    --primary: #4f46e5;
+    --primary-dark: #4338ca;
+    --secondary: #64748b;
+    --bg-body: #f1f5f9;
+    --card-bg: #ffffff;
+    --accent: #06b6d4;
+    --success: #10b981;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --shadow-3d: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+body {
+    background-color: var(--bg-body);
+    font-family: 'Prompt', sans-serif;
+}
+
+/* --- Layout Containers --- */
+.main-content { padding: 20px; }
+.dashboard-container { max-width: 1600px; margin: 0 auto; }
+
+/* --- Header Section (ฉบับแก้ไขให้ยาวเต็มจอ) --- */
+.page-header-3d {
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    padding: 20px 25px;
+    border-radius: 20px;
+    box-shadow: var(--shadow-md);
+    border: 1px solid #e2e8f0;
+    margin-bottom: 25px;
+    
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    flex-wrap: wrap; /* ยยอมให้ปัดลงถ้าจอเล็กมาก */
+    gap: 20px;       /* ระยะห่าง */
+    
+    position: relative;
+    overflow: hidden;
+}
+
+.page-header-3d::before {
+    content: ''; position: absolute; top: 0; left: 0; 
+    width: 6px; height: 100%;
+    background: linear-gradient(to bottom, var(--primary), var(--accent));
+}
+
+/* ส่วนชื่อหัวข้อ (Fix ขนาดไว้พอประมาณ) */
+.header-title {
+    flex: 0 0 auto;
+    margin-right: 10px;
+}
+
+.header-title h2 {
+    margin: 0; font-size: 1.6rem; font-weight: 700;
+    background: linear-gradient(to right, #1e293b, #475569);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.header-title span {
+    color: var(--secondary); font-size: 0.9rem; font-weight: 300;
+    display: block; margin-top: 2px;
+}
+
+.header-search-wrapper {
+    flex-grow: 1;
+    min-width: 300px;
+    max-width: 450px;
+    width: 100%;
+}
+
+.select2-container {
+    width: 100% !important;
+    max-width: 100%;
+}
+
+/* --- Customer Info Panel --- */
+.info-panel-3d {
+    background: #fff;
+    border-radius: 16px;
+    padding: 25px;
+    margin-bottom: 25px;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid #fff;
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: transform 0.3s ease;
+}
+
+.info-panel-3d:hover { transform: translateY(-2px); }
+
+.info-content h3 { margin: 0 0 5px 0; color: #1e293b; font-size: 1.5rem; }
+.info-content p { margin: 0; color: var(--secondary); font-size: 1rem; display: flex; gap: 15px; align-items: center; }
+.info-badge {
+    background: #e0e7ff; color: var(--primary); padding: 4px 12px;
+    border-radius: 50px; font-size: 0.85rem; font-weight: 600;
+}
+
+/* --- Layout Grid (List & Map) --- */
+.layout-grid {
+    display: grid;
+    grid-template-columns: 400px 1fr;
+    gap: 25px;
+    height: calc(100vh - 200px); /* เต็มจอพอดี */
+}
+
+/* --- Shop List Column --- */
+.col-shop-list {
+    background: #fff;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: var(--shadow-md);
+    border: 1px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.list-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 15px; padding-bottom: 15px;
+    border-bottom: 2px dashed #f1f5f9;
+}
+
+.scroll-area { flex: 1; overflow-y: auto; padding-right: 5px; }
+
+/* --- Shop Card (High Design) --- */
+.shop-card-3d {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 15px;
+    border: 1px solid #f1f5f9;
+    border-left: 5px solid var(--secondary); /* Default color */
+    box-shadow: var(--shadow-sm);
+    transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.shop-card-3d:hover {
+    transform: translateY(-5px) scale(1.01);
+    box-shadow: var(--shadow-lg);
+    border-left-color: var(--primary);
+}
+
+.shop-card-3d .card-top {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 8px;
+}
+
+.shop-name { font-weight: 700; color: #1e293b; font-size: 1.1rem; line-height: 1.3; }
+
+.dist-badge {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white; padding: 4px 10px; border-radius: 8px;
+    font-size: 0.75rem; font-weight: 700;
+    box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.3);
+    white-space: nowrap;
+}
+
+.shop-detail { font-size: 0.9rem; color: #64748b; margin-bottom: 8px; }
+.shop-detail i { width: 20px; text-align: center; color: #94a3b8; }
+
+.shop-remark {
+    background: #f8fafc; border: 1px dashed #cbd5e1;
+    padding: 8px; border-radius: 6px; font-size: 0.8rem; color: #475569;
+    margin-bottom: 10px;
+}
+
+.card-actions {
+    display: flex; justify-content: space-between; align-items: center;
+    border-top: 1px solid #f1f5f9; padding-top: 10px; margin-top: 5px;
+}
+
+/* --- Map Column --- */
+.col-map-view {
+    position: relative;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: var(--shadow-3d);
+    border: 4px solid #fff;
+    height: 100%;
+}
+
+#map { width: 100%; height: 100%; z-index: 1; }
+
+/* --- 3D Buttons --- */
+.btn-3d-primary {
+    background: linear-gradient(to bottom, #4f46e5, #4338ca);
+    color: white; border: none; border-radius: 10px;
+    padding: 10px 20px; font-weight: 600; cursor: pointer;
+    box-shadow: 0 4px 0 #312e81, 0 5px 10px rgba(0,0,0,0.2);
+    transition: all 0.1s;
+    text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
+}
+.btn-3d-primary:active { transform: translateY(4px); box-shadow: 0 0 0 #312e81, inset 0 2px 5px rgba(0,0,0,0.2); }
+
+.btn-3d-success {
+    background: linear-gradient(to bottom, #10b981, #059669);
+    color: white; border: none; border-radius: 8px;
+    padding: 8px 15px; font-weight: 600; cursor: pointer;
+    box-shadow: 0 3px 0 #047857, 0 4px 6px rgba(0,0,0,0.1);
+    transition: all 0.1s; text-decoration: none; font-size: 0.9rem;
+}
+.btn-3d-success:active { transform: translateY(3px); box-shadow: 0 0 0 #047857; }
+
+.btn-3d-danger {
+    background: #fff; color: #ef4444; border: 1px solid #fecaca;
+    border-radius: 8px; padding: 6px 12px; font-weight: 600; cursor: pointer;
+    transition: all 0.2s; font-size: 0.8rem;
+}
+.btn-3d-danger:hover { background: #fef2f2; border-color: #ef4444; }
+
+.btn-nav-link {
+    color: var(--primary); font-weight: 700; text-decoration: none;
+    font-size: 0.9rem; display: flex; align-items: center; gap: 5px;
+    padding: 6px 12px; border-radius: 6px; transition: background 0.2s;
+}
+.btn-nav-link:hover { background: #e0e7ff; }
+
+/* --- Fullscreen Overlay --- */
+#map-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(255,255,255,1); z-index: 9999; display: none; flex-direction: column;
+}
+.map-overlay-header {
+    height: 70px; background: #fff; padding: 0 30px;
+    display: flex; justify-content: space-between; align-items: center;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.05); z-index: 10;
+}
+.close-btn {
+    background: #ef4444; color: white; border: none; padding: 10px 25px;
+    border-radius: 50px; font-weight: 700; cursor: pointer;
+    box-shadow: 0 4px 10px rgba(239, 68, 68, 0.4);
+    transition: transform 0.2s;
+}
+.close-btn:hover { transform: scale(1.05); background: #dc2626; }
+
+/* --- Select2 Custom --- */
+.select2-container .select2-selection--single {
+    height: 45px !important; border-radius: 10px !important;
+    border: 1px solid #cbd5e1 !important; display: flex; align-items: center;
+}
+
+/* Responsive */
+@media(max-width: 992px) {
+    .layout-grid { grid-template-columns: 1fr; height: auto; }
+    .col-shop-list { max-height: 500px; margin-bottom: 20px; }
+    .col-map-view { height: 400px; }
+}
+/* --- [เพิ่มใหม่] CSS สำหรับหน้าแผนที่เต็มจอแบบมี Sidebar --- */
+#map-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.8);
+    z-index: 9999;
+    /* เปลี่ยนเป็น Flex เพื่อแบ่งซ้ายขวา */
+    flex-direction: row; 
+    align-items: stretch;
+}
+
+/* แถบซ้ายแสดงรายชื่อร้าน */
+.map-sidebar {
+    width: 320px;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #cbd5e1;
+    animation: slideInLeft 0.3s ease;
+    flex-shrink: 0; /* ไม่ให้หด */
+}
+
+.map-sidebar-header {
+    background: #ffffff;
+    padding: 15px;
+    border-bottom: 1px solid #e2e8f0;
+    position: sticky; /* ทำให้ติดอยู่ด้านบน */
+    top: 0;
+    z-index: 10;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.map-sidebar-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.shop-count-badge {
+    background: #eff6ff;
+    color: #2563eb;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid #dbeafe;
+}
+
+.map-sidebar-content {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+/* การ์ดร้านค้าใน Sidebar */
+.sidebar-shop-item {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px; /* มุมโค้งมนขึ้น */
+    padding: 15px;
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    position: relative;
+    overflow: hidden;
+}
+
+.sidebar-shop-item:hover {
+    border-color: #3b82f6;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+.sidebar-shop-item::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+    background: #3b82f6; opacity: 0; transition: opacity 0.2s;
+}
+.sidebar-shop-item:hover::before { opacity: 1; }
+
+/* หัวข้อชื่อร้าน */
+.shop-item-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 8px;
+}
+.shop-item-title {
+    font-size: 1rem; font-weight: 700; color: #1e293b;
+    line-height: 1.4;
+}
+
+/* แถวข้อมูลทั่วไป (เบอร์/ชื่อ) */
+.shop-item-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.85rem; color: #64748b; margin-bottom: 4px;
+}
+.shop-item-icon {
+    width: 16px; text-align: center; color: #94a3b8;
+}
+
+/* กล่องที่อยู่ (Remark) */
+.shop-item-address-box {
+    margin-top: 10px;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 0.8rem;
+    color: #475569;
+    line-height: 1.5;
+    display: flex; gap: 8px; align-items: flex-start;
+}
+
+/* ป้ายระยะทาง */
+.shop-item-dist-badge {
+    margin-top: 10px;
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #eff6ff; color: #2563eb;
+    font-size: 0.8rem; font-weight: 600;
+    padding: 4px 12px; border-radius: 20px;
+}
+.sidebar-shop-item h5 { margin: 0 0 5px 0; color: #1e293b; font-size: 0.95rem; }
+.sidebar-shop-item p { margin: 0; color: #64748b; font-size: 0.8rem; }
+.sidebar-shop-item .dist { font-weight: 700; color: #2563eb; font-size: 0.85rem; margin-top: 5px; display: block; }
+
+/* พื้นที่แสดงแผนที่ขวามือ */
+.map-wrapper-full {
+    flex-grow: 1;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.map-overlay-header {
+    /* ปรับแต่ง Header เดิมเล็กน้อย */
+    background: rgba(255,255,255,0.95);
+    padding: 10px 20px;
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    z-index: 1001; /* อยู่เหนือแผนที่ */
+}
+
+@keyframes slideInLeft { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+
+/* รองรับมือถือ: ซ่อน Sidebar หรือทำให้เล็กลง */
+@media (max-width: 768px) {
+    .map-sidebar { width: 260px; display: none; /* หรือจะซ่อนไว้ก่อนแล้วมีปุ่มเปิด */ }
+}
+/* กล่องแสดงที่อยู่ลูกค้าใน Sidebar */
+.site-address-card {
+    background: #fef2f2; /* สีพื้นแดงอ่อนๆ ให้รู้ว่าเป็นลูกค้า */
+    border-bottom: 1px solid #fecaca;
+    padding: 15px;
+    margin-bottom: 10px;
+} 
+.site-address-card h5 {
+    color: #991b1b;
+    font-size: 0.95rem;
+    margin: 0 0 8px 0;
+    font-weight: 700;
+    display: flex; align-items: center; gap: 8px;
+}
+.site-address-text {
+    font-size: 0.9rem;
+    color: #450a0a;
+    line-height: 1.6; /* เพิ่มระยะห่างบรรทัดให้อ่านง่าย */
+}
+.address-part {
+    display: block; /* ขึ้นบรรทัดใหม่ในแต่ละส่วน */
+    margin-bottom: 2px;
+}
+.shop-address {
+    font-size: 0.85rem;
+    color: #475569;
+    margin: 8px 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    line-height: 1.5;
+    background: #f8fafc;
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px dashed #cbd5e1;
+}

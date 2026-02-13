@@ -1,0 +1,633 @@
+:root {
+    /* Light Mode */
+    --bg-body: #f1f5f9;
+    --bg-card: #ffffff;
+    --bg-input: #ffffff;
+    --text-main: #1e293b;
+    --text-sub: #64748b;
+    --border-color: #e2e8f0;
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+
+    --primary-color: #2563eb;
+    --primary-dark: #1e40af;
+    --hover-bg: #eff6ff;
+
+    /* Table Specific (Light) */
+    --table-head-bg: #f8fafc;
+    --table-head-text: #64748b;
+    --table-row-hover: #f8faff;
+
+    /* Modal & Form Specific (Light) */
+    --input-bg: #ffffff;
+    --input-text: #1e293b;
+    --input-border: #e2e8f0;
+}
+
+/* 🌑 Dark Mode Variables */
+body.dark-mode {
+    --bg-body: #0f172a;
+    --bg-card: #1e293b;
+    --bg-input: #334155;
+    --text-main: #f8fafc;
+    --text-sub: #cbd5e1;
+    --border-color: #334155;
+    --shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+
+    --primary-color: #60a5fa;
+    --primary-dark: #3b82f6;
+    --hover-bg: #334155;
+
+    /* Table Specific (Dark) */
+    --table-head-bg: #1e293b;
+    --table-head-text: #e2e8f0;
+    --table-row-hover: #334155;
+
+    /* Modal & Form Specific (Dark) */
+    --input-bg: #334155;
+    --input-text: #f1f5f9;
+    --input-border: #475569;
+}
+
+/* =========================================================
+   2. GLOBAL STYLES
+   ========================================================= */
+body {
+    background-color: var(--bg-body);
+    color: var(--text-main);
+    font-family: 'Prompt', sans-serif;
+    transition: background-color 0.3s, color 0.3s;
+    margin: 0;
+    padding-left: 350px;
+}
+
+/* บังคับใช้สีกับ Element หลักๆ */
+.card,
+.stat-card,
+.white-box,
+.filter-card,
+.comp-card,
+.form-container,
+.modal-content {
+    background-color: var(--bg-card) !important;
+    color: var(--text-main) !important;
+    border: 1px solid var(--border-color) !important;
+    box-shadow: var(--shadow) !important;
+}
+
+/* บังคับใช้สีกับ Input/Select/Textarea */
+input,
+select,
+textarea,
+.form-control {
+    background-color: var(--input-bg) !important;
+    color: var(--input-text) !important;
+    border: 1px solid var(--border-color) !important;
+}
+
+/* บังคับสีหัวข้อ */
+h1, h2, h3, h4, h5, h6 {
+    color: var(--text-main) !important;
+}
+
+/* ตาราง (Table) */
+th {
+    background-color: var(--table-head-bg) !important;
+    color: var(--table-head-text) !important;
+    border-bottom: 2px solid var(--border-color) !important;
+}
+
+td {
+    color: var(--text-main) !important;
+    border-bottom: 1px solid var(--border-color) !important;
+}
+
+tr:hover td {
+    background-color: var(--table-row-hover) !important;
+}
+
+/* Responsive Sidebar Padding */
+@media (max-width: 900px) {
+    body {
+        padding-left: 0;
+    }
+}
+
+/* =========================================================
+   3. SIDEBAR STYLES (Normal State)
+   ========================================================= */
+#mySidebar {
+    height: 100vh;
+    width: 350px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    background: linear-gradient(180deg, #1e3a8a 0%, #172554 100%);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+}
+
+/* Header */
+#mySidebar .sidebar-brand {
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 25px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#mySidebar .brand-logo {
+    color: #ffffff !important;
+    font-weight: 800;
+    font-size: 1.3rem;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+}
+
+#mySidebar .toggle-btn {
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    font-size: 1.2rem;
+}
+
+/* Menu List (ปกติให้ Scroll ได้) */
+#mySidebar .sidebar-menu {
+    flex: 1;
+    overflow-y: auto;
+    padding: 25px 15px;
+    list-style: none;
+    margin: 0;
+}
+
+#mySidebar .sidebar-menu::-webkit-scrollbar {
+    width: 4px;
+}
+
+#mySidebar .sidebar-menu::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+}
+
+#mySidebar .menu-header {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #93c5fd !important;
+    margin: 25px 0 10px 15px;
+    letter-spacing: 1px;
+    opacity: 0.9;
+}
+
+#mySidebar .menu-header:first-child {
+    margin-top: 5px;
+}
+
+#mySidebar .sidebar-menu li a {
+    display: flex;
+    align-items: center;
+    padding: 12px 18px;
+    color: #ffffff !important;
+    text-decoration: none;
+    border-radius: 12px;
+    margin-bottom: 6px;
+    transition: all 0.2s ease;
+    font-size: 0.95rem;
+    font-weight: 500;
+    border: 1px solid transparent;
+}
+
+#mySidebar .sidebar-menu li a i {
+    color: #ffffff !important;
+    width: 24px;
+    text-align: center;
+    margin-right: 12px;
+    font-size: 1.1rem;
+}
+
+#mySidebar .sidebar-menu li a:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+    transform: translateX(5px);
+}
+
+#mySidebar .sidebar-menu li a.active {
+    background: #ffffff !important;
+    color: #1e3a8a !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    font-weight: 700;
+}
+
+#mySidebar .sidebar-menu li a.active i,
+#mySidebar .sidebar-menu li a.active span {
+    color: #1e3a8a !important;
+}
+
+/* Footer Profile */
+#mySidebar .sidebar-footer {
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.2);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+#mySidebar .user-img {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    object-fit: cover;
+}
+
+#mySidebar .user-info {
+    flex: 1;
+    overflow: hidden;
+}
+
+#mySidebar .user-name {
+    color: #ffffff !important;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+#mySidebar .user-role {
+    color: rgba(255, 255, 255, 0.7) !important;
+    font-size: 0.75rem;
+}
+
+#mySidebar .footer-actions {
+    display: flex;
+    gap: 8px;
+}
+
+#mySidebar .icon-btn {
+    color: rgba(255, 255, 255, 0.8);
+    width: 35px;
+    height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: 0.2s;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: transparent;
+}
+
+#mySidebar .icon-btn:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+}
+
+/* LOGOUT BUTTON */
+#mySidebar .logout-btn {
+    background-color: rgba(239, 68, 68, 0.15) !important;
+    border: 1px solid #ef4444 !important;
+    color: #fca5a5 !important;
+}
+
+#mySidebar .logout-btn:hover {
+    background-color: #ef4444 !important;
+    border-color: #ef4444 !important;
+    color: #ffffff !important;
+}
+
+#mySidebar .logout-btn i {
+    color: inherit !important;
+}
+
+/* =========================================================
+   4. DROPDOWN STYLES (Normal State)
+   ========================================================= */
+.has-dropdown {
+    position: relative;
+}
+
+/* ซ่อนปกติ */
+.sidebar-menu .submenu {
+    display: none;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    background-color: rgba(0, 0, 0, 0.15);
+}
+
+/* แสดงเมื่อมี class 'show' */
+.sidebar-menu .submenu.show {
+    display: block;
+    animation: fadeIn 0.3s ease;
+}
+
+.sidebar-menu .submenu li a {
+    padding-left: 50px !important;
+    font-size: 0.9rem;
+    border-left: 3px solid transparent;
+}
+
+.sidebar-menu .submenu li a.active {
+    border-left: 3px solid var(--primary-color);
+    background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+.dropdown-icon {
+    transition: transform 0.3s ease;
+    margin-left: auto;
+    font-size: 0.75rem !important;
+    opacity: 0.7;
+}
+
+.has-dropdown.open .dropdown-icon {
+    transform: rotate(180deg);
+}
+
+/* =========================================================
+   🔥 5. SIDEBAR COLLAPSED (โหมดพับจอ: Footer ล็อค + Menu เลื่อนได้)
+   ========================================================= */
+
+body.sidebar-collapsed {
+    padding-left: 85px;
+}
+
+/* 1. จัด Sidebar เป็น Flexbox แนวตั้ง เพื่อจัดการพื้นที่ */
+body.sidebar-collapsed #mySidebar {
+    width: 85px;
+    height: 100vh;
+    display: flex;          /* ใช้ Flexbox */
+    flex-direction: column; /* เรียงจากบนลงล่าง */
+    overflow: hidden;       /* ห้าม Scroll ที่ตัวกล่องหลัก */
+}
+
+/* 2. จัดการส่วนเมนู (Sidebar Menu) ให้ยืดเต็มพื้นที่และเลื่อนได้ */
+body.sidebar-collapsed .sidebar-menu {
+    flex: 1;                /* ยืดกินพื้นที่ว่างระหว่าง Header กับ Footer */
+    overflow-y: auto !important; /* 🔥 บังคับให้ Scroll ได้เฉพาะตรงนี้ */
+    overflow-x: visible;    /* ยอมให้ Popup เด้งออกแนวนอนได้ (ถ้ามี) */
+    
+    padding: 15px 0;
+    margin: 0;
+    
+    /* ซ่อน Scrollbar (แต่ยังเลื่อนได้) เพื่อความสวยงาม */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+body.sidebar-collapsed .sidebar-menu::-webkit-scrollbar {
+    display: none;
+}
+
+/* 3. จัดการส่วน Footer ให้ล็อคติดล่าง */
+body.sidebar-collapsed .sidebar-footer {
+    flex-shrink: 0;         /* ห้ามหดตัวเด็ดขาด */
+    background: #172554;    /* สีพื้นหลังทึบ เพื่อบังเมนูที่เลื่อนผ่าน */
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    width: 85px;            /* ล็อคความกว้าง */
+    
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 15px 0;
+    gap: 15px;
+    z-index: 50;            /* อยู่ชั้นบนสุด */
+}
+
+/* --- ซ่อน Text/Elements ที่ไม่ใช้ตอนพับ (ตามโค้ดเดิม) --- */
+body.sidebar-collapsed .menu-text,
+body.sidebar-collapsed .menu-header,
+body.sidebar-collapsed .brand-logo span,
+body.sidebar-collapsed .user-info,
+body.sidebar-collapsed .nav-badge,
+body.sidebar-collapsed .has-dropdown .dropdown-icon {
+    display: none !important;
+}
+
+/* --- ส่วน Header/Logo --- */
+body.sidebar-collapsed .sidebar-brand {
+    flex-shrink: 0;         /* ห้ามหด */
+    justify-content: center !important;
+    padding: 0 !important;
+}
+
+body.sidebar-collapsed .brand-logo {
+    display: none !important;
+}
+
+body.sidebar-collapsed .toggle-btn {
+    margin: 0 !important;
+    font-size: 1.6rem !important;
+}
+
+/* --- ปุ่มเมนู --- */
+body.sidebar-collapsed .sidebar-menu li a {
+    justify-content: center;
+    padding: 15px 0;
+}
+
+body.sidebar-collapsed .sidebar-menu li a i {
+    margin-right: 0;
+    font-size: 1.4rem;
+}
+
+/* =========================================================
+   ✨ FLOATING SUBMENU (เมนูลอยแบบเดิมของคุณ)
+   ========================================================= */
+body.sidebar-collapsed .sidebar-menu .submenu {
+    position: absolute;
+    left: 85px;
+    top: 0;
+    width: 240px;
+    
+    background-color: #172554;
+    border-radius: 0 10px 10px 10px;
+    box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    z-index: 9999;
+    padding: 10px 0;
+    display: none;
+
+    /* กันยาวเกิน */
+    max-height: 50vh;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+
+/* ให้ 5 ตัวสุดท้ายเด้งขึ้นบน */
+body.sidebar-collapsed .sidebar-menu li:nth-last-child(-n+5) .submenu {
+    top: auto !important;
+    bottom: 0 !important;
+    border-radius: 10px 10px 10px 0;
+    transform-origin: bottom left;
+}
+
+/* แสดงผลเมื่อมี class show */
+body.sidebar-collapsed .sidebar-menu .submenu.show {
+    display: block !important;
+    animation: fadeInLeft 0.2s ease;
+}
+
+/* Scrollbar ใน Popup */
+body.sidebar-collapsed .sidebar-menu .submenu::-webkit-scrollbar { width: 6px; }
+body.sidebar-collapsed .sidebar-menu .submenu::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
+body.sidebar-collapsed .sidebar-menu .submenu::-webkit-scrollbar-thumb { background-color: rgba(255, 255, 255, 0.3); border-radius: 4px; }
+
+/* Text ใน Popup */
+body.sidebar-collapsed .sidebar-menu .submenu li a {
+    padding-left: 20px !important;
+    padding-right: 15px !important;
+    justify-content: flex-start !important;
+    display: flex !important;
+}
+body.sidebar-collapsed .sidebar-menu .submenu li a span {
+    display: inline-block !important;
+    font-size: 0.9rem;
+}
+
+@keyframes fadeInLeft {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+/* =========================================================
+   6. MISC / BADGES / ANIMATION
+   ========================================================= */
+.nav-badge {
+    background-color: #ef4444;
+    color: white;
+    font-size: 0.65rem;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-left: auto;
+    margin-right: 10px;
+    display: inline-block;
+    animation: pulse-red 2s infinite;
+}
+
+@keyframes pulse-red {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* SweetAlert2 Dark Mode */
+body.dark-mode .swal2-popup {
+    background-color: var(--bg-card) !important;
+    color: var(--text-main) !important;
+    border: 1px solid var(--border-color) !important;
+}
+
+body.dark-mode .swal2-title,
+body.dark-mode .swal2-html-container,
+body.dark-mode .swal2-close {
+    color: var(--text-main) !important;
+}
+
+/* Mobile Header */
+.mobile-header {
+    display: none;
+}
+
+@media (max-width: 900px) {
+    #mySidebar { left: -100%; }
+    #mySidebar.show { left: 0; }
+    .mobile-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px 20px;
+        background: #1e3a8a;
+        color: #fff;
+        position: sticky;
+        top: 0;
+        z-index: 999;
+    }
+    .overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 998;
+        backdrop-filter: blur(3px);
+    }
+    .overlay.show { display: block; }
+}
+
+/* Floating Header Style (แสดงเฉพาะตอนพับจอ) */
+.floating-header {
+    display: none;
+}
+body.sidebar-collapsed .floating-header {
+    display: block;
+    padding: 12px 20px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #60a5fa;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 5px;
+    text-align: left;
+    border-radius: 10px 10px 0 0;
+}
+/* 1. ปรับ Grid ให้ปุ่มเรียงตัวได้สวยงาม (รองรับ 5 ปุ่ม) */
+.doc-type-grid {
+    display: grid;
+    /* auto-fill + minmax จะช่วยให้ปุ่มเรียงกันพอดี ไม่ว่าจะจอเล็กหรือใหญ่ */
+    grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+/* 2. สไตล์ปุ่ม "ใบเสร็จรับเงิน" (สีฟ้า Cyan) */
+.dt-box.dt-receipt {
+    background-color: #ecfeff; /* พื้นหลังฟ้าอ่อน */
+    color: #0891b2;            /* ตัวหนังสือฟ้าเข้ม */
+    border: 1px solid #cffafe;
+}
+.dt-box.dt-receipt .dt-icon {
+    color: #06b6d4;            /* ไอคอนสีฟ้าสด */
+}
+/* สถานะ: เอาเมาส์ชี้ (Hover) หรือ กดเลือก (Active) */
+.dt-box.dt-receipt:hover, 
+.dt-box.dt-receipt.active {
+    background-color: #06b6d4;
+    color: white;
+    border-color: #06b6d4;
+}
+.dt-box.dt-receipt:hover .dt-icon, 
+.dt-box.dt-receipt.active .dt-icon {
+    color: white;
+}
+
+/* 3. สไตล์ปุ่ม "ชุดชำระเงิน" (สีม่วง Purple) */
+.dt-box.dt-payment {
+    background-color: #faf5ff; /* พื้นหลังม่วงอ่อน */
+    color: #9333ea;            /* ตัวหนังสือม่วงเข้ม */
+    border: 1px solid #f3e8ff;
+}
+.dt-box.dt-payment .dt-icon {
+    color: #a855f7;            /* ไอคอนสีม่วงสด */
+}
+/* สถานะ: เอาเมาส์ชี้ (Hover) หรือ กดเลือก (Active) */
+.dt-box.dt-payment:hover, 
+.dt-box.dt-payment.active {
+    background-color: #a855f7;
+    color: white;
+    border-color: #a855f7;
+}
+.dt-box.dt-payment:hover .dt-icon, 
+.dt-box.dt-payment.active .dt-icon {
+    color: white;
+}

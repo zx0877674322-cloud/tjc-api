@@ -1,0 +1,658 @@
+@import url("https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap");
+
+/* ==========================================================================
+   1. VARIABLES & THEME CONFIG
+   ========================================================================== */
+:root {
+  /* --- Brand Colors --- */
+  --primary: #0f172a; /* Dark Navy (Text/Headers) */
+  --primary-light: #1e293b;
+  --secondary: #64748b; /* Slate Gray (Subtext) */
+
+  /* --- Accent Colors (Blue Gradient) --- */
+  --accent-start: #3b82f6;
+  --accent-end: #2563eb;
+  --accent-shadow: rgba(59, 130, 246, 0.4);
+
+  /* --- Backgrounds --- */
+  --bg-body: #f8fafc; /* Light Gray Background */
+  --bg-card: #ffffff;
+
+  /* --- Status Colors --- */
+  --success-bg: #ecfdf5;
+  --success-text: #059669;
+  --warning-bg: #fffbeb;
+  --warning-text: #d97706;
+  --danger-bg: #fef2f2;
+  --danger-text: #dc2626;
+
+  /* --- Dimensions & Radius --- */
+  --sidebar-width: 260px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-pill: 50px;
+
+  /* --- Shadows --- */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+
+  /* --- Transitions --- */
+  --trans-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ==========================================================================
+   2. GLOBAL RESET
+   ========================================================================== */
+body {
+  font-family: "Prompt", sans-serif;
+  background-color: var(--bg-body);
+  color: var(--primary);
+  margin: 0;
+  padding: 0;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ==========================================================================
+   3. LAYOUT & SIDEBAR
+   ========================================================================== */
+.sidebar {
+  width: var(--sidebar-width);
+  height: 100vh;
+  background-color: var(--bg-card);
+  position: fixed;
+  top: 0;
+  left: 0;
+  border-right: 1px solid #e2e8f0;
+  z-index: 1000;
+  box-shadow: var(--shadow-sm);
+}
+
+.main-content {
+  margin-left: 50px;
+  padding: 30px;
+  min-height: 100vh;
+  transition: margin-left var(--trans-smooth);
+}
+
+.dashboard-container,
+.main-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* ==========================================================================
+   4. CARDS & HEADERS
+   ========================================================================== */
+.service-card,
+.recent-table-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  margin-bottom: 40px;
+}
+
+.card-header-modern {
+  background: #FFFFFF;
+  padding: 30px 40px;
+  color: rgb(0, 0, 0);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05); /* ลดเงาลงนิดหน่อยให้ดูสะอาดตา */
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.card-body-modern {
+  padding: 40px;
+}
+
+/* ==========================================================================
+   5. STAT CARDS (Dashboard)
+   ========================================================================== */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 25px;
+  margin-bottom: 35px;
+}
+
+.stat-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid #f1f5f9;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all var(--trans-smooth);
+}
+
+.stat-card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-lg);
+}
+
+.stat-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+}
+
+.stat-info h3 {
+  margin: 0;
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: var(--primary);
+  line-height: 1.1;
+}
+.stat-info p {
+  margin: 5px 0 0;
+  color: var(--secondary);
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.stat-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  transition: transform 0.4s ease;
+}
+.stat-card:hover .stat-icon {
+  transform: scale(1.1) rotate(5deg);
+}
+
+/* Card Themes */
+.c-blue::before { background: var(--accent-start); }
+.c-blue .stat-icon { background: #eff6ff; color: var(--accent-end); }
+
+.c-orange::before { background: var(--warning-text); }
+.c-orange .stat-icon { background: var(--warning-bg); color: var(--warning-text); }
+
+.c-green::before { background: var(--success-text); }
+.c-green .stat-icon { background: var(--success-bg); color: var(--success-text); }
+
+/* Active Filter State */
+.stat-card.active-filter {
+  background: #f8fafc;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.05);
+  transform: translateY(2px);
+  border: 2px solid;
+}
+.stat-card.active-filter.c-blue { border-color: var(--accent-start); }
+.stat-card.active-filter.c-orange { border-color: var(--warning-text); }
+.stat-card.active-filter.c-green { border-color: var(--success-text); }
+
+/* ==========================================================================
+   6. TOOLBAR & SEARCH
+   ========================================================================== */
+.toolbar-container {
+  margin-bottom: 30px;
+  display: flex;
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.search-group-box {
+  display: flex;
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-pill);
+  padding: 8px 10px 8px 30px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
+  width: 100%;
+}
+
+.search-group-box:focus-within {
+  border-color: var(--accent-start);
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+}
+
+.search-item {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 15px;
+  position: relative;
+}
+
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.input-icon {
+  color: var(--secondary);
+  font-size: 1rem;
+}
+
+.search-item label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.clean-input {
+  border: none;
+  background: transparent;
+  font-family: "Prompt", sans-serif;
+  font-size: 1rem;
+  color: var(--primary);
+  width: 100%;
+  font-weight: 500;
+  padding: 2px 0;
+}
+.clean-input:focus { outline: none; }
+.clean-input::placeholder { color: #cbd5e1; font-weight: 400; }
+
+.divider {
+  width: 1px;
+  height: 35px;
+  background: #e2e8f0;
+  margin: 0 5px;
+}
+
+/* ==========================================================================
+   7. BUTTONS
+   ========================================================================== */
+.btn-create,
+.btn-search-icon {
+  background: linear-gradient(135deg, var(--accent-start) 0%, var(--accent-end) 100%);
+  color: white;
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 0 32px;
+  height: 48px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px var(--accent-shadow);
+  transition: all 0.3s ease;
+  text-decoration: none;
+}
+
+.btn-create:hover,
+.btn-search-icon:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.5);
+  filter: brightness(1.1);
+}
+
+.btn-reset-icon {
+  color: var(--secondary);
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.4s ease;
+  text-decoration: none;
+  margin-left: 10px;
+  background: white;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid #e2e8f0;
+}
+.btn-reset-icon:hover {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  transform: rotate(180deg);
+  border-color: var(--danger-bg);
+}
+
+/* Table Action Buttons */
+.btn-view, .btn-edit, .btn-delete {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  border: none;
+  cursor: pointer;
+  margin: 0 2px;
+  text-decoration: none;
+}
+.btn-view { background: #e0f2fe; color: #0284c7; }
+.btn-view:hover { background: #bae6fd; transform: scale(1.1); }
+
+.btn-edit { background: #fef3c7; color: #d97706; }
+.btn-edit:hover { background: #fde68a; transform: scale(1.1); }
+
+.btn-delete { background: #fee2e2; color: #dc2626; }
+.btn-delete:hover { background: #fecaca; transform: scale(1.1); }
+
+/* ==========================================================================
+   8. FORMS (Inputs & Styles)
+   ========================================================================== */
+.form-group {
+  margin-bottom: 25px;
+}
+
+.form-label {
+  display: block;
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: 8px;
+  font-size: 0.95rem;
+}
+
+.form-control {
+  width: 100%;
+  padding: 12px 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid #cbd5e1;
+  background-color: #fff;
+  font-family: "Prompt", sans-serif;
+  font-size: 1rem;
+  color: var(--primary);
+  box-sizing: border-box;
+  transition: all 0.2s;
+  height: 48px; /* Standard Height */
+}
+
+textarea.form-control {
+  height: auto;
+  min-height: 120px;
+  line-height: 1.6;
+}
+
+.form-control:focus {
+  border-color: var(--accent-start);
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+.form-control[readonly] {
+  background-color: #f8fafc;
+  color: #64748b;
+  border-color: #e2e8f0;
+  cursor: default;
+}
+
+/* --- Select2 Overrides (เพื่อให้ความสูงเท่า Input ปกติ) --- */
+.select2-container .select2-selection--single {
+    height: 48px !important;
+    padding: 10px 15px !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: var(--radius-md) !important;
+    display: flex;
+    align-items: center;
+}
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 46px !important;
+    top: 1px !important;
+}
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    color: var(--primary) !important;
+    font-family: "Prompt", sans-serif;
+    padding-left: 0 !important;
+}
+
+/* ==========================================================================
+   9. TABLES
+   ========================================================================== */
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.table th {
+  background-color: #f8fafc;
+  color: var(--secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  padding: 18px 20px;
+  border-bottom: 2px solid #e2e8f0;
+  white-space: nowrap;
+}
+.table td {
+  padding: 18px 20px;
+  vertical-align: middle;
+  border-bottom: 1px solid #f1f5f9;
+  color: var(--primary);
+  font-size: 0.95rem;
+}
+.table tbody tr:hover td {
+  background-color: #f8fafc;
+}
+
+/* ==========================================================================
+   10. SERVICE REQUEST PAGE SPECIFIC (จัดระเบียบหน้าแจ้งซ่อม)
+   ========================================================================== */
+
+/* หัวข้อ Section (Gradient Bar Title) */
+.section-title {
+  font-size: 1.1rem;
+  color: var(--primary);
+  font-weight: 700;
+  margin: 35px 0 25px 0;
+  padding: 10px 15px;
+  border-left: 5px solid var(--accent-start);
+  background: linear-gradient(90deg, #f1f5f9 0%, rgba(255, 255, 255, 0) 100%);
+  border-radius: 0 8px 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* การ์ดข้อมูลโครงการ (Project Info Box) */
+.project-info-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  padding: 30px;
+  margin-bottom: 40px;
+  position: relative;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.01);
+}
+
+/* เส้นสีรุ้งด้านบนการ์ด */
+.project-info-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+/* Grid System */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  margin-bottom: 10px;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 30px;
+  margin-bottom: 10px;
+}
+
+/* --- [ADDED] Service Item Box (กล่องรายการแจ้งซ่อมแบบใหม่) --- */
+/* --- ดีไซน์กล่องรายการแจ้งซ่อม (ใหม่) --- */
+/* --- [ส่วนที่ 1] ดีไซน์กล่องรายการและปุ่ม --- */
+
+/* กล่องรายการสินค้า (ดีไซน์ใหม่) */
+.service-item-box {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid var(--accent-start); /* เส้นสีน้ำเงินด้านซ้าย */
+    border-radius: 8px;
+    padding: 25px 20px 20px 20px;
+    margin-bottom: 20px;
+    position: relative;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+    transition: all 0.3s ease;
+}
+.service-item-box:hover {
+    box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+    transform: translateY(-2px);
+}
+
+/* ป้ายบอกลำดับรายการ (รายการที่ 1, 2, ...) */
+.item-counter {
+    position: absolute;
+    top: -10px;
+    left: 15px;
+    background: var(--primary);
+    color: #fff;
+    font-size: 0.75rem;
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-weight: 600;
+    z-index: 2;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* ปุ่มลบ (กากบาทมุมขวาบน) */
+.btn-remove-item {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: transparent;
+    color: #cbd5e1;
+    border: none;
+    width: 30px;
+    height: 30px;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: 0.2s;
+    border-radius: 50%;
+}
+.btn-remove-item:hover {
+    background: #fee2e2;
+    color: #ef4444;
+}
+
+/* ปุ่มเพิ่มรายการ (แบบเล็ก สวยงาม) */
+.btn-add-group {
+    display: flex;
+    justify-content: center; /* จัดกึ่งกลาง */
+    margin-top: 10px;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px dashed #e2e8f0; /* เส้นประคั่นส่วนต่อไป */
+}
+
+.btn-add-new-item {
+    width: auto !important; /* บังคับไม่ให้เต็มจอ */
+    padding: 10px 25px;
+    background: #ffffff;
+    color: var(--accent-start);
+    border: 1px solid var(--accent-start);
+    border-radius: 50px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);
+}
+
+.btn-add-new-item:hover {
+    background: var(--accent-start);
+    color: #ffffff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.btn-add-new-item:hover {
+    background: var(--accent-start);
+    color: #ffffff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+/* Alert Box Style */
+.deadline-box {
+  background: var(--warning-bg);
+  border: 1px solid #fcd34d;
+  color: #b45309;
+  padding: 12px 20px;
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 5px;
+  font-weight: 500;
+}
+
+/* Utilities */
+.text-center { text-align: center; }
+.badge {
+  padding: 5px 12px;
+  border-radius: 50px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-block;
+}
+.badge-pending {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  border: 1px solid #fed7aa;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .main-content { margin-left: 0; padding: 20px; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; gap: 20px; }
+  .card-header-modern { flex-direction: column; align-items: flex-start; gap: 15px; }
+  .search-group-box { flex-direction: column; align-items: stretch; padding: 15px; border-radius: var(--radius-md); }
+  .search-item { padding: 10px 0; border-bottom: 1px solid #f1f5f9; }
+  .divider { display: none; }
+}

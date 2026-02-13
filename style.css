@@ -1,0 +1,1026 @@
+:root {
+    --primary: #4f46e5;
+    --primary-light: #e0e7ff;
+    --secondary: #64748b;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --bg-body: #f8fafc;
+    --bg-card: #ffffff;
+    --text-main: #1e293b;
+    --border: #e2e8f0;
+    --edit: #00CED1;
+    --radius: 12px;
+}
+
+body {
+    font-family: 'Prompt', sans-serif;
+    background: var(--bg-card);
+    color: var(--text-main);
+    margin: 0;
+}
+
+.main-content {
+    /* margin-left: 50px; */
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.content {
+    background: var(--bg-card);
+    padding: 10px 25px 20px 10px;
+    border-radius: 16px;
+    margin-bottom: 25px;
+    box-shadow: var(--shadow-card);
+    border: 1px solid var(--border-color);
+}
+
+.card {
+    /* background: linear-gradient(to right, #1e1b4b, var(--primary)); */
+    /* color: white; */
+    border-radius: 16px;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    /* ถ้าจอเล็กเกินให้ปัดตกบรรทัดใหม่ */
+    /* margin-right: -10px; */
+    /* margin-left: -10px; */
+}
+
+[class*="col-"] {
+    position: relative;
+    padding-right: 3px;
+    padding-left: 3px;
+    box-sizing: border-box;
+    flex: 1 !important;
+}
+
+
+/* มาตรฐาน 12 Column Grid */
+
+.col-1 {
+    /* 1 หาร 12 */
+    flex: 0 0 8.333333%;
+    max-width: 8.333333%;
+}
+
+.col-2 {
+    /* 2 หาร 12 */
+    flex: 0 0 16.666667%;
+    max-width: 16.666667%;
+}
+
+.col-3 {
+    /* 3 หาร 12*/
+    flex: 0 0 25%;
+    max-width: 25%;
+}
+
+.col-4 {
+    /* 4 หาร 12 */
+    flex: 0 0 33.333333%;
+    max-width: 33.333333%;
+}
+
+.col-5 {
+    /* 5 หาร 12 */
+    flex: 0 0 41.666667%;
+    max-width: 41.666667%;
+}
+
+.col-6 {
+    /* 6 หาร 12 */
+    flex: 0 0 50%;
+    max-width: 50%;
+}
+
+.col-7 {
+    /* 7 หาร 12 */
+    flex: 0 0 58.333333%;
+    max-width: 58.333333%;
+}
+
+.col-8 {
+    /* 8 หาร 12 */
+    flex: 0 0 66.666667%;
+    max-width: 66.666667%;
+}
+
+.col-9 {
+    /* 9 หาร 12 */
+    flex: 0 0 75%;
+    max-width: 75%;
+}
+
+.col-10 {
+    /* 10 หาร 12 */
+    flex: 0 0 83.333333%;
+    max-width: 83.333333%;
+}
+
+.col-11 {
+    /* 11 หาร 12 */
+    flex: 0 0 91.666667%;
+    max-width: 91.666667%;
+}
+
+.col-12 {
+    /* เต็มจอ */
+    flex: 0 0 100%;
+    max-width: 100%;
+}
+
+.box-img-wrapper {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.box-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 2px;
+}
+
+.box-c1 {
+    height: 45px;
+    background: var(--success);
+    color: white;
+    padding: 0 15px;
+    border-radius: 10px;
+    font-weight: 800;
+    border: none;
+    display: flex;
+    align-items: center;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+}
+
+.box-c2 {
+    height: 45px;
+    width: 100%;
+    background: linear-gradient(135deg, #37a6c2 0%, #cef3fc 100%);
+    color: white;
+    padding: 0 15px;
+    border-radius: 10px;
+    font-weight: 800;
+    border: none;
+    display: flex;
+    align-items: center;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+}
+
+.box-c3 {
+    height: 45px;
+    width: 100%;
+    background: linear-gradient(135deg, #7337c2 0%, #997cbe 100%);
+    color: white;
+    padding: 0 15px;
+    border-radius: 10px;
+    font-weight: 800;
+    border: none;
+    display: flex;
+    align-items: center;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+}
+
+.text-center {
+    text-align: center !important;
+}
+
+.bold {
+    font-weight: 800 !important;
+}
+
+.rad {
+    color: red !important;
+}
+
+.green {
+    color: green !important;
+}
+
+.blue {
+    color: blue !important;
+}
+
+.blueviolet {
+    color: blueviolet !important;
+}
+
+
+.status-box-btn {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 10px 10px;
+    border-radius: 16px;
+    text-decoration: none;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+.status-box-btn:hover {
+    transform: translateY(-5px) scale(1.02);
+    box-shadow: 0 15px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+    z-index: 2;
+}
+
+.sb-icon-bg {
+    position: absolute;
+    right: -10px;
+    bottom: -10px;
+    font-size: 50px;
+    opacity: 0.15;
+    transform: rotate(-15deg);
+    pointer-events: none;
+    transition: 0.3s;
+}
+
+.status-box-btn:hover .sb-icon-bg {
+    transform: rotate(0deg) scale(1.2);
+    opacity: 0.2;
+}
+
+.sb-count {
+    font-size: 24px;
+    font-weight: 900;
+    line-height: 1;
+    z-index: 1;
+    text-shadow: 2px 2px 0px rgba(255, 255, 255, 0.5);
+}
+
+
+/* mt-0 = ไม่เว้นเลย */
+
+.mt-0 {
+    margin-top: 0 !important;
+}
+
+
+/* mt-1 = เว้นนิดเดียว (เช่น 5px) */
+
+.mt-1 {
+    margin-top: 0.25rem;
+    /* หรือ 4px */
+}
+
+
+/* mt-2 = เว้นปานกลาง (เช่น 10px) */
+
+.mt-2 {
+    margin-top: 0.5rem;
+    /* หรือ 8px */
+}
+
+
+/* mt-3 = เว้นมาตรฐาน (เช่น 16px) */
+
+.mt-3 {
+    margin-top: 1rem;
+    /* หรือ 16px */
+}
+
+
+/* mt-4 = เว้นเยอะหน่อย (เช่น 24px) */
+
+.mt-4 {
+    margin-top: 1.5rem;
+    /* หรือ 24px */
+}
+
+
+/* mt-5 = เว้นเยอะมาก (เช่น 48px) */
+
+.mt-5 {
+    margin-top: 3rem;
+    /* หรือ 48px */
+}
+
+hr {
+    border: none;
+    border-top: 1px dashed #b9b6b6;
+    margin: 10px 0;
+}
+
+.sb-label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.sb-count {
+    font-size: 24px;
+    font-weight: 900;
+    line-height: 1;
+    z-index: 1;
+    text-shadow: 2px 2px 0px rgba(255, 255, 255, 0.5);
+}
+
+.b-status {
+    height: 25px;
+    width: auto;
+    border-radius: 20px;
+    font-weight: 800 !important;
+    font-size: 12px !important;
+    border: none;
+    display: flex;
+    align-items: center;
+    transition: 0.3s;
+}
+
+.s-wait {
+    /* สถานะ ยังไม่เซ็นสัญญา */
+    background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+    color: #7e22ce;
+    border-color: rgba(225, 198, 255, 0.286)
+}
+
+.s-contract {
+    /* สถานะ เซ็นสัญญา */
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    color: #1d4ed8;
+    border-color: rgb(223, 237, 255);
+}
+
+.s-process {
+    /* ระหว่างดำเนินการ */
+    background: linear-gradient(135deg, #f9d9cc 0%, #ffb293 100%);
+    color: #fe4800;
+    border-color: #ffddd0;
+}
+
+.s-completed {
+    /* ดำเนินการเสร็จสิ้น */
+    background: linear-gradient(135deg, #fff0d9 0%, #ffd898 100%);
+    color: #ff9d00;
+    border-color: #ffe8c3;
+}
+
+.s-cancel {
+    /* ยกเลิก */
+    background: linear-gradient(135deg, #fbdede 0%, #ffa2a2 100%);
+    color: #ff4f4f;
+    border-color: #f6c5c5;
+}
+
+
+.s-send {
+    /* ส่งมอบงานแล้ว */
+    background: linear-gradient(135deg, #d6fcf2 0%, #a3ffe8 100%);
+    color: #00cf9b;
+    border-color: #bcffee;
+}
+
+.s-cash {
+    /* เงินเข้าแล้ว */
+    background: linear-gradient(135deg, #ffe2f2 0%, #ff97cf 100%);
+    color: #FF1493;
+    border-color: #ffcce7;
+}
+
+.sb-approved {
+    /* ปิดโครงการ */
+    background: linear-gradient(135deg, #c5fcc5 0%, #006400a0 100%);
+    color: #006400;
+    border-color: #bdffbd;
+}
+
+.s-nstall-repairs {
+    /* ติดตั้ง/ซ่อมแซม */
+    background: linear-gradient(135deg, #d9cfe4 0%, #ba89e7 100%);
+    color: #8A2BE2;
+    border-color: #bb96dd;
+}
+
+/* Header */
+
+.page-header {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 30px;
+}
+
+@media(min-width: 768px) {
+    .page-header {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: flex-end;
+    }
+}
+
+.header-title h2 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+@media (max-width: 768px) {
+    .col-3 {
+        flex: 0 0 50%;
+        /* บนมือถือให้เหลือ 2 กล่องต่อแถว */
+        max-width: 50%;
+    }
+}
+
+@media (max-width: 576px) {
+    .col-3 {
+        flex: 0 0 100%;
+        /* บนจอมือถือเล็กมาก ให้เต็มจอเลย */
+        max-width: 100%;
+    }
+}
+
+.btn-create {
+    height: 45px;
+    background: var(--success);
+    color: white;
+    padding: 0 15px;
+    border-radius: 10px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+    transition: 0.3s;
+}
+
+.btn-edit {
+    height: 45px;
+    background: linear-gradient(135deg, #bcfeff 0%, #00CED1 100%);
+    color: white;
+    border: none;
+    height: 40px;
+    width: 40px;
+    border-radius: 10px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 10px rgba(79, 172, 254, 0.3);
+    cursor: pointer;
+}
+
+.btn-search {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: white;
+    border: none;
+    height: 35px;
+    padding: 0 25px;
+    border-radius: 10px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 10px rgba(79, 172, 254, 0.3);
+    cursor: pointer;
+}
+
+.btn-view {
+    background: linear-gradient(135deg, #f7b986 0%, #ff7300 100%);
+    color: white;
+    border: none;
+    height: 40px;
+    width: 40px;
+    border-radius: 10px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 10px rgba(79, 172, 254, 0.3);
+    cursor: pointer;
+}
+
+.btn-flow {
+    background: linear-gradient(135deg, #96ff88 0%, #1eff00 100%);
+    color: white;
+    border: none;
+    height: 40px;
+    width: 40px;
+    border-radius: 10px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 10px rgba(79, 172, 254, 0.3);
+    cursor: pointer;
+}
+
+.btn-cancel {
+    background: linear-gradient(135deg, #ff8888 0%, #ff0000 100%) !important;
+    color: white !important;
+    border: none !important;
+    height: 40px;
+    width: 40px;
+    border-radius: 10px !important;
+    font-weight: 500 !important;
+    transition: all 0.3s ease !important;
+    box-shadow: 0 4px 10px rgba(79, 172, 254, 0.3) !important;
+    cursor: pointer !important;
+}
+
+
+.btn-save {
+    height: 45px;
+    background: linear-gradient(135deg, #6969ff 0%, #0000FF 100%);
+    color: white;
+    padding: 0 15px;
+    border-radius: 10px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+    transition: 0.3s;
+}
+
+
+.btn-close {
+    height: 45px;
+    background: linear-gradient(135deg, #ff7a7a 0%, #FF0000 100%);
+    color: white;
+    padding: 0 15px;
+    border-radius: 10px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+    transition: 0.3s;
+}
+
+.btn-clear {
+    height: 45px;
+    background: linear-gradient(135deg, #DCDCDC 0%, #acabab 100%);
+    color: white;
+    padding: 0 15px;
+    border-radius: 10px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+    transition: 0.3s;
+}
+
+.sub-btn {
+    border-radius: 50px;
+    height: 40px;
+    padding: 0px 15px;
+    background: linear-gradient(135deg, #9fffcf 0%, #0ec268 100%);
+    color: #ffffff;
+    padding: 0 15px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+    transition: 0.3s;
+}
+
+.btn-create:hover,
+.btn-view:hover,
+.btn-flow:hover,
+.btn-close:hover,
+.btn-save:hover,
+.btn-clear:hover,
+.sub-btn:hover,
+.btn-edit:hover,
+.btn-cancel:hover,
+.btn-search:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 12px 25px rgba(37, 99, 235, 0.4);
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+    width: 100%;
+    height: 45px;
+    padding: 10px 10px;
+    border-radius: 10px;
+    font-family: 'Prompt', sans-serif;
+    font-size: 1rem;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-input);
+    color: var(--text-main);
+    transition: all 0.3s;
+    box-sizing: border-box;
+}
+
+.form-input:disabled {
+    background-color: #e1e1e1 !important;
+    color: #6c757d !important;
+    cursor: not-allowed;
+    opacity: 1;
+}
+
+.select2-container .select2-selection--single {
+    font-family: 'Prompt', sans-serif;
+    height: 45px !important;
+    display: flex;
+    align-items: center;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 45px !important;
+    padding-left: 12px !important;
+    color: #000000 !important;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__clear {
+    padding: 13px 15px !important;
+    color: #6c757d !important;
+}
+
+/* ปรับตำแหน่งลูกศร */
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 40px !important;
+    right: 5px !important;
+}
+
+/* 4. สไตล์ตอน Focus (สีฟ้า Azure) */
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus,
+.select2-search--dropdown .select2-search__field:focus,
+.select2-container--default.select2-container--focus .select2-selection--single {
+    border-color: #4facfe !important;
+    box-shadow: 0 0 0 0.2rem rgba(79, 172, 254, 0.25) !important;
+    outline: 0;
+}
+
+/* 5. ปรับแต่ง Dropdown list (เวลาคลิกเลือก) */
+.select2-dropdown {
+    border: 1px solid #4facfe !important;
+    border-radius: 8px !important;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* สีแถบไฮไลท์เวลาเอาเมาส์ชี้เลือก */
+.select2-container--default .select2-results__option--highlighted[aria-selected] {
+    background-color: #4facfe !important;
+    /* ฟ้า Azure */
+    color: white !important;
+}
+
+/* ช่อง Search ข้างใน Dropdown */
+.select2-search--dropdown .select2-search__field {
+    line-height: 30px !important;
+    border-radius: 5px !important;
+    border: 1px solid #4facfe !important;
+    padding: 4px 8px !important;
+}
+
+/* สี รายการที่ถูกเลือก*/
+.select2-container--default .select2-results__option--selected {
+    background-color: unset !important;
+    font-weight: 800 !important;
+    color: var(--primary) !important;
+}
+
+.select2-container--default .select2-selection--single {
+    background-color: #fff;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 10px !important;
+}
+
+/* กำหนดความสูงของรายการที่ Dropdown ลงมา */
+.select2-results__options {
+    max-height: 200px !important;
+    /* ปรับเลขนี้ตามความสูงที่ต้องการ */
+    overflow-y: auto !important;
+    /* บังคับให้มี Scrollbar แนวตั้ง */
+}
+
+.tt-menu {
+    max-height: 200px !important;
+    overflow-y: auto !important;
+}
+
+/* Table */
+.table-card {
+    background: var(--bg-card);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: var(--shadow-card);
+    border: 1px solid var(--border-color);
+}
+
+.table-responsive {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    min-width: 900px;
+}
+
+tr th {
+    background-color: #083275 !important;
+    color: white !important;
+    height: 30px;
+}
+
+th {
+    background: var(--bg-hover);
+    color: var(--text-sub);
+    font-weight: 600;
+    font-size: 14px;
+    padding: 10px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+    text-transform: uppercase;
+}
+
+td {
+    padding: 10px 10px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 14px;
+    vertical-align: middle;
+    color: var(--text-main);
+}
+
+tr:last-child td {
+    border-bottom: none;
+}
+
+tr:hover td {
+    background: var(--bg-hover);
+}
+
+.label-text {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+/* modal */
+/* พื้นหลัง Modal */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    /* พื้นหลังเบลอแบบสมัยใหม่ */
+}
+
+/* กล่อง Modal */
+.modal-content {
+    max-height: 650px;
+    overflow-y: auto;
+    resize: none;
+    background-color: #fff;
+    margin: 2% auto;
+    padding: 0;
+    width: 85%;
+    border-radius: 16px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.modal-header {
+    padding: 5px 20px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: #1e293b;
+}
+
+.modal-body {
+    padding: 20px !important;
+}
+
+.modal-footer {
+    padding: 15px 20px;
+    border-top: 1px solid #e2e8f0;
+    text-align: right;
+    display: flex;
+    gap: 10px;
+    justify-content: space-between;
+}
+
+.row {
+    display: flex !important;
+}
+
+a {
+    text-decoration: none !important;
+}
+
+input[type="radio"] {
+    transform: scale(1.5);
+    /* ขยายเป็น 1.5 เท่า (ปรับเลขได้ตามต้องการ) */
+    margin-right: 5px;
+    /* จัดระยะห่างจากข้อความนิดหน่อย */
+}
+
+/* เปลี่ยนสีแถบเวลาของ SweetAlert2 */
+.swal2-timer-progress-bar {
+    background-color: #ff0000 !important;
+}
+
+.pagination {
+    display: flex;
+    padding-left: 0;
+    list-style: none;
+    gap: 5px;
+    /* เว้นระยะระหว่างปุ่ม */
+}
+
+.page-item .page-link {
+    position: relative;
+    display: block;
+    padding: 0.5rem 0.75rem;
+    margin-left: 0;
+    line-height: 1.25;
+    color: #6c757d;
+    /* สีตัวอักษรปกติ */
+    background-color: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    /* ขอบมน */
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+/* Hover */
+.page-item .page-link:hover {
+    color: #0d6efd;
+    background-color: #e9ecef;
+    border-color: #dee2e6;
+}
+
+/* Active (หน้าปัจจุบัน) */
+.page-item.active .page-link {
+    z-index: 3;
+    color: #fff;
+    background-color: #0d6efd;
+    /* สีน้ำเงินหลัก */
+    border-color: #0d6efd;
+    box-shadow: 0 2px 5px rgba(13, 110, 253, 0.3);
+}
+
+/* Disabled (กดไม่ได้) */
+.page-item.disabled .page-link {
+    color: #adb5bd;
+    pointer-events: none;
+    background-color: #fff;
+    border-color: #dee2e6;
+    opacity: 0.6;
+}
+
+/* Text Muted (ข้อความ "แสดง 1 ถึง 10") */
+.text-muted {
+    color: #6c757d !important;
+    font-size: 0.9rem;
+    padding: 20px;
+}
+
+/* จัดวางตำแหน่ง Tooltip */
+.tooltip {
+    position: relative;
+    display: inline;
+
+}
+
+.tooltip .tooltiptext {
+    white-space: nowrap;
+    width: auto;
+    font-size: 14px;
+    visibility: hidden;
+    background-color: #333;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    padding: 5px 10px;
+    position: absolute;
+    z-index: 999999 !important;
+    bottom: 125%;
+    /* ให้อยู่เหนือปุ่ม */
+    left: 50%;
+    margin-left: -18px;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+/* เมื่อชี้เมาส์ให้แสดงข้อความ */
+.tooltip:hover .tooltiptext {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* =========================================
+   1. ส่วนแสดงผลข้อความ Error (Text)
+   ========================================= */
+.parsley-errors-list {
+    display: none;
+    list-style-type: none;
+    padding-left: 0;
+    margin-top: 5px;
+    color: #dc3545;
+    font-size: 0.875em;
+    transition: all 0.3s ease-in-out;
+}
+
+.parsley-errors-list.filled {
+    display: block;
+    animation: fadeInDown 0.3s ease-in-out;
+}
+
+@keyframes fadeInDown {
+    from {
+        opacity: 0;
+        transform: translate3d(0, -10px, 0);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+    }
+}
+
+select.parsley-error+.select2 .select2-selection,
+input.parsley-error,
+textarea.parsley-error {
+    border-color: #dc3545 !important;
+    padding-right: 2.25rem;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.8rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+select.parsley-error+.select2 .select2-selection__rendered {
+    color: #dc3545 !important;
+}
+
+select.parsley-success+.select2 .select2-selection {
+    border-color: #aaa !important;
+    background-image: none !important;
+    padding-right: 0 !important;
+}
+
+select.parsley-success+.select2 .select2-selection__rendered {
+    color: #444 !important;
+}
+
+/* [Success] คืนค่าสีเดิม */
+input.parsley-success,
+textarea.parsley-success {
+    border-color: #ced4da !important;
+    background-image: none !important;
+}
+
+select.parsley-error+.select2.select2-container--focus .select2-selection,
+select.parsley-error+.select2.select2-container--open .select2-selection,
+/* เพิ่ม open ให้ด้วยเผื่อตอนกาง */
+input.parsley-error:focus,
+textarea.parsley-error:focus {
+    border-color: #dc3545 !important;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
+}
