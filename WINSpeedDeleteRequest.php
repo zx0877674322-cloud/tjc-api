@@ -439,6 +439,9 @@ $users_list_q = $conn->query("SELECT DISTINCT requester_name FROM winspeed_delet
                             <option value="completed" <?php echo ($_GET['filter_status'] ?? '') == 'completed' ? 'selected' : ''; ?>>
                                 เสร็จสิ้น
                             </option>
+                            <option value="cancelled" <?php echo ($_GET['filter_status'] ?? '') == 'cancelled' ? 'selected' : ''; ?>>
+                                ยกเลิก
+                            </option>
                         </select>
                     </div>
                     <button type="submit" class="btn-search">

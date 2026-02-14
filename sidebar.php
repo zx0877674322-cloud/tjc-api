@@ -1064,7 +1064,7 @@ function getAvatar()
             </li>
         <?php endif; ?>
 
-        <?php if (canSeeMenu('Dashboard.php') || canSeeMenu('Report.php') || canSeeMenu('ManageCustomers.php') || canSeeMenu('MapDashboard.php') || canSeeMenu('ActivityManager.php') || canSeeMenu('StatusManager.php')):
+        <?php if (canSeeMenu('Dashboard.php') || canSeeMenu('Report.php') || canSeeMenu('ManageCustomers.php') || canSeeMenu('MapDashboard.php') || canSeeMenu('ActivityManager.php') || canSeeMenu('StatusManager.php')||canSeeMenu('work_plan_add.php')):
             $sale_pages = ['Dashboard.php', 'Report.php', 'MapDashboard.php', 'ActivityManager.php', 'StatusManager.php', 'ManageCustomers.php'];
             $sale_open = in_array($current_page, $sale_pages) ? 'open' : '';
             $sale_show = in_array($current_page, $sale_pages) ? 'show' : '';
@@ -1098,6 +1098,11 @@ function getAvatar()
                         <li><a href="ManageCustomers.php"
                                 class="<?php echo isActive('ManageCustomers.php', $current_page); ?>"><i
                                     class="fas fa-tasks"></i> จัดการชื่อหน่วยงาน</a></li><?php endif; ?>
+                    <?php if (canSeeMenu('work_plan_add.php')): ?>
+                        <li><a href="work_plan_add.php"
+                                class="<?php echo isActive('work_plan_add.php', $current_page); ?>"><i
+                                    class="fas fa-tasks"></i> เพลนงาน</a></li>
+                    <?php endif; ?>
                 </ul>
             </li>
         <?php endif; ?>
@@ -1129,7 +1134,7 @@ function getAvatar()
             </li>
         <?php endif; ?>
 
-        <?php if (canSeeMenu('fm_dashboard.php') || canSeeMenu('fm_jobs.php')||canSeeMenu('delivery_dashboard.php')||canSeeMenu('delivery_create_report.php')):
+        <?php if (canSeeMenu('fm_dashboard.php') || canSeeMenu('fm_jobs.php') || canSeeMenu('delivery_dashboard.php') || canSeeMenu('delivery_create_report.php')):
             $fm_pages = ['fm_dashboard.php', 'fm_jobs.php', 'fm_accommodation.php', 'fm_report_travel.php', 'fm_drivers.php'];
             $fm_open = in_array($current_page, $fm_pages) ? 'open' : '';
             $fm_show = in_array($current_page, $fm_pages) ? 'show' : '';
@@ -1184,10 +1189,10 @@ function getAvatar()
             </li>
         <?php endif; ?>
 
-        <?php if (canSeeMenu('warehouse_dashboard.php') || canSeeMenu('warehouse_create_report.php')): 
-                $wh_pages = ['warehouse_dashboard.php', 'warehouse_create_report.php'];
-                $wh_open = in_array($current_page, $wh_pages) ? 'open' : '';
-                $wh_show = in_array($current_page, $wh_pages) ? 'show' : '';
+        <?php if (canSeeMenu('warehouse_dashboard.php') || canSeeMenu('warehouse_create_report.php')):
+            $wh_pages = ['warehouse_dashboard.php', 'warehouse_create_report.php'];
+            $wh_open = in_array($current_page, $wh_pages) ? 'open' : '';
+            $wh_show = in_array($current_page, $wh_pages) ? 'show' : '';
             ?>
             <li class="has-dropdown <?php echo $wh_open; ?>">
                 <a href="javascript:void(0);" onclick="toggleDropdown(event, this);"
@@ -1206,20 +1211,22 @@ function getAvatar()
                         </a>
                     </li>
                     <li>
-                        <a href="warehouse_dashboard.php" class="<?php echo isActive('warehouse_dashboard.php', $current_page); ?>">
+                        <a href="warehouse_dashboard.php"
+                            class="<?php echo isActive('warehouse_dashboard.php', $current_page); ?>">
                             <i class="fas fa-chart-pie"></i> สรุปรายงานคลัง
                         </a>
                     </li>
 
                     <li>
-                        <a href="warehouse_create_report.php" class="<?php echo isActive('warehouse_create_report.php', $current_page); ?>">
+                        <a href="warehouse_create_report.php"
+                            class="<?php echo isActive('warehouse_create_report.php', $current_page); ?>">
                             <i class="fas fa-file-alt"></i> บันทึกงานคลัง
                         </a>
                     </li>
-    
+
                 </ul>
             </li>
-            <?php endif; ?>
+        <?php endif; ?>
 
         <?php if (canSeeMenu('SubmitDocument.php') || canSeeMenu('DocumentDashboard.php') || canSeeMenu('ManageSuppliers.php') || canSeeMenu('WINSpeedDeleteRequest.php')):
             $po_pages = ['DocumentDashboard.php', 'SubmitDocument.php', 'ManageSuppliers.php', 'WINSpeedDeleteRequest.php'];
@@ -1281,7 +1288,7 @@ function getAvatar()
         <?php endif; ?>
 
 
-        <?php if (canSeeMenu('project_dashboard.php') || canSeeMenu('project_details.php') || canSeeMenu('ServiceRequest.php') || canSeeMenu('service_dashboard.php') || canSeeMenu('ProjectShops.php')||canSeeMenu('manage_job_types.php')):
+        <?php if (canSeeMenu('project_dashboard.php') || canSeeMenu('project_details.php') || canSeeMenu('ServiceRequest.php') || canSeeMenu('service_dashboard.php') || canSeeMenu('ProjectShops.php') || canSeeMenu('manage_job_types.php')):
             $proj_pages = ['project_dashboard.php', 'project_details.php'];
             $proj_open = in_array($current_page, $proj_pages) ? 'open' : '';
             $proj_show = in_array($current_page, $proj_pages) ? 'show' : '';
@@ -1319,7 +1326,8 @@ function getAvatar()
                                     class="fas fa-tools"></i> ร้านช่าง</a></li>
                     <?php endif; ?>
                     <?php if (canSeeMenu('manage_job_types.php')): ?>
-                        <li><a href="manage_job_types.php" class="<?php echo isActive('manage_job_types.php', $current_page); ?>"><i
+                        <li><a href="manage_job_types.php"
+                                class="<?php echo isActive('manage_job_types.php', $current_page); ?>"><i
                                     class="fas fa-tools"></i> ประเภทงานเเละติดต่อ</a></li>
                     <?php endif; ?>
                 </ul>
