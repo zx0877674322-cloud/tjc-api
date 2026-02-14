@@ -45,35 +45,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $is_returning = $_POST['is_returning']; // 1=ตีกลับ, 0=ยกเลิก
 
             if ($is_returning == '1') {
-                // ✅ ตีกลับ: บันทึกคนตีกลับ + ล้างประวัติคนยกเลิก (Reset Cancel Info)
-                $sql = "UPDATE document_submissions SET 
-                        return_doc_by = ?, return_doc_at = ?, 
-                        cancel_return_by = NULL, cancel_return_at = NULL 
-                        WHERE id = ?";
-                $stmt = $conn->prepare($sql);
-                $stmt->bind_param("ssi", $current_user, $now, $doc_id);
-            } else {
-                // ✅ ยกเลิก: ล้างคนตีกลับ + บันทึกคนยกเลิกแทน
-                $sql = "UPDATE document_submissions SET 
-                        return_doc_by = NULL, return_doc_at = NULL,
-                        cancel_return_by = ?, cancel_return_at = ?
-                        WHERE id = ?";
-                $stmt = $conn->prepare($sql);
-                $stmt->bind_param("ssi", $current_user, $now, $doc_id);
-            }
-            $stmt->execute();
-            $stmt->close();
+                // ✅ 1. รับค่าหมายเหตุ (ถ้าไม่มีให้เป็น null)
+                $remark = isset($_POST['return_remark']) ? trim($_POST['return_remark']) : null;
 
-            // ส่งค่ากลับไปให้ JS อัปเดตหน้าจอ
+                // ✅ 2. เพิ่มการบันทึก return_remark ลงฐานข้อมูล
+                $sql = "UPDATE document_submissions SET 
+                return_doc_by = ?, 
+                return_doc_at = ?, 
+                return_remark = ?,  -- เพิ่มคอลัมน์นี้
+                cancel_return_by = NULL, 
+                cancel_return_at = NULL 
+                WHERE id = ?";
+
+                $stmt = $conn->prepare($sql);
+                // ✅ 3. ผูกตัวแปร (sssi -> sssi) : s ตัวที่ 3 คือ remark
+                $stmt->bind_param("sssi", $current_user, $now, $remark, $doc_id);
+                $stmt->execute();
+                $stmt->close();
+
+            } else {
+                // กรณี "ยกเลิก" (ต้องล้างค่าหมายเหตุทิ้งด้วย เพื่อไม่ให้ค้าง)
+                $sql = "UPDATE document_submissions SET 
+                return_doc_by = NULL, 
+                return_doc_at = NULL,
+                return_remark = NULL, -- ล้างหมายเหตุออก
+                cancel_return_by = ?, 
+                cancel_return_at = ?
+                WHERE id = ?";
+
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("ssi", $current_user, $now, $doc_id);
+                $stmt->execute();
+                $stmt->close();
+            }
+
+            // ✅ 4. ส่งค่าหมายเหตุกลับไปให้ JavaScript แสดงผลทันที
             echo json_encode([
                 'status' => 'success',
                 'doc_id' => $doc_id,
                 'is_returning' => $is_returning,
                 'action_by' => $current_user,
-                'action_at' => date('d/m/y H:i', strtotime($now))
+                'action_at' => date('d/m/y H:i', strtotime($now)),
+                'return_remark' => isset($remark) ? $remark : '' // ส่งกลับไปแสดง
             ]);
             exit;
-
         } elseif ($action == 'update_credit') {
             $credit = $_POST['credit_term'];
             $stmt = $conn->prepare("UPDATE document_submissions SET credit_term=? WHERE id=?");
@@ -1103,7 +1118,8 @@ while ($r = $q_u->fetch_assoc()) {
                                     <i class="fas fa-receipt dt-icon"></i>
                                     <div class="dt-text">ใบเสร็จ</div>
                                     <div class="dt-val" id="c_rcpt_cnt_<?php echo $cid; ?>">
-                                        <?php echo $c['count_receipt']; ?></div>
+                                        <?php echo $c['count_receipt']; ?>
+                                    </div>
                                     <div class="dt-amt"><span
                                             id="c_rcpt_amt_<?php echo $cid; ?>"><?php echo number_format($c['amount_receipt']); ?></span>
                                     </div>
@@ -1113,7 +1129,8 @@ while ($r = $q_u->fetch_assoc()) {
                                     <i class="fas fa-money-check-alt dt-icon"></i>
                                     <div class="dt-text">ชุดชำระ</div>
                                     <div class="dt-val" id="c_pay_cnt_<?php echo $cid; ?>">
-                                        <?php echo $c['count_payment']; ?></div>
+                                        <?php echo $c['count_payment']; ?>
+                                    </div>
                                     <div class="dt-amt"><span
                                             id="c_pay_amt_<?php echo $cid; ?>"><?php echo number_format($c['amount_payment']); ?></span>
                                     </div>
@@ -1627,24 +1644,36 @@ while ($r = $q_u->fetch_assoc()) {
                                             <?php endif; ?>
                                         </td>
                                         <td id="cell-return-<?php echo $row['id']; ?>" class="col-nowrap"
-                                            style="text-align:center;">
+                                            style="text-align:center; vertical-align:middle;">
 
                                             <?php if (!empty($row['return_doc_by'])): ?>
                                                 <div class="action-info-box"
-                                                    style="background:#fef2f2; border:1px solid #fca5a5; color:#b91c1c; padding:6px 4px;">
-                                                    <div class="action-user"
-                                                        style="color:inherit; justify-content:center; font-weight:700;">
-                                                        <i class="fas fa-ban" style="margin-right:3px;"></i>
+                                                    style="background:#fef2f2; border:1px solid #fecaca; color:#b91c1c; padding:8px 6px; border-radius:8px; width: 100%;">
+
+                                                    <div style="font-weight:700; font-size:11px; margin-bottom:2px;">
+                                                        <i class="fas fa-user-times"></i>
                                                         <?php echo htmlspecialchars($row['return_doc_by']); ?>
                                                     </div>
-                                                    <div style="font-size:10px; margin-top:2px;">
+
+                                                    <div style="font-size:10px; color:#ef4444; margin-bottom:8px;">
                                                         <?php echo date('d/m/y H:i', strtotime($row['return_doc_at'])); ?>
                                                     </div>
-                                                    <div style="margin-top:4px; border-top:1px dashed #fca5a5; padding-top:4px;">
+
+                                                    <?php
+                                                    $remark_text = !empty($row['return_remark']) ? $row['return_remark'] : "- ไม่ระบุ -";
+                                                    ?>
+                                                    <button type="button"
+                                                        data-remark="<?php echo htmlspecialchars($remark_text, ENT_QUOTES); ?>"
+                                                        onclick="viewReturnRemark(this)"
+                                                        style="background:#fff; border:1px solid #fca5a5; color:#dc2626; font-size:10px; padding:4px 10px; border-radius:15px; cursor:pointer; width:100%; margin-bottom:8px; font-weight:600; display:flex; align-items:center; justify-content:center; gap:5px;">
+                                                        <i class="fas fa-comment-alt"></i> อ่านสาเหตุ
+                                                    </button>
+
+                                                    <div style="border-top:1px dashed #fca5a5; padding-top:6px;">
                                                         <button type="button"
                                                             onclick="toggleReturnDoc(<?php echo $row['id']; ?>, 0)"
-                                                            style="background:none; border:none; color:#ef4444; font-size:11px; cursor:pointer; text-decoration:underline; font-weight:600;">
-                                                            ยกเลิก (Reset)
+                                                            style="background:none; border:none; color:#991b1b; font-size:10px; cursor:pointer; text-decoration:underline;">
+                                                            ยกเลิกสถานะ (Reset)
                                                         </button>
                                                     </div>
                                                 </div>
@@ -1652,20 +1681,21 @@ while ($r = $q_u->fetch_assoc()) {
                                             <?php else: ?>
                                                 <?php if (!empty($row['cancel_return_by'])): ?>
                                                     <div
-                                                        style="font-size:10px; color:#64748b; margin-bottom:4px; background:#f1f5f9; padding:2px; border-radius:4px;">
+                                                        style="font-size:10px; color:#64748b; margin-bottom:6px; background:#f1f5f9; padding:4px; border-radius:4px; border:1px solid #e2e8f0; text-align:left;">
                                                         <i class="fas fa-history"></i> ยกเลิกโดย: <br>
                                                         <strong><?php echo htmlspecialchars($row['cancel_return_by']); ?></strong><br>
-                                                        (<?php echo date('d/m/y H:i', strtotime($row['cancel_return_at'])); ?>)
+                                                        <span
+                                                            style="font-size:9px;">(<?php echo date('d/m/y H:i', strtotime($row['cancel_return_at'])); ?>)</span>
                                                     </div>
                                                 <?php endif; ?>
 
                                                 <button type="button" onclick="toggleReturnDoc(<?php echo $row['id']; ?>, 1)"
                                                     class="status-btn"
-                                                    style="background:#fff; border:1px solid #197a29; color:#197a29; width:100%; justify-content:center; padding:4px;">
-                                                    <i class="fas fa-undo-alt" style="margin-right:3px;"></i> ตีกลับ
+                                                    style="background:#fff; border:1px solid #dc2626; color:#dc2626; width:100%; justify-content:center; padding:4px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:600; display:block;">
+                                                    <i class="fas fa-reply" style="margin-right:3px;"></i> ตีกลับ
                                                 </button>
-                                            <?php endif; ?>
 
+                                            <?php endif; ?>
                                         </td>
 
                                         <td class="col-nowrap" style="text-align:center;">

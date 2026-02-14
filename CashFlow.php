@@ -429,7 +429,7 @@ if (!empty($all_companies)) {
                             </thead>
                             <tbody>
                                 <?php
-                                $sql = "SELECT * FROM cash_flow WHERE $date_condition ORDER BY trans_date DESC, id DESC LIMIT 50";
+                                $sql = "SELECT * FROM cash_flow WHERE $date_condition ORDER BY trans_date DESC, id DESC ";
                                 $result = $conn->query($sql);
                                 if ($result->num_rows > 0) {
                                     $i = 1;

@@ -858,74 +858,92 @@ function openHistoryModal(docId) {
         console.error(err);
     });
 }
-function toggleReturnDoc(docId, isReturning) {
-    let titleText = isReturning == 1 ? "ยืนยันการตีกลับเอกสาร?" : "ยกเลิกสถานะตีกลับ?";
-    let btnText = isReturning == 1 ? "ใช่, ตีกลับ" : "ใช่, ยกเลิก";
-    let btnColor = isReturning == 1 ? "#ef4444" : "#6b7280";
+// ฟังก์ชันกดดูหมายเหตุ (Popup)
+function viewReturnRemark(btn) {
+    // ดึงข้อความจาก attribute data-remark
+    let remarkText = btn.getAttribute('data-remark');
 
     Swal.fire({
+        title: '<strong style="color:#b91c1c; font-size:1.1rem;"><i class="fas fa-exclamation-circle"></i> สาเหตุการตีกลับ</strong>',
+        html: `
+            <div style="background:#fff5f5; padding:15px; border-radius:8px; border:1px dashed #fca5a5; color:#7f1d1d; font-size:0.95rem; line-height:1.5; text-align:left;">
+                ${remarkText}
+            </div>
+        `,
+        confirmButtonText: 'รับทราบ',
+        confirmButtonColor: '#64748b',
+        width: '350px',
+        padding: '1rem'
+    });
+}
+
+// ฟังก์ชันตีกลับ/ยกเลิก (เหมือนเดิม แต่ย้ำเพื่อความชัวร์)
+function toggleReturnDoc(docId, isReturning) {
+    let titleText = isReturning == 1 ? "ยืนยันการตีกลับ?" : "ยกเลิกสถานะตีกลับ?";
+    let confirmBtnColor = isReturning == 1 ? "#ef4444" : "#6b7280";
+
+    let swalConfig = {
         title: titleText,
-        text: isReturning == 1 ? "ระบบจะบันทึกสถานะการตีกลับ" : "รายการจะกลับสู่สถานะปกติ",
-        icon: "warning",
+        icon: isReturning == 1 ? "warning" : "question",
         showCancelButton: true,
-        confirmButtonColor: btnColor,
-        confirmButtonText: btnText,
+        confirmButtonColor: confirmBtnColor,
+        confirmButtonText: "ยืนยัน",
         cancelButtonText: "ปิด"
-    }).then((result) => {
+    };
+
+    if (isReturning == 1) {
+        swalConfig.input = 'textarea';
+        swalConfig.inputPlaceholder = 'ระบุสาเหตุ (เช่น เอกสารไม่ชัดเจน)...';
+        swalConfig.inputValidator = (value) => {
+            if (!value) return 'กรุณาระบุสาเหตุ!';
+        };
+    }
+
+    Swal.fire(swalConfig).then((result) => {
         if (result.isConfirmed) {
             const formData = new FormData();
             formData.append('action', 'return_document');
             formData.append('doc_id', docId);
             formData.append('is_returning', isReturning);
+            // ส่งค่าหมายเหตุไปด้วย
+            if (isReturning == 1) {
+                formData.append('return_remark', result.value);
+            }
 
-            fetch('DocumentDashboard.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
+            fetch('DocumentDashboard.php', { method: 'POST', body: formData })
+            .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
-                    const cell = document.getElementById('cell-return-' + docId);
-                    
-                    if (isReturning == 1) {
-                        // เปลี่ยนเป็นกล่องแดง (ตีกลับ)
-                        cell.innerHTML = `
-                            <div class="action-info-box" style="background:#fef2f2; border:1px solid #fca5a5; color:#b91c1c; padding:6px 4px;">
-                                <div class="action-user" style="color:inherit; justify-content:center; font-weight:700;">
-                                    <i class="fas fa-ban" style="margin-right:3px;"></i> 
-                                    ${data.action_by}
-                                </div>
-                                <div style="font-size:10px; margin-top:2px;">
-                                    ${data.action_at}
-                                </div>
-                                <div style="margin-top:4px; border-top:1px dashed #fca5a5; padding-top:4px;">
-                                    <button type="button" onclick="toggleReturnDoc(${docId}, 0)"
-                                            style="background:none; border:none; color:#ef4444; font-size:11px; cursor:pointer; text-decoration:underline; font-weight:600;">
-                                        ยกเลิก (Reset)
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    } else {
-                        // ✅ กดยกเลิก -> กลับเป็นปุ่มตีกลับ + โชว์ประวัติคนยกเลิก
-                        cell.innerHTML = `
-                            <div style="font-size:10px; color:#64748b; margin-bottom:4px; background:#f1f5f9; padding:2px; border-radius:4px;">
-                                <i class="fas fa-history"></i> ยกเลิกโดย: <br>
-                                <strong>${data.action_by}</strong><br>
-                                (${data.action_at})
-                            </div>
-                            <button type="button" onclick="toggleReturnDoc(${docId}, 1)"
-                                    class="status-btn"
-                                    style="background:#fff; border:1px solid #ef4444; color:#ef4444; width:100%; justify-content:center; padding:4px;">
-                                <i class="fas fa-undo-alt" style="margin-right:3px;"></i> ตีกลับ
-                            </button>
-                        `;
-                    }
+                    location.reload(); // รีโหลดหน้าเพื่ออัปเดตปุ่ม
                 }
-            })
-            .catch(error => {
-                console.error('Error:', error);
             });
         }
     });
+}
+function openReturnModal(id) {
+    // 1. รับค่า Element แบบไม่ใช้ jQuery ($)
+    var idInput = document.getElementById('return_req_id');
+    var remarkInput = document.querySelector('textarea[name="return_remark"]');
+    var modalEl = document.getElementById('returnModal');
+
+    // 2. ใส่ค่า ID และเคลียร์ข้อความ
+    if (idInput) idInput.value = id;
+    if (remarkInput) remarkInput.value = '';
+
+    // 3. สั่งเปิด Modal (รองรับทั้ง Bootstrap 5 และ 4)
+    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+        // กรณีใช้ Bootstrap 5
+        var myModal = bootstrap.Modal.getInstance(modalEl); // เช็คว่ามี instance อยู่แล้วไหม
+        if (!myModal) {
+            myModal = new bootstrap.Modal(modalEl);
+        }
+        myModal.show();
+    } else if (typeof $ !== 'undefined' && $.fn.modal) {
+        // กรณีใช้ Bootstrap 4 (ต้องมี jQuery)
+        $(modalEl).modal('show');
+    } else {
+        // 🔴 กรณีเลวร้ายสุด: ไม่มีทั้ง Bootstrap JS และ jQuery
+        alert('ระบบไม่สามารถเปิดหน้าต่างได้ (ไม่พบ Bootstrap JS หรือ jQuery)');
+        // วิธีแก้คือต้องไปเพิ่ม Script Tag ในหน้า PHP
+    }
 }

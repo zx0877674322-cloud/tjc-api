@@ -1,4 +1,6 @@
 <?php
+
+
 header("Access-Control-Allow-Origin: *");
 header("Content-Type: application/json; charset=UTF-8");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
@@ -684,6 +686,9 @@ if ($action == 'submit_marketing') {
     $final_total_sales = $calculated_total_sales;
     $final_total_expense = ($calc_expense > 0) ? $calc_expense : $total_expense;
 
+    // ✅ SQL INSERT (เพิ่ม doc_references เข้าไป)
+    // ตรวจสอบว่าตาราง report_online_marketing มีฟิลด์ doc_references หรือยัง?
+    // ถ้ายังไม่มีต้องไปเพิ่มใน Database: ALTER TABLE report_online_marketing ADD COLUMN doc_references TEXT AFTER order_number;
     
     $sql = "INSERT INTO report_online_marketing (
         report_date, reporter_name, work_type, area, province, gps, gps_address,
@@ -1050,7 +1055,7 @@ else if ($action == 'update_profile') {
 // ... (ใน api_mobile.php) ...
 
 // ==========================================
-// 11. GET CASH FLOW (ดึงข้อมูล + กราฟแยกบริษัท + Filter วันที่)
+// 11. GET CASH FLOW (แก้ไขป้องกัน Error 500)
 // ==========================================
 else if ($action == 'get_cashflow') {
     // --- 1. รับค่า Filter วันที่ ---
@@ -1058,28 +1063,38 @@ else if ($action == 'get_cashflow') {
     $end_date = isset($_GET['end_date']) && !empty($_GET['end_date']) ? $_GET['end_date'] : '';
 
     // สร้างเงื่อนไข SQL
-    $date_condition = "1=1"; // ถ้าไม่มี filter ให้ดึงทั้งหมด
+    $date_condition = "1=1"; 
     if (!empty($start_date) && !empty($end_date)) {
-        // Escape เพื่อความปลอดภัย
         $start_date = $conn->real_escape_string($start_date);
         $end_date = $conn->real_escape_string($end_date);
         $date_condition = "trans_date BETWEEN '$start_date' AND '$end_date'";
     }
 
-    // --- 2. คำนวณยอดรวมทั้งหมด (Overall Summary) ---
-    $sql_sum_in = "SELECT SUM(amount) as total FROM cash_flow WHERE type='Income' AND $date_condition";
-    $sum_in = $conn->query($sql_sum_in)->fetch_assoc()['total'] ?? 0;
+    // --- 2. คำนวณยอดรวมทั้งหมด (Safe Mode) ---
+    $sum_in = 0;
+    $sum_out = 0;
 
+    // คำนวณรายรับ (Income)
+    $sql_sum_in = "SELECT SUM(amount) as total FROM cash_flow WHERE type='Income' AND $date_condition";
+    $res_in = $conn->query($sql_sum_in);
+    if ($res_in) {
+        $row_in = $res_in->fetch_assoc();
+        $sum_in = $row_in['total'] ?? 0;
+    }
+
+    // คำนวณรายจ่าย (Expense)
     $sql_sum_out = "SELECT SUM(amount) as total FROM cash_flow WHERE type='Expense' AND $date_condition";
-    $sum_out = $conn->query($sql_sum_out)->fetch_assoc()['total'] ?? 0;
+    $res_out = $conn->query($sql_sum_out);
+    if ($res_out) {
+        $row_out = $res_out->fetch_assoc();
+        $sum_out = $row_out['total'] ?? 0;
+    }
     
-    // --- 3. คำนวณยอดแยกรายบริษัท (Company Stats for Cards & Chart) ---
+    // --- 3. คำนวณยอดแยกรายบริษัท ---
     $comp_stats = [];
-    // ✅ เพิ่มบรรทัด (SELECT logo_file ...)
     $sql_comp = "SELECT company, 
                  SUM(CASE WHEN type = 'Income' THEN amount ELSE 0 END) as total_in,
-                 SUM(CASE WHEN type = 'Expense' THEN amount ELSE 0 END) as total_out,
-                 (SELECT logo_file FROM companies WHERE company_name = cash_flow.company LIMIT 1) as logo_file 
+                 SUM(CASE WHEN type = 'Expense' THEN amount ELSE 0 END) as total_out
                  FROM cash_flow 
                  WHERE $date_condition
                  GROUP BY company 
@@ -1088,25 +1103,40 @@ else if ($action == 'get_cashflow') {
     $res_comp = $conn->query($sql_comp);
     
     if ($res_comp) {
+        // เตรียมดึง Logo แยก (เพื่อความชัวร์ ไม่ Subquery ซ้อน)
         while($row = $res_comp->fetch_assoc()) {
-            // สร้างชื่อย่อสำหรับกราฟ
-            $short_name = str_replace(['บริษัท ', ' จำกัด', ' (มหาชน)', ' คอร์ปอเรชั่น'], '', $row['company']);
-            $row['short_name'] = mb_substr($short_name, 0, 10, 'UTF-8') . (mb_strlen($short_name) > 10 ? '..' : '');
+            $company_name = $row['company'];
+            
+            // ดึง Logo แบบแยก query (ช้ากว่านิดหน่อยแต่ปลอดภัยกว่า Subquery ถ้า DB ไม่สมบูรณ์)
+            $logo_sql = "SELECT logo_file FROM companies WHERE company_name = '$company_name' LIMIT 1";
+            $res_logo = $conn->query($logo_sql);
+            $logo_file = ($res_logo && $r = $res_logo->fetch_assoc()) ? $r['logo_file'] : null;
+            $row['logo_file'] = $logo_file;
+
+            // ตัดคำชื่อบริษัท (Check mb_string support)
+            $short_name = str_replace(['บริษัท ', ' จำกัด', ' (มหาชน)', ' คอร์ปอเรชั่น'], '', $company_name);
+            
+            if (function_exists('mb_substr')) {
+                $row['short_name'] = mb_substr($short_name, 0, 10, 'UTF-8') . (mb_strlen($short_name) > 10 ? '..' : '');
+            } else {
+                // Fallback ถ้า Server ไม่มี mb_string
+                $row['short_name'] = substr($short_name, 0, 10) . '..';
+            }
             
             $row['total_in'] = floatval($row['total_in']);
             $row['total_out'] = floatval($row['total_out']);
-            // คำนวณส่วนต่าง
             $row['diff'] = $row['total_in'] - $row['total_out'];
+            
             $comp_stats[] = $row;
         }
     }
 
     // --- 4. ดึงรายการ (Transaction History) ---
-    // ถ้าไม่ได้กรองวันที่ ให้จำกัดแค่ 50 รายการล่าสุดเหมือนเว็บ
     $limit_clause = ($date_condition === "1=1") ? "LIMIT 50" : "";
     $sql_list = "SELECT * FROM cash_flow WHERE $date_condition ORDER BY trans_date DESC, id DESC $limit_clause";
     $result = $conn->query($sql_list);
     $history = [];
+    
     if ($result) {
         while($row = $result->fetch_assoc()) {
             $row['amount'] = floatval($row['amount']);
@@ -1125,7 +1155,7 @@ else if ($action == 'get_cashflow') {
             "expense" => floatval($sum_out),
             "diff" => floatval($sum_in - $sum_out)
         ],
-        "company_stats" => $comp_stats, // ข้อมูลสำหรับทั้งการ์ดและกราฟ
+        "company_stats" => $comp_stats,
         "history" => $history
     ]);
 }
