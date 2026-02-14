@@ -9,18 +9,46 @@ date_default_timezone_set('Asia/Bangkok');
 // --- 1. AJAX Handler: สำหรับ Admin กดยืนยัน (ทำงานส่วนนี้ก่อน HTML) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] == 'ajax_complete') {
     if (strtolower($_SESSION['role'] ?? '') !== 'admin' && !hasAction('btn_confirm_delete')) {
-    echo json_encode(['status' => 'error', 'message' => 'No permission']);
-    exit;
-}
+        echo json_encode(['status' => 'error', 'message' => 'No permission']);
+        exit;
+    }
     $id = intval($_POST['id']);
     $admin_name = $_SESSION['fullname'];
     $now = date('Y-m-d H:i:s');
-    
+
     $stmt = $conn->prepare("UPDATE winspeed_deletion_requests SET status = 'completed', completed_by = ?, completed_at = ? WHERE id = ?");
     $stmt->bind_param("ssi", $admin_name, $now, $id);
-    
+
     if ($stmt->execute()) {
         echo json_encode(['status' => 'success', 'admin_name' => $admin_name, 'date' => date('d/m/Y H:i', strtotime($now))]);
+    } else {
+        echo json_encode(['status' => 'error', 'message' => $conn->error]);
+    }
+    exit;
+}
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] == 'ajax_cancel') {
+    // เช็คสิทธิ์ (ใช้สิทธิ์เดียวกับ confirm หรือจะสร้างสิทธิ์ใหม่ก็ได้)
+    if (strtolower($_SESSION['role'] ?? '') !== 'admin' && !hasAction('btn_confirm_delete')) {
+        echo json_encode(['status' => 'error', 'message' => 'No permission']);
+        exit;
+    }
+
+    $id = intval($_POST['id']);
+    $cancel_reason = trim($_POST['cancel_reason']); // รับค่าหมายเหตุ
+    $admin_name = $_SESSION['fullname'];
+    $now = date('Y-m-d H:i:s');
+
+    // อัปเดตสถานะเป็น cancelled และบันทึกสาเหตุ
+    $stmt = $conn->prepare("UPDATE winspeed_deletion_requests SET status = 'cancelled', cancel_reason = ?, completed_by = ?, completed_at = ? WHERE id = ?");
+    $stmt->bind_param("sssi", $cancel_reason, $admin_name, $now, $id);
+
+    if ($stmt->execute()) {
+        echo json_encode([
+            'status' => 'success',
+            'admin_name' => $admin_name,
+            'date' => date('d/m/Y H:i', strtotime($now)),
+            'reason' => $cancel_reason
+        ]);
     } else {
         echo json_encode(['status' => 'error', 'message' => $conn->error]);
     }
@@ -45,7 +73,7 @@ if ($current_user_id > 0) {
     $stmt->close();
 }
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] == 'update_request') {
-    
+
     $id = intval($_POST['request_id']);
     $doc_type = $_POST['doc_type'];
     $doc_number = $_POST['doc_number'];
@@ -86,7 +114,7 @@ $requester_company = $user_info['company_name'] ?? 'ไม่ระบุสั�
 $current_user = $_SESSION['fullname'] ?? 'Unknown User';
 
 // *** แก้ตรงนี้: ให้ใช้ค่าเดียวกับที่โชว์ใน Input ($requester_company) ไปบันทึก ***
-$user_company_origin = $requester_company; 
+$user_company_origin = $requester_company;
 // ถ้าค่าว่าง ให้ใส่สำนักงานใหญ่
 if (empty($user_company_origin) || $user_company_origin == 'ไม่ระบุสังกัด') {
     $user_company_origin = 'สำนักงานใหญ่';
@@ -103,8 +131,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $target_companies = $_POST['target_winspeed_company'] ?? '';
 
     if ($doc_type === 'Other' && !empty($_POST['doc_type_remark'])) {
-    $doc_type = "อื่นๆ " . trim($_POST['doc_type_remark']);
-}
+        $doc_type = "อื่นๆ " . trim($_POST['doc_type_remark']);
+    }
 
     if (empty($doc_number) || empty($target_companies)) {
         echo "<script>
@@ -174,15 +202,15 @@ if (!empty($_GET['keyword'])) {
                         OR w.doc_type LIKE ? 
                         OR CONCAT(w.doc_type, ' ', w.doc_number) LIKE ?  
                         OR CONCAT(w.doc_type, w.doc_number) LIKE ?)"; // เพิ่มบรรทัดนี้ (แบบไม่เว้นวรรค)
-    
+
     $keyword_param = "%" . $_GET['keyword'] . "%";
-    
+
     $params[] = $keyword_param; // 1. เลขที่
     $params[] = $keyword_param; // 2. สาเหตุ
     $params[] = $keyword_param; // 3. ประเภท
     $params[] = $keyword_param; // 4. แบบมีเว้นวรรค (เช่น "AX 123")
     $params[] = $keyword_param; // 5. แบบติดกัน (เช่น "AX123")
-    
+
     $types .= "sssss"; // แก้ไข: ต้องมี s 5 ตัว (เพราะมี ? 5 ตัว)
 }
 if (!empty($_GET['filter_status'])) {
@@ -232,7 +260,7 @@ $users_list_q = $conn->query("SELECT DISTINCT requester_name FROM winspeed_delet
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="stylesheet" href="css/WINSpeedDeleteRequest.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-<link rel="stylesheet" href="https://npmcdn.com/flatpickr/dist/themes/material_blue.css">
+    <link rel="stylesheet" href="https://npmcdn.com/flatpickr/dist/themes/material_blue.css">
 </head>
 
 <body>
@@ -242,8 +270,8 @@ $users_list_q = $conn->query("SELECT DISTINCT requester_name FROM winspeed_delet
     <div class="main-content">
         <div class="container">
 
-            <button class="toggle-form-btn toggle-active" onclick="toggleForm()" id="btnToggle" 
-                    style="background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);">
+            <button class="toggle-form-btn toggle-active" onclick="toggleForm()" id="btnToggle"
+                style="background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);">
                 <span><i class="fas fa-minus-circle"></i> ปิดแบบฟอร์ม</span>
                 <i class="fas fa-chevron-down toggle-icon" style="transform: rotate(180deg);"></i>
             </button>
@@ -255,9 +283,9 @@ $users_list_q = $conn->query("SELECT DISTINCT requester_name FROM winspeed_delet
                     </div>
                     <div class="card-body">
                         <form method="POST">
-    <input type="hidden" name="action" id="form_action" value="submit_request">
+                            <input type="hidden" name="action" id="form_action" value="submit_request">
 
-    <input type="hidden" name="request_id" id="request_id" value="">
+                            <input type="hidden" name="request_id" id="request_id" value="">
 
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                                 <div class="form-group">
@@ -273,27 +301,30 @@ $users_list_q = $conn->query("SELECT DISTINCT requester_name FROM winspeed_delet
                             </div>
 
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-    <div class="form-group">
-        <label class="form-label">วันเวลาที่แจ้ง</label>
-        <input type="text" class="form-control"
-            value="<?php echo date('d/m/Y H:i', strtotime($current_datetime)); ?>" readonly>
-    </div>
-    
-    <div class="form-group">
-        <label class="form-label">ประเภทเอกสาร <span style="color:red">*</span></label>
-        <select name="doc_type" id="doc_type_select" class="form-control" required onchange="toggleRemarkField()">
-            <option value="PO">PO (ใบสั่งซื้อ)</option>
-            <option value="AX">AX (ใบขอซื้อ/ค่าใช้จ่าย)</option>
-            <option value="Other">อื่นๆ</option>
-        </select>
-    </div>
-</div>
+                                <div class="form-group">
+                                    <label class="form-label">วันเวลาที่แจ้ง</label>
+                                    <input type="text" class="form-control"
+                                        value="<?php echo date('d/m/Y H:i', strtotime($current_datetime)); ?>" readonly>
+                                </div>
 
-<div class="form-group" id="other_remark_field" style="display:none; margin-top: -10px; margin-bottom: 20px;">
-    <label class="form-label">ระบุประเภทเอกสารเพิ่มเติม <span style="color:red">*</span></label>
-    <input type="text" name="doc_type_remark" id="doc_type_remark_input" class="form-control" 
-           placeholder="เช่น ใบเสนอราคา, ใบรับของ...">
-</div>
+                                <div class="form-group">
+                                    <label class="form-label">ประเภทเอกสาร <span style="color:red">*</span></label>
+                                    <select name="doc_type" id="doc_type_select" class="form-control" required
+                                        onchange="toggleRemarkField()">
+                                        <option value="PO">PO (ใบสั่งซื้อ)</option>
+                                        <option value="AX">AX (ใบขอซื้อ/ค่าใช้จ่าย)</option>
+                                        <option value="Other">อื่นๆ</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-group" id="other_remark_field"
+                                style="display:none; margin-top: -10px; margin-bottom: 20px;">
+                                <label class="form-label">ระบุประเภทเอกสารเพิ่มเติม <span
+                                        style="color:red">*</span></label>
+                                <input type="text" name="doc_type_remark" id="doc_type_remark_input"
+                                    class="form-control" placeholder="เช่น ใบเสนอราคา, ใบรับของ...">
+                            </div>
 
                             <div class="form-group">
                                 <label class="form-label">เลขที่เอกสารที่จะลบ <span style="color:red">*</span>
@@ -303,7 +334,8 @@ $users_list_q = $conn->query("SELECT DISTINCT requester_name FROM winspeed_delet
                             </div>
 
                             <div class="form-group">
-                                <label class="form-label">บริษัทที่เปิดเอกสารใน WINSpeed <span style="color:red">*</span>
+                                <label class="form-label">บริษัทที่เปิดเอกสารใน WINSpeed <span
+                                        style="color:red">*</span>
                                     (เลือก 1 บริษัท)</label>
 
                                 <div class="company-grid">
@@ -348,16 +380,16 @@ $users_list_q = $conn->query("SELECT DISTINCT requester_name FROM winspeed_delet
                             </div>
 
                             <div style="display: flex; gap: 10px; margin-top: 20px;">
-        <button type="submit" class="btn-submit" id="btn_submit">
-            <i class="fas fa-paper-plane"></i> ส่งแจ้งลบ
-        </button>
+                                <button type="submit" class="btn-submit" id="btn_submit">
+                                    <i class="fas fa-paper-plane"></i> ส่งแจ้งลบ
+                                </button>
 
-        <button type="button" class="btn-submit" id="btn_cancel" 
-                style="background: #64748b; display: none;" onclick="cancelEditMode()">
-            <i class="fas fa-times"></i> ยกเลิกแก้ไข
-        </button>
-    </div>
-</form>
+                                <button type="button" class="btn-submit" id="btn_cancel"
+                                    style="background: #64748b; display: none;" onclick="cancelEditMode()">
+                                    <i class="fas fa-times"></i> ยกเลิกแก้ไข
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -370,48 +402,45 @@ $users_list_q = $conn->query("SELECT DISTINCT requester_name FROM winspeed_delet
                 <form method="GET" class="filter-bar">
                     <div class="filter-item" style="flex: 1; min-width: 200px;">
                         <label class="filter-label">คำค้นหา</label>
-                        <input type="text" name="keyword" class="filter-input" 
-                               placeholder="เลขที่เอกสาร / สาเหตุ..." 
-                               value="<?php echo htmlspecialchars($_GET['keyword'] ?? ''); ?>">
+                        <input type="text" name="keyword" class="filter-input" placeholder="เลขที่เอกสาร / สาเหตุ..."
+                            value="<?php echo htmlspecialchars($_GET['keyword'] ?? ''); ?>">
                     </div>
 
                     <div class="filter-item">
-    <label class="filter-label">วันที่เริ่ม</label>
-    <input type="text" name="start_date" class="filter-input date-picker" 
-           placeholder="เลือกวันที่..." 
-           value="<?php echo $_GET['start_date'] ?? ''; ?>">
-</div>
+                        <label class="filter-label">วันที่เริ่ม</label>
+                        <input type="text" name="start_date" class="filter-input date-picker"
+                            placeholder="เลือกวันที่..." value="<?php echo $_GET['start_date'] ?? ''; ?>">
+                    </div>
 
-<div class="filter-item">
-    <label class="filter-label">ถึงวันที่</label>
-    <input type="text" name="end_date" class="filter-input date-picker" 
-           placeholder="เลือกวันที่..." 
-           value="<?php echo $_GET['end_date'] ?? ''; ?>">
-</div>
+                    <div class="filter-item">
+                        <label class="filter-label">ถึงวันที่</label>
+                        <input type="text" name="end_date" class="filter-input date-picker" placeholder="เลือกวันที่..."
+                            value="<?php echo $_GET['end_date'] ?? ''; ?>">
+                    </div>
                     <div class="filter-item" style="min-width: 150px;">
-    <label class="filter-label">ผู้แจ้ง</label>
-    <select name="filter_user" class="filter-input" onchange="this.form.submit()">
-        <option value="">-- ทั้งหมด --</option>
-        <?php while ($u = $users_list_q->fetch_assoc()): ?>
-            <option value="<?php echo $u['requester_name']; ?>" 
-                <?php echo ($_GET['filter_user'] ?? '') == $u['requester_name'] ? 'selected' : ''; ?>>
-                <?php echo $u['requester_name']; ?>
-            </option>
-        <?php endwhile; ?>
-    </select>
-</div>
+                        <label class="filter-label">ผู้แจ้ง</label>
+                        <select name="filter_user" class="filter-input" onchange="this.form.submit()">
+                            <option value="">-- ทั้งหมด --</option>
+                            <?php while ($u = $users_list_q->fetch_assoc()): ?>
+                                <option value="<?php echo $u['requester_name']; ?>" <?php echo ($_GET['filter_user'] ?? '') == $u['requester_name'] ? 'selected' : ''; ?>>
+                                    <?php echo $u['requester_name']; ?>
+                                </option>
+                            <?php endwhile; ?>
+                        </select>
+                    </div>
                     <div class="filter-item" style="min-width: 140px;">
-    <label class="filter-label">สถานะ</label>
-    <select name="filter_status" class="filter-input" style="width:100%;" onchange="this.form.submit()">
-        <option value="">-- ทั้งหมด --</option>
-        <option value="pending" <?php echo ($_GET['filter_status'] ?? '') == 'pending' ? 'selected' : ''; ?>>
-            เเจ้งลบ
-        </option>
-        <option value="completed" <?php echo ($_GET['filter_status'] ?? '') == 'completed' ? 'selected' : ''; ?>>
-            เสร็จสิ้น
-        </option>
-    </select>
-</div>
+                        <label class="filter-label">สถานะ</label>
+                        <select name="filter_status" class="filter-input" style="width:100%;"
+                            onchange="this.form.submit()">
+                            <option value="">-- ทั้งหมด --</option>
+                            <option value="pending" <?php echo ($_GET['filter_status'] ?? '') == 'pending' ? 'selected' : ''; ?>>
+                                เเจ้งลบ
+                            </option>
+                            <option value="completed" <?php echo ($_GET['filter_status'] ?? '') == 'completed' ? 'selected' : ''; ?>>
+                                เสร็จสิ้น
+                            </option>
+                        </select>
+                    </div>
                     <button type="submit" class="btn-search">
                         <i class="fas fa-search"></i> ค้นหา
                     </button>
@@ -426,21 +455,21 @@ $users_list_q = $conn->query("SELECT DISTINCT requester_name FROM winspeed_delet
                             <thead>
                                 <tr>
                                     <th style="min-width: 140px;">วันที่แจ้ง</th>
-                                    
+
                                     <th style="min-width: 150px;">ผู้แจ้ง</th>
-                                    
+
                                     <th style="min-width: 140px;">เอกสาร</th>
-                                    
+
                                     <th>บริษัท (WINSpeed)</th>
-                                    
+
                                     <th style="text-align:center;">สาเหตุ</th>
-                                    
+
                                     <th style="text-align:center; min-width: 130px;">สถานะ</th>
-                                    
-                                    <th style="text-align:center; min-width: 120px;">ผู้ยืนยันลบ</th>
-                                    
+
+                                    <th style="text-align:center; min-width: 120px;">ผู้ยืนยัน/ยกเลิก</th>
+
                                     <th style="text-align:center; min-width: 120px;">ผู้แก้ไขล่าสุด</th>
-                                        <th style="text-align:center; min-width: 110px;">จัดการ</th>
+                                    <th style="text-align:center; min-width: 110px;">จัดการ</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -448,47 +477,96 @@ $users_list_q = $conn->query("SELECT DISTINCT requester_name FROM winspeed_delet
                                     <?php while ($row = $history->fetch_assoc()): ?>
                                         <tr id="row-<?php echo $row['id']; ?>">
                                             <td><?php echo date('d/m/Y H:i', strtotime($row['request_datetime'])); ?></td>
+
                                             <td>
                                                 <strong><?php echo $row['requester_name']; ?></strong><br>
                                                 <?php
-                                                    $show_comp = !empty($row['req_comp_short']) ? $row['req_comp_short'] : $row['requester_company'];
-                                                    if (trim($show_comp) === 'สำนักงานใหญ่') $show_comp = '';
+                                                $show_comp = !empty($row['req_comp_short']) ? $row['req_comp_short'] : $row['requester_company'];
+                                                if (trim($show_comp) === 'สำนักงานใหญ่')
+                                                    $show_comp = '';
                                                 ?>
                                                 <?php if ($show_comp !== ''): ?>
-                                                    <small style="color:#64748b; background:#f1f5f9; padding:2px 6px; border-radius:4px;">
+                                                    <small
+                                                        style="color:#64748b; background:#f1f5f9; padding:2px 6px; border-radius:4px;">
                                                         <i class="fas fa-building"></i> <?php echo $show_comp; ?>
                                                     </small>
                                                 <?php endif; ?>
                                             </td>
+
                                             <td>
-                                                <span style="font-weight:600; color:#ef4444;"><?php echo $row['doc_type']; ?></span>
+                                                <span
+                                                    style="font-weight:600; color:#ef4444;"><?php echo $row['doc_type']; ?></span>
                                                 <?php echo $row['doc_number']; ?>
                                             </td>
+
                                             <td><?php echo $row['target_winspeed_company']; ?></td>
 
                                             <td style="text-align:center;">
-                                                <button type="button" class="btn-view-reason" onclick="showReason('<?php echo htmlspecialchars($row['reason'], ENT_QUOTES); ?>')">
+                                                <button type="button" class="btn-view-reason"
+                                                    onclick="showReason('<?php echo htmlspecialchars($row['reason'], ENT_QUOTES); ?>')">
                                                     <i class="fas fa-eye"></i>
                                                 </button>
                                             </td>
 
                                             <td style="text-align:center;" class="status-cell">
                                                 <?php if ($row['status'] == 'pending'): ?>
-                                                    <span class="badge badge-pending"><i class="fas fa-clock"></i> เเจ้งลบ</span>
-                                                <?php else: ?>
-                                                    <span class="badge badge-completed"><i class="fas fa-check"></i> เสร็จสิ้น</span>
+                                                    <span class="badge badge-pending"><i class="fas fa-clock"></i> แจ้งลบ</span>
+
+                                                <?php elseif ($row['status'] == 'completed'): ?>
+                                                    <span class="badge badge-completed"><i class="fas fa-check"></i>
+                                                        เสร็จสิ้น</span>
+
+                                                <?php else: /* กรณี cancelled */ ?>
+                                                    <span class="badge"
+                                                        style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5;">
+                                                        <i class="fas fa-times-circle"></i> ยกเลิก
+                                                    </span>
+
+                                                    <?php if (!empty($row['cancel_reason'])): ?>
+                                                        <div style="margin-top: 5px;">
+                                                            <button type="button"
+                                                                onclick="showCancelReason('<?php echo htmlspecialchars($row['cancel_reason'], ENT_QUOTES); ?>')"
+                                                                style="border: none; background: none; color: #ef4444; font-size: 0.75rem; cursor: pointer; text-decoration: underline; padding: 0;">
+                                                                (ดูสาเหตุ)
+                                                            </button>
+                                                        </div>
+                                                    <?php endif; ?>
                                                 <?php endif; ?>
                                             </td>
 
                                             <td style="text-align:center;" class="completed-cell">
-                                                <?php if ($row['status'] == 'completed' && !empty($row['completed_by'])): ?>
+                                                <?php
+                                                // กรณี 1: ทำรายการสำเร็จ (Completed) -> สีเขียว
+                                                if ($row['status'] == 'completed'):
+                                                    ?>
                                                     <div style="font-size:12px; font-weight:600; color:#166534;">
-                                                        <?php echo $row['completed_by']; ?>
+                                                        <i class="fas fa-check-circle"></i>
+                                                        <?php echo !empty($row['completed_by']) ? $row['completed_by'] : '-'; ?>
                                                     </div>
                                                     <div style="font-size:10px; color:#64748b;">
-                                                        <?php echo date('d/m/Y H:i', strtotime($row['completed_at'])); ?>
+                                                        <?php echo !empty($row['completed_at']) ? date('d/m/Y H:i', strtotime($row['completed_at'])) : ''; ?>
                                                     </div>
-                                                <?php else: ?>
+
+                                                    <?php
+                                                    // กรณี 2: ถูกยกเลิก (Cancelled) -> สีแดง (ต้องเพิ่มส่วนนี้!)
+                                                elseif ($row['status'] == 'cancelled'):
+                                                    ?>
+                                                    <div style="font-size:12px; font-weight:600; color:#ef4444;">
+                                                        <i class="fas fa-user-times"></i>
+                                                        <?php echo !empty($row['completed_by']) ? $row['completed_by'] : 'Admin'; ?>
+                                                    </div>
+                                                    <div style="font-size:10px; color:#64748b;">
+                                                        <?php echo !empty($row['completed_at']) ? date('d/m/Y H:i', strtotime($row['completed_at'])) : ''; ?>
+                                                    </div>
+                                                    <div
+                                                        style="font-size:9px; background:#fef2f2; color:#b91c1c; display:inline-block; padding:1px 4px; border-radius:3px; margin-top:2px; border:1px solid #fca5a5;">
+                                                        ผู้ยกเลิก
+                                                    </div>
+
+                                                    <?php
+                                                    // กรณี 3: ยังไม่ดำเนินการ (Pending) -> ขีด
+                                                else:
+                                                    ?>
                                                     <span style="color:#cbd5e1;">-</span>
                                                 <?php endif; ?>
                                             </td>
@@ -505,27 +583,50 @@ $users_list_q = $conn->query("SELECT DISTINCT requester_name FROM winspeed_delet
                                                     <span style="color:#cbd5e1;">-</span>
                                                 <?php endif; ?>
                                             </td>
-                                                <td style="text-align:center;" class="action-cell">
-                                                    <?php if ($row['status'] == 'pending'): ?>
+
+                                            <td style="text-align:center;" class="action-cell">
+                                                <?php if ($row['status'] == 'pending'): ?>
+
+                                                    <div style="display:flex; flex-direction:column; gap:5px; align-items:center;">
+
+                                                        <?php // 1. ส่วนของ Admin: ปุ่มยืนยัน และ ปุ่มยกเลิก ?>
                                                         <?php if (hasAction('btn_confirm_delete')): ?>
-                                                            <button type="button" id="btn_confirm_delete" class="btn-confirm-ajax hasAction" 
-                                                                    onclick="confirmDelete(<?php echo $row['id']; ?>)">
+
+                                                            <button type="button" id="btn_confirm_delete"
+                                                                class="btn-confirm-ajax hasAction"
+                                                                style="width: 100%; margin-bottom: 2px;"
+                                                                onclick="confirmDelete(<?php echo $row['id']; ?>)">
                                                                 ยืนยันการลบ
                                                             </button>
+
+                                                            <button type="button" class="btn-cancel-ajax"
+                                                                style="background: #ef4444; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; width: 100%; box-shadow: 0 2px 5px rgba(239, 68, 68, 0.3); transition: all 0.2s ease;"
+                                                                onmouseover="this.style.background='#dc2626'; this.style.transform='translateY(-1px)';"
+                                                                onmouseout="this.style.background='#ef4444'; this.style.transform='translateY(0)';"
+                                                                onclick="cancelRequest(<?php echo $row['id']; ?>)">
+                                                                <i class="fas fa-times-circle"></i> ยกเลิก
+                                                            </button>
+
                                                         <?php endif; ?>
 
-                                                        <button type="button" class="btn-edit-ajax" 
-                                                                onclick='populateEditForm(<?php echo json_encode($row); ?>)'>
+                                                        <?php // 2. ปุ่มแก้ไข (ของเดิม) ?>
+                                                        <button type="button" class="btn-edit-ajax"
+                                                            onclick='populateEditForm(<?php echo json_encode($row); ?>)'>
                                                             <i class="fas fa-edit"></i>
                                                         </button>
-                                                    <?php else: ?>
-                                                        -
-                                                    <?php endif; ?>
-                                                </td>
+
+                                                    </div>
+
+                                                <?php else: ?>
+                                                    -
+                                                <?php endif; ?>
+                                            </td>
                                         </tr>
                                     <?php endwhile; ?>
                                 <?php else: ?>
-                                    <tr><td colspan="9" style="text-align:center; padding: 20px;">ไม่พบข้อมูล</td></tr>
+                                    <tr>
+                                        <td colspan="9" style="text-align:center; padding: 20px;">ไม่พบข้อมูล</td>
+                                    </tr>
                                 <?php endif; ?>
                             </tbody>
                         </table>
@@ -537,7 +638,7 @@ $users_list_q = $conn->query("SELECT DISTINCT requester_name FROM winspeed_delet
     </div>
     <script src="js/WINSpeedDeleteRequest.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-<script src="https://npmcdn.com/flatpickr/dist/l10n/th.js"></script>
+    <script src="https://npmcdn.com/flatpickr/dist/l10n/th.js"></script>
 </body>
 
 </html>

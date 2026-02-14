@@ -198,3 +198,109 @@ function cancelEditMode() {
     // รีเซ็ตช่องหมายเหตุ
     toggleRemarkField();
 }
+function cancelRequest(id) {
+    Swal.fire({
+        title: '<span style="font-family:Prompt; font-weight:600; color:#334155;">ยืนยันการยกเลิก?</span>',
+        html: `
+            <div style="font-family:Prompt; font-size:0.95rem; color:#64748b; margin-bottom:10px;">
+                รายการนี้จะถูกเปลี่ยนสถานะเป็น <b style="color:#ef4444;">"ยกเลิก"</b><br>
+                และจะไม่ถูกนำไปดำเนินการต่อ
+            </div>
+            <div style="text-align:left; font-family:Prompt; font-size:0.9rem; color:#334155; margin-bottom:5px; font-weight:500;">
+                ระบุสาเหตุ / หมายเหตุ: <span style="color:red">*</span>
+            </div>
+        `,
+        input: 'textarea',
+        inputPlaceholder: 'เช่น ข้อมูลไม่ถูกต้อง, แจ้งผิด, เอกสารซ้ำซ้อน...',
+        inputAttributes: {
+            'style': 'font-family:Prompt; font-size:0.95rem; border-radius:10px; padding:12px; border:1px solid #cbd5e1; box-shadow:inset 0 1px 2px rgba(0,0,0,0.05); min-height:80px;'
+        },
+        icon: 'warning',
+        iconColor: '#f87171', // สีไอคอนแดงอ่อนๆ
+        showCancelButton: true,
+        
+        // --- 🔴 จุดที่เปลี่ยนสีปุ่ม ---
+        confirmButtonText: '<i class="fas fa-ban"></i> ยืนยันยกเลิก',
+        confirmButtonColor: '#ef4444', // สีแดงสวย (Red-500)
+        cancelButtonText: 'ปิดหน้าต่าง',
+        cancelButtonColor: '#94a3b8',  // สีเทา
+        
+        reverseButtons: true,
+        focusInput: true,
+        
+        customClass: {
+            popup: 'swal2-rounded-popup',
+            confirmButton: 'swal2-confirm-btn-danger', // เพิ่มคลาสเผื่ออยากแต่ง CSS เพิ่ม
+        },
+        preConfirm: (value) => {
+            if (!value) {
+                Swal.showValidationMessage('<i class="fas fa-exclamation-circle"></i> กรุณาระบุสาเหตุการยกเลิกก่อนครับ')
+            }
+            return value;
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const reason = result.value;
+            
+            // แสดง Loading
+            Swal.fire({
+                title: 'กำลังบันทึก...',
+                html: 'กรุณารอสักครู่',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+
+            // ส่งข้อมูล
+            const formData = new FormData();
+            formData.append('action', 'ajax_cancel');
+            formData.append('id', id);
+            formData.append('cancel_reason', reason);
+
+            fetch('WINSpeedDeleteRequest.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'ยกเลิกรายการสำเร็จ',
+                        text: 'บันทึกสถานะเรียบร้อยแล้ว',
+                        confirmButtonColor: '#10b981', // สีเขียวตอนสำเร็จ
+                        confirmButtonText: 'ตกลง',
+                        timer: 2000
+                    }).then(() => {
+                        location.reload(); 
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'เกิดข้อผิดพลาด',
+                        text: data.message,
+                        confirmButtonColor: '#ef4444'
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire('Error', 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้', 'error');
+            });
+        }
+    });
+}
+function showCancelReason(reason) {
+    Swal.fire({
+        title: '<span style="font-family:Prompt; font-weight:600; color:#ef4444;"><i class="fas fa-times-circle"></i> ถูกยกเลิกเนื่องจาก</span>',
+        html: `
+            <div style="font-family:Prompt; font-size:1rem; color:#334155; text-align:left; background:#fef2f2; padding:15px; border-radius:10px; border:1px solid #fca5a5; line-height: 1.6;">
+                ${reason}
+            </div>
+        `,
+        confirmButtonText: 'รับทราบ',
+        confirmButtonColor: '#64748b',
+        customClass: {
+            popup: 'swal2-rounded-popup'
+        }
+    });
+}
