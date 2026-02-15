@@ -256,3 +256,115 @@ body {
 .modal-header { background: linear-gradient(135deg, var(--primary-color), #4338ca); color: white; padding: 25px; }
 .modal-body { padding: 30px; background: #fff; }
 .modal-footer { background: #f8fafc; padding: 20px; }
+/* --- 💎 Super Premium Status Cards --- */
+.status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 24px;
+    margin-bottom: 40px;
+    perspective: 1000px; /* เพิ่มมิติความลึก */
+}
+
+.status-card {
+    /* รับค่าสีจาก PHP */
+    --card-bg: var(--theme-color); 
+    
+    position: relative;
+    height: 100%;
+    background: linear-gradient(135deg, var(--card-bg) 0%, color-mix(in srgb, var(--card-bg), black 20%) 100%);
+    border-radius: 24px;
+    padding: 24px;
+    color: white;
+    cursor: pointer;
+    overflow: hidden;
+    
+    /* 3D Border & Shadow Effect */
+    border-top: 1px solid rgba(255, 255, 255, 0.4);
+    border-left: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 
+        0 10px 20px -5px rgba(0, 0, 0, 0.2),
+        0 8px 8px -6px rgba(0, 0, 0, 0.1),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.05); /* Inner border */
+
+    /* Animation Settings */
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); /* เด้งดึ๋งแบบสปริง */
+    animation: cardEntrance 0.6s backwards;
+}
+
+/* สร้างแสงเงาฟุ้งๆ ด้านหลัง (Glow) */
+.status-card::before {
+    content: '';
+    position: absolute;
+    top: 20%; left: 10%; width: 80%; height: 60%;
+    background: var(--card-bg);
+    filter: blur(40px);
+    opacity: 0.4;
+    z-index: -1;
+    transition: opacity 0.4s;
+}
+
+/* ✨ Shine Effect (แสงพาดผ่าน) */
+.status-card::after {
+    content: '';
+    position: absolute;
+    top: -50%; left: -50%; width: 200%; height: 200%;
+    background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 60%);
+    transform: rotate(45deg) translateY(-20px);
+    opacity: 0;
+    transition: opacity 0.4s;
+    pointer-events: none;
+}
+
+/* --- Interactive States --- */
+.status-card:hover {
+    transform: translateY(-12px) scale(1.02);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+    z-index: 10;
+}
+.status-card:hover::after { opacity: 1; } /* เปิดไฟส่อง */
+.status-card:hover .sc-icon { 
+    transform: rotate(0deg) scale(1.2) translate(10px, -10px); 
+    opacity: 0.2; 
+}
+
+/* Active State (กดเลือก) */
+.status-card.active {
+    border: 2px solid rgba(255,255,255,0.9);
+    box-shadow: 
+        0 0 0 4px rgba(255,255,255,0.3), /* Ring effect */
+        0 20px 40px -10px rgba(0,0,0,0.4);
+}
+
+/* Typography */
+.sc-count {
+    font-size: 3.2rem;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 8px;
+    display: block;
+    text-shadow: 2px 4px 8px rgba(0,0,0,0.2);
+    letter-spacing: -1px;
+}
+.sc-label {
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.9;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+.sc-icon {
+    position: absolute;
+    right: -20px; bottom: -25px;
+    font-size: 7rem;
+    opacity: 0.1;
+    transform: rotate(-20deg);
+    transition: all 0.5s ease;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+}
+
+/* Keyframes: การ์ดค่อยๆ เด้งขึ้นมา */
+@keyframes cardEntrance {
+    0% { opacity: 0; transform: translateY(50px) scale(0.8); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}

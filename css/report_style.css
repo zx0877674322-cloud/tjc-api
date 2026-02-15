@@ -1,0 +1,149 @@
+:root {
+    --primary-color: #004aad;
+    --text-main: #333;
+    --bg-body: #f4f6f9;
+    --bg-card: #ffffff;
+    --bg-input: #f9fafb;
+    --border-color: #e5e7eb;
+    --hover-bg: #f0f9ff;
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+body { font-family: 'Prompt', sans-serif; background-color: var(--bg-body); margin: 0; }
+.main-container { width: 100%; padding: 30px; box-sizing: border-box; }
+@media (min-width: 992px) { .main-container { margin-left: 150px; width: calc(100% - 270px); padding: 40px; } }
+@media (max-width: 991px) { .main-container { margin-left: 0; width: 100%; padding-top: 80px; } }
+
+.top-header h1 { font-size: 1.8rem; color: var(--text-main); margin-bottom: 20px; }
+.form-container { background-color: var(--bg-card); border-radius: 20px; padding: 30px; border-top: 4px solid var(--primary-color); box-shadow: var(--shadow); max-width: 850px; margin: 0 auto; }
+.section-title { font-size: 1.2rem; font-weight: 600; color: var(--primary-color); margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+.section-title i { background: var(--hover-bg); padding: 8px; border-radius: 8px; }
+
+.form-group { margin-bottom: 15px; }
+label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.95rem; }
+.form-input, .form-select, .form-textarea { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-input); box-sizing: border-box; }
+.form-input:focus, .form-select:focus { border-color: var(--primary-color); outline: none; }
+
+.form-grid-2-custom, .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+@media (max-width: 768px) { .form-grid-2-custom, .form-grid-2 { grid-template-columns: 1fr; } }
+
+/* Radio Button Styling */
+.radio-select-group { display: flex; gap: 10px; flex-wrap: wrap; }
+.radio-option { cursor: pointer; position: relative; flex: 1; }
+.radio-option input { position: absolute; opacity: 0; }
+.radio-card { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; transition: 0.3s; }
+.radio-option input:checked + .radio-card { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
+
+/* --- WORK BOX STYLE (NEW) --- */
+.work-box {
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    background: #fff;
+    position: relative;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+.work-box-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed var(--border-color);
+}
+.work-box-title { font-weight: 700; color: var(--primary-color); }
+.btn-remove-box {
+    color: #ef4444;
+    cursor: pointer;
+    font-size: 0.9rem;
+    background: none; border: none;
+}
+.btn-add-work {
+    width: 100%;
+    padding: 12px;
+    border: 2px dashed var(--primary-color);
+    background: var(--hover-bg);
+    color: var(--primary-color);
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: 0.3s;
+}
+.btn-add-work:hover { background: #e0f2fe; }
+.small-radio .radio-card { padding: 8px; font-size: 0.9rem; }
+
+/* GPS & Expense */
+.hidden { display: none; }
+.gps-actions { display: flex; gap: 10px; }
+.btn-gps { background: #f59e0b; color: white; border: none; padding: 0 20px; border-radius: 8px; cursor: pointer; }
+.expense-item { padding: 15px; border-bottom: 1px solid var(--border-color); }
+.expense-item.active { background: var(--hover-bg); border-left: 4px solid var(--primary-color); }
+.expense-content { display: none; margin-top: 10px; }
+.expense-item.active .expense-content { display: block; }
+.expense-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+.file-upload-btn { cursor: pointer; padding: 8px 15px; background: #fff; border: 1px dashed #ccc; border-radius: 6px; font-size: 0.85rem; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.total-bar { background: var(--primary-color); color: #fff; padding: 15px; text-align: right; font-weight: bold; border-radius: 0 0 12px 12px; }
+
+.btn-submit { width: 100%; padding: 15px; background: var(--primary-color); color: #fff; border: none; border-radius: 12px; font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-top: 20px; }
+.btn-submit:hover { opacity: 0.9; }
+.alert { color: red; background: #fee2e2; padding: 10px; margin-bottom: 20px; border-radius: 8px; }
+/* --- CUSTOM AUTOCOMPLETE STYLE --- */
+.autocomplete-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+/* กล่องรายการที่จะเด้งออกมา */
+.autocomplete-items {
+    position: absolute;
+    border: 1px solid #e2e8f0;
+    border-top: none;
+    z-index: 999; /* ให้ลอยอยู่เหนือทุกอย่าง */
+    top: 100%;
+    left: 0;
+    right: 0;
+    background-color: #ffffff;
+    border-radius: 0 0 12px 12px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    max-height: 250px; /* ถ้าเยอะให้ Scroll เอา */
+    overflow-y: auto;
+    display: none; /* ซ่อนไว้ก่อน */
+    margin-top: 5px;
+}
+
+/* รายการแต่ละบรรทัด */
+.autocomplete-item {
+    padding: 12px 15px;
+    cursor: pointer;
+    background-color: #fff;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.95rem;
+    color: var(--text-main);
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.autocomplete-item i {
+    color: var(--primary-color);
+    opacity: 0.5;
+    font-size: 0.8rem;
+}
+
+/* ตอนเอาเมาส์ชี้ */
+.autocomplete-item:hover, .autocomplete-item.active {
+    background-color: var(--hover-bg);
+    color: var(--primary-color);
+    font-weight: 500;
+}
+
+.autocomplete-item:last-child {
+    border-bottom: none;
+    border-radius: 0 0 12px 12px;
+}
+
+/* Scrollbar สวยๆ */
+.autocomplete-items::-webkit-scrollbar { width: 6px; }
+.autocomplete-items::-webkit-scrollbar-track { background: #f1f1f1; }
+.autocomplete-items::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
