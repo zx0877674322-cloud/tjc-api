@@ -151,3 +151,40 @@ document.getElementById('summaryForm').addEventListener('submit', function(e) {
         // ถ้าพัง ให้ลองเช็คว่า PHP พ่น Error อะไรออกมาใน Network Tab ครับ
     });
 });
+// ฟังก์ชันกดแล้วดาวน์โหลด Excel
+function exportToExcel() {
+    // 1. ดึงค่าจาก Filter ปัจจุบัน
+    const form = document.getElementById('filterForm');
+    const formData = new FormData(form);
+    
+    // 2. แปลงเป็น Query String
+    const params = new URLSearchParams(formData);
+    
+    // 3. เพิ่มค่า status จาก hidden input (ถ้ามีระบบเลือกการ์ด)
+    const statusVal = document.getElementById('filter_status_input').value;
+    if(statusVal) params.set('status', statusVal);
+
+    // 4. เพิ่ม flag บอกว่าเป็น export
+    params.set('export', 'excel');
+
+    // 5. สั่งเปิด URL เพื่อดาวน์โหลด (ไม่รีเฟรชหน้าเดิม)
+    window.location.href = `export_work_plan.php?${params.toString()}`;
+}
+// 1. ฟังก์ชันเปิด Modal
+    function openExportModal() {
+        var myModal = new bootstrap.Modal(document.getElementById('exportModal'));
+        myModal.show();
+    }
+
+    // 2. ฟังก์ชันกดปุ่มยืนยันดาวน์โหลด (ใน Modal)
+    function confirmExport() {
+    let startDate = document.getElementById('ex_start_date').value;
+    let endDate   = document.getElementById('ex_end_date').value;
+    let type      = document.getElementById('ex_type').value;
+    let worker    = document.getElementById('ex_worker').value;
+    let status    = document.getElementById('ex_status').value; // ดึงค่าจาก Select ใน Modal
+
+    // ส่งค่า status ไปใน URL
+    let url = `export_work_plan.php?start_date=${startDate}&end_date=${endDate}&type=${type}&worker=${encodeURIComponent(worker)}&status=${status}`;
+    window.location.href = url;
+}

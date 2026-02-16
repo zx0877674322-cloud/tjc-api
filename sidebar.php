@@ -1064,7 +1064,7 @@ function getAvatar()
             </li>
         <?php endif; ?>
 
-        <?php if (canSeeMenu('Dashboard.php') || canSeeMenu('Report.php') || canSeeMenu('ManageCustomers.php') || canSeeMenu('MapDashboard.php') || canSeeMenu('ActivityManager.php') || canSeeMenu('StatusManager.php')||canSeeMenu('work_plan_add.php')):
+        <?php if (canSeeMenu('Dashboard.php') || canSeeMenu('Report.php') || canSeeMenu('ManageCustomers.php') || canSeeMenu('MapDashboard.php') || canSeeMenu('ActivityManager.php') || canSeeMenu('StatusManager.php')||canSeeMenu('work_plan_add.php')||canSeeMenu('work_plan_dashboard.php')):
             $sale_pages = ['Dashboard.php', 'Report.php', 'MapDashboard.php', 'ActivityManager.php', 'StatusManager.php', 'ManageCustomers.php'];
             $sale_open = in_array($current_page, $sale_pages) ? 'open' : '';
             $sale_show = in_array($current_page, $sale_pages) ? 'show' : '';
@@ -1098,10 +1098,16 @@ function getAvatar()
                         <li><a href="ManageCustomers.php"
                                 class="<?php echo isActive('ManageCustomers.php', $current_page); ?>"><i
                                     class="fas fa-tasks"></i> จัดการชื่อหน่วยงาน</a></li><?php endif; ?>
+                    
+                    <?php if (canSeeMenu('work_plan_dashboard.php')): ?>
+                        <li><a href="work_plan_dashboard.php"
+                                class="<?php echo isActive('work_plan_dashboard.php', $current_page); ?>"><i
+                                    class="fas fa-chart-pie"></i> Dashboardเเพลนงาน</a></li>
+                    <?php endif; ?>
                     <?php if (canSeeMenu('work_plan_add.php')): ?>
                         <li><a href="work_plan_add.php"
                                 class="<?php echo isActive('work_plan_add.php', $current_page); ?>"><i
-                                    class="fas fa-tasks"></i> เพลนงาน</a></li>
+                                    class="fas fa-tasks"></i> พิมพ์รายงานเเพลนงาน</a></li>
                     <?php endif; ?>
                 </ul>
             </li>

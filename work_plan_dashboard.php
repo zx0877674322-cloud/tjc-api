@@ -4,8 +4,6 @@ session_start();
 require_once 'auth.php';
 require_once 'db_connect.php';
 
-$current_user = $_SESSION['fullname'] ?? $_SESSION['username'];
-
 // --- Helper Function: Smart Color ---
 function getStatusThemeColor($status_name, $status_id)
 {
@@ -51,17 +49,30 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
     $summary = trim($_POST['summary']);
     $status_id = intval($_POST['status_id']);
 
-    $stmt = $conn->prepare("UPDATE work_plans SET summary = ?, status_id = ? WHERE id = ?");
-    $stmt->bind_param("sii", $summary, $status_id, $plan_id);
-    $success = $stmt->execute();
+    // 🟢 1. [เพิ่ม] ไปดึงชื่อสถานะ (Text) มาก่อน จะได้เอาไปบันทึกด้วย
+    $status_text = "Plan"; // ค่าเริ่มต้น
+    $q_name = $conn->prepare("SELECT status_name FROM master_job_status WHERE id = ?");
+    $q_name->bind_param("i", $status_id);
+    $q_name->execute();
+    $res_name = $q_name->get_result();
+    if ($r_name = $res_name->fetch_assoc()) {
+        $status_text = $r_name['status_name'];
+    }
+    $q_name->close();
 
-    // 🟢 [เพิ่มส่วนนี้] ถ้าเป็น AJAX ให้ส่ง JSON กลับแล้วหยุดทำงานทันที
+    // 🟢 2. [แก้ไข] อัปเดตทั้ง summary, status_id และ status (Text) พร้อมกัน
+    $stmt = $conn->prepare("UPDATE work_plans SET summary = ?, status_id = ?, status = ? WHERE id = ?");
+    // sisi = string, int, string, int
+    $stmt->bind_param("sisi", $summary, $status_id, $status_text, $plan_id);
+    $success = $stmt->execute();
+    $stmt->close();
+
+    // ถ้าเป็น AJAX ให้ส่ง JSON กลับ
     if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
         echo json_encode(['success' => $success]);
-        exit; // สำคัญมาก ห้ามเอาออก
+        exit;
     }
 
-    // ส่วนเดิม (กรณีไม่ได้ใช้ AJAX)
     header("Location: work_plan_dashboard.php");
     exit();
 }
@@ -415,6 +426,11 @@ if (isset($_GET['ajax'])) {
                 style="border-radius: 10px; padding: 10px 20px;">
                 <i class="fas fa-undo me-1"></i> ล้างค่า
             </button>
+
+            <button type="button" onclick="openExportModal()" class="btn btn-success text-white shadow-sm"
+                style="border-radius: 10px; padding: 10px 20px; background-color: #10b981; border-color: #10b981;">
+                <i class="fas fa-file-excel me-1"></i> Export Excel
+            </button>
         </form>
 
         <div class="table-card">
@@ -422,7 +438,7 @@ if (isset($_GET['ajax'])) {
                 <table class="table-custom">
                     <thead>
                         <tr>
-                            <th width="8%">วันที่</th>
+                            <th width="8%">วันที่เเพลนงาน</th>
                             <th width="8%">ประเภท</th>
                             <th width="12%">ผู้บันทึก</th>
                             <th width="15%">ผู้ปฏิบัติงาน</th>
@@ -457,7 +473,7 @@ if (isset($_GET['ajax'])) {
                                 ?>
                                 <tr>
                                     <td><span class="fw-bold text-primary"><?php echo $d; ?></span></td>
-                                    <td><?php echo ($row['team_type'] == 'Auction') ? '<span class="badge bg-warning text-dark rounded-pill">ทีม</span>' : '<span class="badge bg-info text-dark rounded-pill">เดี่ยว</span>'; ?>
+                                    <td><?php echo ($row['team_type'] == 'Auction') ? '<span class="badge bg-warning text-dark rounded-pill">ทีมประมูล</span>' : '<span class="badge bg-info text-dark rounded-pill">การตลาด</span>'; ?>
                                     </td>
                                     <td><small class="text-muted"><?php echo $row['reporter_name']; ?></small></td>
                                     <td>
@@ -543,6 +559,70 @@ if (isset($_GET['ajax'])) {
                     <button type="submit" class="btn btn-primary rounded-3 px-4 fw-bold shadow-sm">บันทึกผล</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <div class="modal fade" id="exportModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-file-excel me-2"></i> ส่งออกข้อมูล (Export Excel)
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="exportForm">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">ช่วงวันที่แผนงาน</label>
+                            <div class="input-group">
+                                <input type="date" id="ex_start_date" class="form-control"
+                                    value="<?php echo date('Y-m-01'); ?>">
+                                <span class="input-group-text bg-light">ถึง</span>
+                                <input type="date" id="ex_end_date" class="form-control"
+                                    value="<?php echo date('Y-m-t'); ?>">
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">ประเภททีม</label>
+                            <select id="ex_type" class="form-select">
+                                <option value="">-- ทั้งหมด --</option>
+                                <option value="Marketing">การตลาด</option>
+                                <option value="Auction">ทีมประมูล</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">ผู้ปฏิบัติงาน / ผู้บันทึก</label>
+                            <select id="ex_worker" class="form-select">
+                                <option value="">-- ทั้งหมด --</option>
+                                <?php foreach ($workers_list as $wk): ?>
+                                    <option value="<?php echo $wk; ?>"><?php echo $wk; ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">สถานะงาน</label>
+                            <select id="ex_status" class="form-select">
+                                <option value="">-- ทุกสถานะ --</option>
+                                <?php foreach ($status_list as $st): ?>
+                                    <option value="<?php echo $st['id']; ?>">
+                                        <?php echo $st['status_name']; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="button" onclick="confirmExport()" class="btn btn-success fw-bold">
+                        <i class="fas fa-download me-1"></i> ดาวน์โหลดไฟล์
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
