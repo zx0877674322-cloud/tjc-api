@@ -1,149 +1,691 @@
+/* ==========================================================================
+   🎨 PREMIUM REPORT STYLE - ULTRA MODERN & ANIMATED
+   Design System: Depth, Motion, Clarity
+   ========================================================================== */
+
+/* 1. ROOT VARIABLES & THEME CONFIGURATION */
 :root {
+    /* Main Colors */
     --primary-color: #004aad;
-    --text-main: #333;
-    --bg-body: #f4f6f9;
+    --primary-dark: #003380;
+    --primary-light: #3375cd;
+    --primary-gradient: linear-gradient(135deg, #004aad 0%, #0078ff 100%);
+    
+    /* Text Colors */
+    --text-main: #1f2937;
+    --text-sub: #6b7280;
+    --text-white: #ffffff;
+    
+    /* Backgrounds */
+    --bg-body: #f0f4f8; /* ปรับให้ดูนวลตาขึ้น */
     --bg-card: #ffffff;
     --bg-input: #f9fafb;
+    --hover-bg: #eff6ff;
+    
+    /* Borders & Lines */
     --border-color: #e5e7eb;
-    --hover-bg: #f0f9ff;
-    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    --border-focus: #3b82f6;
+    
+    /* 🌑 Advanced Shadows (มิติความลึก) */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    --shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+    --glow-primary: 0 0 15px rgba(0, 74, 173, 0.3);
+
+    /* Animation Speeds */
+    --anim-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --anim-medium: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --anim-bounce: 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
 }
 
-body { font-family: 'Prompt', sans-serif; background-color: var(--bg-body); margin: 0; }
-.main-container { width: 100%; padding: 30px; box-sizing: border-box; }
-@media (min-width: 992px) { .main-container { margin-left: 150px; width: calc(100% - 270px); padding: 40px; } }
-@media (max-width: 991px) { .main-container { margin-left: 0; width: 100%; padding-top: 80px; } }
+/* ==========================================================================
+   🎬 KEYFRAME ANIMATIONS
+   ========================================================================== */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translate3d(0, 30px, 0);
+    }
+    to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+    }
+}
 
-.top-header h1 { font-size: 1.8rem; color: var(--text-main); margin-bottom: 20px; }
-.form-container { background-color: var(--bg-card); border-radius: 20px; padding: 30px; border-top: 4px solid var(--primary-color); box-shadow: var(--shadow); max-width: 850px; margin: 0 auto; }
-.section-title { font-size: 1.2rem; font-weight: 600; color: var(--primary-color); margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
-.section-title i { background: var(--hover-bg); padding: 8px; border-radius: 8px; }
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
 
-.form-group { margin-bottom: 15px; }
-label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.95rem; }
-.form-input, .form-select, .form-textarea { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-input); box-sizing: border-box; }
-.form-input:focus, .form-select:focus { border-color: var(--primary-color); outline: none; }
+@keyframes pulseGlow {
+    0% { box-shadow: 0 0 0 0 rgba(0, 74, 173, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(0, 74, 173, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(0, 74, 173, 0); }
+}
 
-.form-grid-2-custom, .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-@media (max-width: 768px) { .form-grid-2-custom, .form-grid-2 { grid-template-columns: 1fr; } }
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
 
-/* Radio Button Styling */
-.radio-select-group { display: flex; gap: 10px; flex-wrap: wrap; }
-.radio-option { cursor: pointer; position: relative; flex: 1; }
-.radio-option input { position: absolute; opacity: 0; }
-.radio-card { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; transition: 0.3s; }
-.radio-option input:checked + .radio-card { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
+/* ==========================================================================
+   🏠 GLOBAL LAYOUT
+   ========================================================================== */
+body {
+    font-family: 'Prompt', sans-serif;
+    background-color: var(--bg-body);
+    background-image: 
+        radial-gradient(at 0% 0%, rgba(0, 74, 173, 0.05) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(0, 120, 255, 0.05) 0px, transparent 50%);
+    background-attachment: fixed;
+    margin: 0;
+    color: var(--text-main);
+    line-height: 1.6;
+    overflow-x: hidden;
+}
 
-/* --- WORK BOX STYLE (NEW) --- */
+.main-container {
+    width: 100%;
+    padding: 30px;
+    box-sizing: border-box;
+    /* Animation: เข้ามาแบบนุ่มนวล */
+    animation: fadeInUp 0.8s ease-out;
+}
+
+@media (min-width: 992px) {
+    .main-container {
+        margin-left: 150px; /* Sidebar offset */
+        width: calc(100% - 270px);
+        padding: 40px;
+    }
+}
+
+@media (max-width: 991px) {
+    .main-container {
+        margin-left: 0;
+        width: 100%;
+        padding-top: 80px;
+        padding-left: 20px;
+        padding-right: 20px;
+    }
+}
+
+/* ==========================================================================
+   📄 HEADER & TITLES
+   ========================================================================== */
+.top-header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--text-main) 0%, var(--primary-color) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 25px;
+    letter-spacing: -0.5px;
+    position: relative;
+    display: inline-block;
+}
+
+/* ขีดเส้นใต้สวยๆ */
+.top-header h1::after {
+    content: '';
+    display: block;
+    width: 60px;
+    height: 4px;
+    background: var(--primary-gradient);
+    border-radius: 2px;
+    margin-top: 8px;
+    transition: width var(--anim-medium);
+}
+
+.top-header h1:hover::after {
+    width: 100%;
+}
+
+.section-title {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--primary-dark);
+    margin-bottom: 25px;
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+
+.section-title i {
+    background: var(--primary-gradient);
+    color: white;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    box-shadow: var(--shadow-md);
+    font-size: 1rem;
+    transition: transform var(--anim-bounce);
+}
+
+.section-title:hover i {
+    transform: scale(1.15) rotate(5deg);
+}
+
+/* ==========================================================================
+   📦 FORM CONTAINER (Main Card)
+   ========================================================================== */
+.form-container {
+    background-color: var(--bg-card);
+    border-radius: 24px; /* โค้งมนมากขึ้น */
+    padding: 40px;
+    /* Dimension: Border + Shadow ลึก */
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    border-top: 6px solid var(--primary-color);
+    box-shadow: var(--shadow-xl);
+    max-width: 900px;
+    margin: 0 auto;
+    position: relative;
+    overflow: hidden; /* สำหรับ Effect แสง */
+    transition: transform var(--anim-medium);
+}
+
+/* แสงพาดผ่านเบาๆ */
+.form-container::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 6px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
+    animation: pulseGlow 3s infinite;
+}
+
+/* ==========================================================================
+   📝 FORM ELEMENTS (Inputs & Labels)
+   ========================================================================== */
+.form-group {
+    margin-bottom: 24px;
+    position: relative;
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text-main);
+    transition: color var(--anim-fast);
+}
+
+.form-group:focus-within label {
+    color: var(--primary-color);
+}
+
+/* Input Fields */
+.form-input, .form-select, .form-textarea {
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-input);
+    font-size: 1rem;
+    font-family: 'Prompt', sans-serif;
+    color: var(--text-main);
+    box-sizing: border-box;
+    transition: all var(--anim-fast);
+    box-shadow: var(--shadow-inner);
+}
+
+/* Input Hover State */
+.form-input:hover, .form-select:hover, .form-textarea:hover {
+    background-color: #fff;
+    border-color: #cbd5e1;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Input Focus State */
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+    background-color: #fff;
+    border-color: var(--primary-color);
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(0, 74, 173, 0.15); /* Soft Glow ring */
+    transform: translateY(-2px);
+}
+
+/* Grid Layouts */
+.form-grid-2-custom, .form-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+@media (max-width: 768px) {
+    .form-grid-2-custom, .form-grid-2 {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    .form-container {
+        padding: 20px;
+    }
+}
+
+/* ==========================================================================
+   🔘 RADIO BUTTONS (Custom Cards)
+   ========================================================================== */
+.radio-select-group {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.radio-option {
+    cursor: pointer;
+    position: relative;
+    flex: 1;
+    min-width: 140px;
+}
+
+.radio-option input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    height: 0;
+    width: 0;
+}
+
+.radio-card {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 14px;
+    background: #fff;
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    transition: all var(--anim-medium);
+    font-weight: 500;
+    color: var(--text-sub);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Hover Effect for Radio */
+.radio-option:hover .radio-card {
+    border-color: var(--primary-light);
+    background-color: var(--hover-bg);
+    transform: translateY(-2px);
+}
+
+/* Checked State - มีมิติ */
+.radio-option input:checked + .radio-card {
+    background: var(--primary-gradient);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: var(--shadow-md), 0 0 0 3px rgba(0, 74, 173, 0.2);
+    transform: translateY(-3px);
+}
+
+.radio-card i {
+    font-size: 1.1rem;
+    transition: transform var(--anim-bounce);
+}
+
+.radio-option input:checked + .radio-card i {
+    transform: scale(1.3);
+}
+
+.small-radio .radio-card {
+    padding: 10px;
+    font-size: 0.9rem;
+    border-radius: 10px;
+}
+
+/* ==========================================================================
+   🛠️ WORK BOX STYLE (Dynamic Sections)
+   ========================================================================== */
 .work-box {
     border: 1px solid var(--border-color);
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 20px;
-    background: #fff;
+    border-radius: 16px;
+    padding: 25px;
+    margin-bottom: 25px;
+    background: #ffffff;
     position: relative;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    /* Depth */
+    box-shadow: var(--shadow-md);
+    transition: all var(--anim-medium);
+    /* Animation: โผล่มาแบบเด้ง */
+    animation: scaleIn 0.4s ease-out;
+    border-left: 5px solid var(--primary-color); /* แถบสีด้านซ้าย */
 }
+
+.work-box:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-3px);
+}
+
 .work-box-header {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
     border-bottom: 1px dashed var(--border-color);
 }
-.work-box-title { font-weight: 700; color: var(--primary-color); }
+
+.work-box-title {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--primary-color);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .btn-remove-box {
     color: #ef4444;
     cursor: pointer;
     font-size: 0.9rem;
-    background: none; border: none;
+    background: rgba(239, 68, 68, 0.1);
+    border: none;
+    padding: 6px 12px;
+    border-radius: 8px;
+    transition: all var(--anim-fast);
+    display: flex;
+    align-items: center;
+    gap: 5px;
 }
+
+.btn-remove-box:hover {
+    background: #ef4444;
+    color: white;
+    box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.3);
+}
+
+/* Add Work Button - Dashed style */
 .btn-add-work {
     width: 100%;
-    padding: 12px;
-    border: 2px dashed var(--primary-color);
-    background: var(--hover-bg);
+    padding: 18px;
+    border: 2px dashed var(--primary-light);
+    background: rgba(0, 74, 173, 0.02);
     color: var(--primary-color);
+    border-radius: 16px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: all var(--anim-medium);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.btn-add-work:hover {
+    background: var(--hover-bg);
+    border-color: var(--primary-color);
+    transform: scale(1.01);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-add-work i {
+    font-size: 1.2rem;
+    transition: transform var(--anim-bounce);
+}
+.btn-add-work:hover i {
+    transform: rotate(90deg);
+}
+
+/* ==========================================================================
+   📍 GPS & EXPENSES
+   ========================================================================== */
+.hidden {
+    display: none !important;
+}
+
+.gps-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.btn-gps {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+    border: none;
+    padding: 12px 24px;
     border-radius: 10px;
     cursor: pointer;
     font-weight: 600;
-    transition: 0.3s;
+    box-shadow: 0 4px 6px rgba(245, 158, 11, 0.3);
+    transition: all var(--anim-medium);
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
-.btn-add-work:hover { background: #e0f2fe; }
-.small-radio .radio-card { padding: 8px; font-size: 0.9rem; }
 
-/* GPS & Expense */
-.hidden { display: none; }
-.gps-actions { display: flex; gap: 10px; }
-.btn-gps { background: #f59e0b; color: white; border: none; padding: 0 20px; border-radius: 8px; cursor: pointer; }
-.expense-item { padding: 15px; border-bottom: 1px solid var(--border-color); }
-.expense-item.active { background: var(--hover-bg); border-left: 4px solid var(--primary-color); }
-.expense-content { display: none; margin-top: 10px; }
-.expense-item.active .expense-content { display: block; }
-.expense-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
-.file-upload-btn { cursor: pointer; padding: 8px 15px; background: #fff; border: 1px dashed #ccc; border-radius: 6px; font-size: 0.85rem; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
-.total-bar { background: var(--primary-color); color: #fff; padding: 15px; text-align: right; font-weight: bold; border-radius: 0 0 12px 12px; }
+.btn-gps:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px rgba(245, 158, 11, 0.4);
+    filter: brightness(1.1);
+}
 
-.btn-submit { width: 100%; padding: 15px; background: var(--primary-color); color: #fff; border: none; border-radius: 12px; font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-top: 20px; }
-.btn-submit:hover { opacity: 0.9; }
-.alert { color: red; background: #fee2e2; padding: 10px; margin-bottom: 20px; border-radius: 8px; }
-/* --- CUSTOM AUTOCOMPLETE STYLE --- */
+.btn-gps:active {
+    transform: translateY(0);
+}
+
+/* Expense Items */
+.expense-item {
+    padding: 20px;
+    border: 1px solid var(--border-color);
+    margin-bottom: 10px;
+    border-radius: 12px;
+    background: #fff;
+    transition: all var(--anim-medium);
+}
+
+.expense-item:hover {
+    border-color: var(--primary-light);
+}
+
+.expense-item.active {
+    background: #f8fafc;
+    border-color: var(--primary-color);
+    border-left: 5px solid var(--primary-color);
+    box-shadow: var(--shadow-md);
+}
+
+.expense-content {
+    display: none;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px dashed var(--border-color);
+    animation: slideDown 0.3s ease-out;
+}
+
+.expense-item.active .expense-content {
+    display: block;
+}
+
+.expense-row {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.file-upload-btn {
+    cursor: pointer;
+    padding: 10px 18px;
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    color: var(--text-sub);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    transition: all var(--anim-fast);
+}
+
+.file-upload-btn:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    background: var(--hover-bg);
+}
+
+.total-bar {
+    background: var(--primary-gradient);
+    color: #fff;
+    padding: 20px;
+    text-align: right;
+    font-size: 1.2rem;
+    font-weight: 700;
+    border-radius: 12px;
+    margin-top: 20px;
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* ==========================================================================
+   🔍 AUTOCOMPLETE (Custom Dropdown)
+   ========================================================================== */
 .autocomplete-wrapper {
     position: relative;
     width: 100%;
 }
 
-/* กล่องรายการที่จะเด้งออกมา */
 .autocomplete-items {
     position: absolute;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--border-color);
     border-top: none;
-    z-index: 999; /* ให้ลอยอยู่เหนือทุกอย่าง */
-    top: 100%;
+    z-index: 1050;
+    top: calc(100% + 5px);
     left: 0;
     right: 0;
-    background-color: #ffffff;
-    border-radius: 0 0 12px 12px;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    max-height: 250px; /* ถ้าเยอะให้ Scroll เอา */
+    background-color: rgba(255, 255, 255, 0.98); /* Glass effect subtle */
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    box-shadow: var(--shadow-xl);
+    max-height: 280px;
     overflow-y: auto;
-    display: none; /* ซ่อนไว้ก่อน */
-    margin-top: 5px;
+    display: none;
+    animation: slideDown 0.2s ease-out;
 }
 
-/* รายการแต่ละบรรทัด */
 .autocomplete-item {
-    padding: 12px 15px;
+    padding: 14px 20px;
     cursor: pointer;
-    background-color: #fff;
+    background-color: transparent;
     border-bottom: 1px solid #f1f5f9;
     font-size: 0.95rem;
     color: var(--text-main);
-    transition: background-color 0.2s;
+    transition: all 0.1s;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
 }
 
 .autocomplete-item i {
     color: var(--primary-color);
-    opacity: 0.5;
-    font-size: 0.8rem;
+    opacity: 0.7;
+    font-size: 0.9rem;
+    background: var(--hover-bg);
+    padding: 6px;
+    border-radius: 50%;
 }
 
-/* ตอนเอาเมาส์ชี้ */
 .autocomplete-item:hover, .autocomplete-item.active {
     background-color: var(--hover-bg);
-    color: var(--primary-color);
-    font-weight: 500;
+    color: var(--primary-dark);
+    font-weight: 600;
+    padding-left: 25px; /* Effect: ขยับขวา */
 }
 
 .autocomplete-item:last-child {
     border-bottom: none;
-    border-radius: 0 0 12px 12px;
 }
 
 /* Scrollbar สวยๆ */
 .autocomplete-items::-webkit-scrollbar { width: 6px; }
-.autocomplete-items::-webkit-scrollbar-track { background: #f1f1f1; }
-.autocomplete-items::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+.autocomplete-items::-webkit-scrollbar-track { background: transparent; }
+.autocomplete-items::-webkit-scrollbar-thumb { 
+    background: #cbd5e1; 
+    border-radius: 10px; 
+}
+.autocomplete-items::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* ==========================================================================
+   🚀 ACTION BUTTONS & ALERTS
+   ========================================================================== */
+.btn-submit {
+    width: 100%;
+    padding: 18px;
+    background: var(--primary-gradient);
+    color: #fff;
+    border: none;
+    border-radius: 16px;
+    font-size: 1.2rem;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 30px;
+    box-shadow: 0 10px 20px -5px rgba(0, 74, 173, 0.4);
+    transition: all var(--anim-medium);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Shine Effect on Button */
+.btn-submit::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(to right, transparent, rgba(255,255,255,0.3), transparent);
+    transform: rotate(45deg) translate(-100%, -100%);
+    transition: transform 0.6s;
+}
+
+.btn-submit:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 15px 30px -5px rgba(0, 74, 173, 0.5);
+}
+
+.btn-submit:hover::after {
+    transform: rotate(45deg) translate(100%, 100%);
+}
+
+.btn-submit:active {
+    transform: translateY(-1px);
+    box-shadow: 0 5px 15px -5px rgba(0, 74, 173, 0.5);
+}
+
+.alert {
+    color: #b91c1c;
+    background: #fef2f2;
+    padding: 15px;
+    margin-bottom: 25px;
+    border-radius: 12px;
+    border: 1px solid #fecaca;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: var(--shadow-sm);
+    animation: slideDown 0.3s ease-out;
+}

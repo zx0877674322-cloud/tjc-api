@@ -1,99 +1,125 @@
 <?php
+
 session_start();
 // require_once 'auth.php'; // เปิดใช้งานเมื่อระบบพร้อม
 require_once 'db_connect.php';
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'update_expense') {
+    // 1. ล้างลำโพง (Output Buffer) เพื่อให้ส่งแต่ JSON เท่านั้น
+    if (ob_get_length())
+        ob_clean();
+    header('Content-Type: application/json; charset=utf-8');
+
+    // 2. รับค่า ID รายงาน
     $id = intval($_POST['report_id']);
 
-    // 1. รับค่าและคำนวณยอดเงิน (รองรับ Array สำหรับน้ำมัน)
+    // 3. จัดการค่าน้ำมัน (บันทึกเป็น String เพื่อแยกช่องได้)
     $fuel_costs = $_POST['fuel_cost'] ?? [];
-    $fuel_total = 0;
+    $fuel_total_sum = 0;
 
-    // วนลูปบวกเงินค่าน้ำมันทุกช่อง
+
+    // กรองเอาเฉพาะค่าที่มีตัวเลข และรวมยอดสุทธิเพื่อบันทึกในช่อง total_expense
     if (is_array($fuel_costs)) {
+        $fuel_costs = array_filter($fuel_costs, function ($v) {
+            return $v !== '';
+        });
         foreach ($fuel_costs as $c) {
-            $fuel_total += floatval($c);
+            $fuel_total_sum += floatval($c);
         }
+        $fuel_cost_save = implode(',', $fuel_costs); // 🟢 บันทึกเป็น "100,200,300"
     } else {
-        $fuel_total = floatval($fuel_costs);
+        $fuel_total_sum = floatval($fuel_costs);
+        $fuel_cost_save = $fuel_costs;
     }
 
-    $accom_cost = floatval($_POST['accommodation_cost']);
-    $other_cost = floatval($_POST['other_cost']);
-    $total_expense = $fuel_total + $accom_cost + $other_cost;
+    // 4. รับค่าที่พักและค่าอื่นๆ
+    $accom_cost = floatval($_POST['accommodation_cost'] ?? 0);
+    $other_cost = floatval($_POST['other_cost'] ?? 0);
+    $other_detail = isset($_POST['other_detail']) ? trim($_POST['other_detail']) : '';
 
-    // ดึงข้อมูลเก่าเพื่อเอาชื่อไฟล์เดิมมาตั้งต้น
-    $q_old = $conn->query("SELECT fuel_receipt, accommodation_receipt, other_receipt FROM reports WHERE id=$id");
-    $old = $q_old->fetch_assoc();
+    // คำนวณยอดรวมสุทธิ
+    $total_expense = $fuel_total_sum + $accom_cost + $other_cost;
 
-    // 2. ฟังก์ชันจัดการไฟล์แบบ Multiple (สำหรับน้ำมัน)
-    function handleMultipleUpload($fileKey, $oldFilesString)
+    // 5. ดึงข้อมูลไฟล์เก่ามาตรวจสอบเพื่อคงค่าไว้ถ้าไม่มีการอัปโหลดใหม่
+    $stmt_old = $conn->prepare("SELECT fuel_receipt, accommodation_receipt, other_receipt FROM reports WHERE id = ?");
+    $stmt_old->bind_param("i", $id);
+    $stmt_old->execute();
+    $old_data = $stmt_old->get_result()->fetch_assoc();
+    $stmt_old->close();
+
+    // 6. ฟังก์ชันจัดการไฟล์น้ำมัน (Multiple Uploads)
+    function processFuelUploads($fileKey, $oldString)
     {
-        $uploaded_names = [];
-        if (!empty($oldFilesString)) {
-            $uploaded_names = explode(',', $oldFilesString); // เก็บชื่อไฟล์เดิมไว้
-        }
-
-        if (isset($_FILES[$fileKey])) {
-            $count = count($_FILES[$fileKey]['name']);
-            for ($i = 0; $i < $count; $i++) {
+        $names = !empty($oldString) ? explode(',', $oldString) : [];
+        if (isset($_FILES[$fileKey]) && is_array($_FILES[$fileKey]['name'])) {
+            foreach ($_FILES[$fileKey]['name'] as $i => $name) {
                 if ($_FILES[$fileKey]['error'][$i] == 0) {
-                    $ext = pathinfo($_FILES[$fileKey]["name"][$i], PATHINFO_EXTENSION);
-                    $new_name = "upd_fuel_" . time() . "_" . $i . "_" . rand(100, 999) . "." . $ext;
+                    $ext = pathinfo($name, PATHINFO_EXTENSION);
+                    $new_name = "fuel_" . time() . "_" . $i . "_" . rand(100, 999) . "." . $ext;
                     if (move_uploaded_file($_FILES[$fileKey]["tmp_name"][$i], "uploads/" . $new_name)) {
-                        $uploaded_names[] = $new_name;
+                        $names[] = $new_name; // เพิ่มไฟล์ใหม่เข้าไปต่อท้ายไฟล์เดิม
                     }
                 }
             }
         }
-        return implode(',', array_filter($uploaded_names));
+        return implode(',', array_filter($names));
     }
 
-    // ฟังก์ชันอัปโหลดเดี่ยว (สำหรับที่พัก/อื่นๆ)
-    function handleSingleUpload($fileKey, $oldFile)
+    // ฟังก์ชันจัดการไฟล์เดี่ยว
+    function processSingleUpload($fileKey, $oldFile)
     {
         if (isset($_FILES[$fileKey]) && $_FILES[$fileKey]['error'] == 0) {
-            $target_dir = "uploads/";
             $ext = pathinfo($_FILES[$fileKey]["name"], PATHINFO_EXTENSION);
-            $new_name = "upd_" . time() . "_" . rand(100, 999) . "." . $ext;
-            if (move_uploaded_file($_FILES[$fileKey]["tmp_name"], $target_dir . $new_name)) {
+            $new_name = "upd_" . $fileKey . "_" . time() . "_" . rand(100, 999) . "." . $ext;
+            if (move_uploaded_file($_FILES[$fileKey]["tmp_name"], "uploads/" . $new_name)) {
                 return $new_name;
             }
         }
         return $oldFile;
     }
 
-    // จัดการไฟล์
-    // กรณีน้ำมัน: ถ้า User กดลบไฟล์เก่าในหน้าเว็บ (Logic นี้ซับซ้อน ขอใช้แบบ Append เพิ่มไฟล์ใหม่เข้าไปก่อนเพื่อความปลอดภัย)
-    // หรือถ้าต้องการ Reset ไฟล์ ให้เพิ่ม Logic ลบไฟล์เดิม (ในที่นี้เน้น Add เพิ่ม)
-    $fuel_slips = handleMultipleUpload('fuel_file', $old['fuel_receipt']);
+    $fuel_slips = processFuelUploads('fuel_file', $old_data['fuel_receipt']);
+    $hotel_slip = processSingleUpload('hotel_file', $old_data['accommodation_receipt']);
+    $other_slip = processSingleUpload('other_file', $old_data['other_receipt']);
 
-    $hotel_slip = handleSingleUpload('hotel_file', $old['accommodation_receipt']);
-    $other_slip = handleSingleUpload('other_file', $old['other_receipt']);
-
-    // 3. อัปเดตลงฐานข้อมูล
+    // 7. อัปเดตข้อมูลลง Database
     $sql_upd = "UPDATE reports SET 
                 fuel_cost = ?, fuel_receipt = ?,
                 accommodation_cost = ?, accommodation_receipt = ?,
-                other_cost = ?, other_receipt = ?,
+                other_cost = ?, other_receipt = ?, other_cost_detail = ?, 
                 total_expense = ?
                 WHERE id = ?";
 
     if ($stmt = $conn->prepare($sql_upd)) {
-        $stmt->bind_param("dsdsdsdi", $fuel_total, $fuel_slips, $accom_cost, $hotel_slip, $other_cost, $other_slip, $total_expense, $id);
-        // ... (ส่วน Execute และแจ้งเตือน เหมือนเดิม) ...
+        // s = string, d = double, i = integer
+        // หมายเหตุ: fuel_cost เปลี่ยนเป็น "s" เพื่อเก็บ string คั่นคอมม่า
+        $stmt->bind_param(
+            "ssdsdssdi",
+            $fuel_cost_save,
+            $fuel_slips,
+            $accom_cost,
+            $hotel_slip,
+            $other_cost,
+            $other_slip,
+            $other_detail,
+            $total_expense,
+            $id
+        );
+
         if ($stmt->execute()) {
-            echo "<script>
-                document.addEventListener('DOMContentLoaded', function() {
-                    Swal.fire({
-                        icon: 'success', title: 'อัปเดตเรียบร้อย', text: 'ยอดเงินและหลักฐานถูกบันทึกแล้ว',
-                        timer: 1500, showConfirmButton: false
-                    }).then(() => { window.location.href = 'Dashboard.php'; });
-                });
-            </script>";
+            echo json_encode([
+                'status' => 'success',
+                'message' => 'บันทึกข้อมูลค่าใช้จ่ายและแยกรายการเรียบร้อยแล้ว'
+            ]);
+        } else {
+            echo json_encode(['status' => 'error', 'message' => $stmt->error]);
         }
         $stmt->close();
+    } else {
+        echo json_encode(['status' => 'error', 'message' => $conn->error]);
     }
+
+    // 🛑 หยุดทำงานทันทีเพื่อป้องกัน HTML ส่วนเกิน
+    exit();
 }
 // =========================================================
 // 🚀 1. AJAX API (สำหรับดึงประวัติลูกค้า)
@@ -103,7 +129,9 @@ if (isset($_GET['ajax_action']) && $_GET['ajax_action'] == 'get_customer_history
     $s_date = $_GET['start_date'] ?? '';
     $e_date = $_GET['end_date'] ?? '';
 
-    $sql_where = "WHERE work_result = '$customer_name'";
+    // ✅ ใช้ LIKE เพื่อหาชื่อในลิสต์ที่มีคอมม่าได้
+    $sql_where = "WHERE work_result LIKE '%$customer_name%'";
+
     if (!empty($s_date)) {
         $sql_where .= " AND report_date >= '$s_date'";
     }
@@ -111,8 +139,19 @@ if (isset($_GET['ajax_action']) && $_GET['ajax_action'] == 'get_customer_history
         $sql_where .= " AND report_date <= '$e_date'";
     }
 
-    $sql_hist = "SELECT report_date, reporter_name, job_status, total_expense, project_name, additional_notes 
-                 FROM reports $sql_where ORDER BY report_date DESC";
+    // 🟢 แก้ไข: เพิ่ม work_result เข้าไปใน SELECT
+    $sql_hist = "SELECT 
+                    id, 
+                    report_date, 
+                    reporter_name, 
+                    work_result, 
+                    job_status, 
+                    total_expense, 
+                    project_name, 
+                    activity_detail,   /* 👈 ตัวสำคัญ! ต้องเพิ่มคำนี้ */
+                    additional_notes   /* 👈 บันทึกเพิ่มเติม ก็ต้องเพิ่ม */
+                 FROM reports $sql_where 
+                 ORDER BY report_date DESC";
 
     $res_hist = $conn->query($sql_hist);
     $history_data = [];
@@ -138,32 +177,64 @@ $filter_status = $_GET['filter_status'] ?? '';
 $start_date = $_GET['start_date'] ?? '';
 $end_date = $_GET['end_date'] ?? '';
 
-$where_sql = "WHERE 1=1";
-if ($filter_name)
-    $where_sql .= " AND reporter_name = '$filter_name'";
-if ($start_date)
-    $where_sql .= " AND report_date >= '$start_date'";
-if ($end_date)
-    $where_sql .= " AND report_date <= '$end_date'";
-if ($filter_status)
-    $where_sql .= " AND job_status = '$filter_status'";
+$where_sql = "WHERE 1=1"; // เริ่มต้นเงื่อนไข
 
+// 🟢 1. ดักจับค่าวันที่ (ของเดิมน่าจะมีอยู่แล้ว)
+if (!empty($_GET['start_date'])) {
+    $s_date = $conn->real_escape_string($_GET['start_date']);
+    $where_sql .= " AND report_date >= '$s_date'";
+}
+if (!empty($_GET['end_date'])) {
+    $e_date = $conn->real_escape_string($_GET['end_date']);
+    $where_sql .= " AND report_date <= '$e_date'";
+}
+
+// 🟢 2. เพิ่มส่วนดักจับสถานะ (สำคัญมาก! ต้องเพิ่มตรงนี้)
+$filter_status = isset($_GET['filter_status']) ? $_GET['filter_status'] : '';
+
+if (!empty($filter_status)) {
+    $filter_status = $conn->real_escape_string($filter_status);
+
+    // 🚨 แก้บั๊ก: ถ้าเลือก "ได้งาน" ต้องระวังไม่ให้ไปติด "ไม่ได้งาน"
+    if ($filter_status == 'ได้งาน') {
+        // สูตร: ต้องมีคำว่า "ได้งาน" แต่อย่ามีคำว่า "ไม่ได้งาน" ในบรรทัดเดียวกัน
+        // (หรือถ้าอยากให้ละเอียดกว่านี้ อาจต้องใช้ REGEXP แต่แบบนี้เข้าใจง่ายสุดครับ)
+        $where_sql .= " AND (job_status LIKE '%ได้งาน%' AND job_status NOT LIKE '%ไม่ได้งาน%')";
+    } else {
+        // กรณีอื่นๆ (เช่น ติดตามงาน, เข้าพบ) ใช้ LIKE ตามปกติ
+        $where_sql .= " AND job_status LIKE '%$filter_status%'";
+    }
+}
 // --- KPI CALCULATION ---
 $status_counts = [];
 $total_expense = 0;
 $total_reports = 0;
 
-$sql_stats = "SELECT job_status, COUNT(*) as count, SUM(total_expense) as expense FROM $table_name $where_sql GROUP BY job_status";
-$res_stats = $conn->query($sql_stats);
-if ($res_stats) {
-    while ($row = $res_stats->fetch_assoc()) {
-        $st = trim($row['job_status']) ?: 'ไม่ระบุ';
-        $status_counts[$st] = $row['count'];
-        $total_expense += $row['expense'];
-        $total_reports += $row['count'];
+// 1. ดึงข้อมูลดิบมาทั้งหมดก่อนตามเงื่อนไข Filter
+$sql_all = "SELECT job_status, total_expense FROM $table_name $where_sql";
+$res_all = $conn->query($sql_all);
+
+if ($res_all) {
+    while ($row = $res_all->fetch_assoc()) {
+        $total_expense += $row['expense'] ?? $row['total_expense'];
+
+        // 2. ระเบิดสถานะที่คั่นด้วยคอมม่าออกเป็น Array
+        $raw_status = $row['job_status'] ?: 'ไม่ระบุ';
+        $individual_statuses = explode(',', $raw_status);
+
+        foreach ($individual_statuses as $st) {
+            $st = trim($st); // ตัดช่องว่าง
+            if ($st != '-' && !empty($st)) {
+                // 3. นับเพิ่มทีละสถานะแยกกัน
+                if (!isset($status_counts[$st])) {
+                    $status_counts[$st] = 0;
+                }
+                $status_counts[$st]++;
+            }
+        }
+        $total_reports++; // นับจำนวนใบรายงานจริง
     }
 }
-
 // --- DATA LIST ---
 $sql_list = "SELECT * FROM $table_name $where_sql ORDER BY report_date DESC, id DESC";
 $result_list = $conn->query($sql_list);
@@ -175,20 +246,41 @@ $statuses = $conn->query("SELECT DISTINCT job_status FROM $table_name WHERE job_
 // ✅ Helper functions
 function getCardConfig($status)
 {
-    $s = trim($status);
-    if (strpos($s, 'ได้งาน') !== false || strpos($s, 'สำเร็จ') !== false)
-        return ['color' => '#10b981', 'icon' => 'fa-check-circle'];
-    if (strpos($s, 'เข้าเสนอโครงการ') !== false || strpos($s, 'เสนอ') !== false)
-        return ['color' => '#3b82f6', 'icon' => 'fa-briefcase']; // Blue Adjusted
-    if (strpos($s, 'ติดตามงาน') !== false || strpos($s, 'ติดตาม') !== false || strpos($s, 'รอ') !== false)
-        return ['color' => '#f59e0b', 'icon' => 'fa-clock'];
-    if (strpos($s, 'ไม่ได้') !== false || strpos($s, 'ยกเลิก') !== false)
-        return ['color' => '#ef4444', 'icon' => 'fa-times-circle'];
+    $status = trim($status);
 
-    $palette = ['#8b5cf6', '#ec4899', '#06b6d4', '#14b8a6', '#f97316', '#6366f1'];
-    $hash = crc32($s);
-    $index = abs($hash) % count($palette);
-    return ['color' => $palette[$index], 'icon' => 'fa-tag'];
+    // 🔴 1. สีแดง (ไม่ได้งาน)
+    if (strpos($status, 'ไม่ได้') !== false || strpos($status, 'ยกเลิก') !== false || strpos($status, 'แพ้') !== false) {
+        return ['color' => '#ef4444', 'icon' => 'fa-times-circle'];
+    }
+
+    // 🟢 2. สีเขียว (ได้งาน)
+    if (strpos($status, 'ได้งาน') !== false || strpos($status, 'สำเร็จ') !== false || strpos($status, 'เรียบร้อย') !== false) {
+        return ['color' => '#10b981', 'icon' => 'fa-check-circle'];
+    }
+
+    // 🔵 3. สีฟ้า (เสนอ)
+    if (strpos($status, 'เสนอ') !== false || strpos($status, 'เข้าพบ') !== false || strpos($status, 'ประมูล') !== false) {
+        return ['color' => '#3b82f6', 'icon' => 'fa-briefcase'];
+    }
+
+    // 🟡 4. สีเหลือง (ติดตาม)
+    if (strpos($status, 'ติดตาม') !== false || strpos($status, 'รอ') !== false || strpos($status, 'นัดหมาย') !== false) {
+        return ['color' => '#f59e0b', 'icon' => 'fa-clock'];
+    }
+
+    // 🎨 5. เจนสีอัตโนมัติ (สูตร Sync กับ JS)
+    // แปลงข้อความเป็นชุดตัวเลข (Bytes) แล้วเอามาบวกกัน
+    $bytes = unpack('C*', $status);
+    $sum = 0;
+    foreach ($bytes as $b) {
+        $sum += $b;
+    }
+
+    // คูณด้วยเลขจำนวนเฉพาะ (157) เพื่อกระจายสีให้ไม่ซ้ำกัน
+    $hue = ($sum * 157) % 360;
+
+    $generated_color = "hsl($hue, 65%, 45%)"; // สีเข้มกำลังดี
+    return ['color' => $generated_color, 'icon' => 'fa-tag'];
 }
 
 function hexToRgba($hex, $alpha = 0.1)
@@ -219,6 +311,12 @@ function hexToRgba($hex, $alpha = 0.1)
 
     <link rel="stylesheet" href="css/dashboard_style.css">
 
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/airbnb.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/th.js"></script>
+
     <script>
         // --- Prevent FOUC ---
         (function () {
@@ -248,63 +346,104 @@ function hexToRgba($hex, $alpha = 0.1)
         </div>
 
         <div class="kpi-grid">
-            <div class="kpi-card" onclick="filterByStatus('')" style="border-left: 5px solid var(--primary-color);">
-                <div class="kpi-label" style="color: var(--primary-color);">รายงานทั้งหมด</div>
-                <div class="kpi-value"><?php echo number_format($total_reports); ?></div>
-                <i class="fas fa-file-alt kpi-icon" style="color: var(--primary-color);"></i>
+
+            <div class="kpi-card" onclick="filterByStatus('')" style="cursor: pointer; border-left: 5px solid #64748b;">
+                <div class="kpi-label" style="color:#64748b;">รายงานทั้งหมด</div>
+                <div class="kpi-value" style="color:#1e293b;"><?php echo number_format($total_reports); ?></div>
+                <i class="fas fa-file-alt kpi-icon" style="color:#64748b;"></i>
             </div>
-            <?php foreach ($status_counts as $st => $cnt):
-                $cfg = getCardConfig($st); ?>
-                <div class="kpi-card" onclick="filterByStatus('<?php echo $st; ?>')"
-                    style="border-left: 5px solid <?php echo $cfg['color']; ?>;">
-                    <div class="kpi-label" style="color: <?php echo $cfg['color']; ?>;"><?php echo $st; ?></div>
-                    <div class="kpi-value"><?php echo number_format($cnt); ?></div>
-                    <i class="fas <?php echo $cfg['icon']; ?> kpi-icon" style="color: <?php echo $cfg['color']; ?>;"></i>
+
+            <?php
+            // วนลูปตัวแปร $status_counts ที่ลูกพี่ทำไว้
+            foreach ($status_counts as $status_name => $count) {
+
+                // กันเหนียว: ถ้าชื่อสถานะว่างเปล่า ให้ข้ามไป
+                if (trim($status_name) == '')
+                    continue;
+
+                // ดึงสีและไอคอน (ใช้ฟังก์ชัน getCardConfig ที่เรามีอยู่แล้ว)
+                $cfg = getCardConfig($status_name);
+                $color = $cfg['color'];
+                $icon = $cfg['icon'];
+
+                // แปลงชื่อสถานะให้ปลอดภัย (เผื่อมีอักขระพิเศษ)
+                $safe_status = htmlspecialchars($status_name, ENT_QUOTES);
+                ?>
+                <div class="kpi-card" onclick="filterByStatus('<?php echo $safe_status; ?>')"
+                    style="cursor: pointer; border-left: 5px solid <?php echo $color; ?>;">
+
+                    <div class="kpi-label" style="color: <?php echo $color; ?>;">
+                        <?php echo $status_name; ?>
+                    </div>
+
+                    <div class="kpi-value" style="color: <?php echo $color; ?>; filter: brightness(0.8);">
+                        <?php echo number_format($count); ?>
+                    </div>
+
+                    <i class="fas <?php echo $icon; ?> kpi-icon" style="color: <?php echo $color; ?>;"></i>
                 </div>
-            <?php endforeach; ?>
-            <div class="kpi-card" style="border-left: 5px solid #ef4444; cursor: default;">
-                <div class="kpi-label" style="color: #ef4444;">ค่าใช้จ่ายรวม</div>
-                <div class="kpi-value" style="color: #ef4444;"><?php echo number_format($total_expense); ?> ฿</div>
-                <i class="fas fa-wallet kpi-icon" style="color: #ef4444;"></i>
-            </div>
+            <?php } ?>
+
         </div>
 
-        <form class="filter-section">
-            <div class="filter-form">
-                <div class="form-group">
-                    <label class="form-label">พนักงาน</label>
-                    <select name="filter_name" class="form-control">
-                        <option value="">ทั้งหมด</option>
-                        <?php while ($u = $users->fetch_assoc()) {
-                            echo "<option value='{$u['reporter_name']}' " . ($filter_name == $u['reporter_name'] ? 'selected' : '') . ">{$u['reporter_name']}</option>";
-                        } ?>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">สถานะ</label>
-                    <select name="filter_status" class="form-control">
-                        <option value="">ทั้งหมด</option>
-                        <?php while ($s = $statuses->fetch_assoc()) {
-                            echo "<option value='{$s['job_status']}' " . ($filter_status == $s['job_status'] ? 'selected' : '') . ">{$s['job_status']}</option>";
-                        } ?>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">วันที่เริ่ม</label>
-                    <input type="date" name="start_date" value="<?php echo $start_date; ?>" class="form-control">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">ถึงวันที่</label>
-                    <input type="date" name="end_date" value="<?php echo $end_date; ?>" class="form-control">
-                </div>
-                <div class="form-group">
-                    <div class="button-group">
-                        <button type="submit" class="btn-search"><i class="fas fa-search"></i> ค้นหา</button>
-                        <a href="Dashboard.php" class="btn-reset"><i class="fas fa-undo"></i> รีเซ็ต</a>
+        <div class="filter-section">
+
+            <form method="GET" action="">
+                <input type="hidden" name="filter_status" id="filter_status"
+                    value="<?php echo htmlspecialchars($filter_status); ?>">
+
+                <div class="filter-form">
+                    <div class="form-group">
+                        <label class="form-label">พนักงาน</label>
+                        <select name="filter_name" class="form-control">
+                            <option value="">ทั้งหมด</option>
+                            <?php while ($u = $users->fetch_assoc()) {
+                                echo "<option value='{$u['reporter_name']}' " . ($filter_name == $u['reporter_name'] ? 'selected' : '') . ">{$u['reporter_name']}</option>";
+                            } ?>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">สถานะ</label>
+                        <select name="filter_status" class="form-control">
+                            <option value="">ทั้งหมด</option>
+                            <?php while ($s = $statuses->fetch_assoc()) {
+                                echo "<option value='{$s['job_status']}' " . ($filter_status == $s['job_status'] ? 'selected' : '') . ">{$s['job_status']}</option>";
+                            } ?>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">วันที่เริ่ม</label>
+                        <div style="position: relative;">
+                            <input type="text" name="start_date" class="form-control datepicker"
+                                value="<?php echo $start_date; ?>" placeholder="เลือกวันที่...">
+                            <i class="fas fa-calendar-alt"
+                                style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; pointer-events: none;"></i>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">ถึงวันที่</label>
+                        <div style="position: relative;">
+                            <input type="text" name="end_date" class="form-control datepicker"
+                                value="<?php echo $end_date; ?>" placeholder="เลือกวันที่...">
+                            <i class="fas fa-calendar-alt"
+                                style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; pointer-events: none;"></i>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <div style="height: 19px;"></div>
+                        <div class="button-group">
+                            <button type="submit" class="btn-search"><i class="fas fa-search"></i> ค้นหา</button>
+                            <a href="Dashboard.php" class="btn-reset"><i class="fas fa-undo"></i> รีเซ็ต</a>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </form>
+            </form>
+
+        </div>
 
         <div class="table-card">
             <div class="table-responsive">
@@ -340,38 +479,88 @@ function hexToRgba($hex, $alpha = 0.1)
                                             <?php echo date('H:i', strtotime($row['created_at'])); ?> น.
                                         </div>
                                     </td>
+
                                     <td>
-                                        <div>
-                                            <div
-                                                style="font-weight:600; color:var(--text-main); margin-bottom: 4px; white-space: nowrap;">
-                                                <?php echo $row['reporter_name']; ?>
-                                            </div>
+                                        <div style="font-weight:600; color:var(--text-main); margin-bottom: 4px;">
+                                            <?php echo $row['reporter_name']; ?>
+                                        </div>
+
+                                        <div style="margin-top: 5px;">
                                             <?php if (isset($row['gps']) && $row['gps'] == 'Office'): ?>
-                                                <span class="status-badge gps-tag-office"><i class="fas fa-building"></i>
-                                                    ออฟฟิศ</span>
+                                                <span class="status-badge gps-tag-office" style="font-size: 10px;">
+                                                    <i class="fas fa-building"></i> ออฟฟิศ
+                                                </span>
                                             <?php else: ?>
-                                                <span class="status-badge gps-tag-out"><i class="fas fa-map-marker-alt"></i>
-                                                    นอกสถานที่</span>
+                                                <span class="status-badge gps-tag-out" style="font-size: 10px;">
+                                                    <i class="fas fa-map-marker-alt"></i> นอกสถานที่
+                                                </span>
                                             <?php endif; ?>
                                         </div>
                                     </td>
-                                    <td>
-                                        <div class="customer-link"
-                                            onclick="showCustomerHistory('<?php echo htmlspecialchars($row['work_result']); ?>')">
-                                            <i class="fas fa-history"
-                                                style="font-size:12px; margin-right:5px; opacity:0.6;"></i>
-                                            <?php echo $row['work_result']; ?>
-                                        </div>
-                                        <div style="font-size:12px; color:var(--text-sub); margin-top:2px;">
-                                            <?php echo $row['activity_type']; ?>
-                                        </div>
+
+                                    <?php
+                                    // --- เตรียมข้อมูลสำหรับเเยกบรรทัด ---
+                                    $customers = explode(',', $row['work_result']);
+                                    $projects = explode(',', $row['project_name']);
+                                    $max_rows = max(count($customers), count($projects));
+                                    $min_h = "min-height: 40px;"; // ปรับความสูงขั้นต่ำให้ลดลงได้เพราะไม่มี GPS แล้ว
+                                    ?>
+
+                                    <td style="padding: 0; vertical-align: top; border-right: 1px solid rgba(0,0,0,0.05);">
+                                        <?php for ($i = 0; $i < $max_rows; $i++):
+                                            $cus_item = isset($customers[$i]) ? trim($customers[$i]) : '';
+                                            $border = ($i < $max_rows - 1) ? 'border-bottom: 1px dashed rgba(0,0,0,0.05);' : '';
+                                            ?>
+                                            <div style="padding: 10px; <?php echo $min_h . $border; ?>">
+                                                <?php if (!empty($cus_item)): ?>
+                                                    <div style="cursor: pointer; color: var(--primary-color); font-weight: 600;"
+                                                        onclick="event.stopPropagation(); showCustomerHistory('<?php echo htmlspecialchars($cus_item, ENT_QUOTES); ?>')">
+                                                        <i class="fas fa-university text-primary me-2"></i>
+                                                        <span style="text-decoration: underline;"><?php echo $cus_item; ?></span>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php endfor; ?>
                                     </td>
-                                    <td><?php echo $row['project_name']; ?></td>
-                                    <td>
-                                        <span class='status-badge'
-                                            style="background-color: <?php echo $bg_color; ?>; color: <?php echo $cfg['color']; ?>; border: 1px solid <?php echo hexToRgba($cfg['color'], 0.2); ?>;">
-                                            <i class='fas <?php echo $cfg['icon']; ?>'></i> <?php echo $row['job_status']; ?>
-                                        </span>
+
+                                    <td style="padding: 0; vertical-align: top;">
+                                        <?php for ($i = 0; $i < $max_rows; $i++):
+                                            $proj_item = isset($projects[$i]) ? trim($projects[$i]) : '';
+                                            $border = ($i < $max_rows - 1) ? 'border-bottom: 1px dashed rgba(0,0,0,0.05);' : '';
+                                            ?>
+                                            <div style="padding: 10px; <?php echo $min_h . $border; ?> font-weight: 500;">
+                                                <?php if (!empty($proj_item)): ?>
+                                                    <i class="fas fa-caret-right text-muted me-1"></i> <?php echo $proj_item; ?>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php endfor; ?>
+                                    </td>
+                                    <td style="padding: 0; vertical-align: top; border-right: 1px solid rgba(0,0,0,0.05);">
+                                        <?php
+                                        // แยกสถานะด้วยคอมม่า
+                                        $job_statuses_arr = explode(',', $row['job_status']);
+
+                                        // วนลูปตาม $max_rows (ที่เราคำนวณไว้ก่อนหน้านี้ในคอลัมน์ลูกค้า)
+                                        for ($i = 0; $i < $max_rows; $i++) {
+                                            $st_item = isset($job_statuses_arr[$i]) ? trim($job_statuses_arr[$i]) : '';
+                                            $border = ($i < $max_rows - 1) ? 'border-bottom: 1px dashed rgba(0,0,0,0.05);' : '';
+
+                                            // ถ้าบรรทัดนั้นมีข้อมูลสถานะ ให้ดึง Config สีและไอคอน
+                                            if (!empty($st_item)) {
+                                                $st_cfg = getCardConfig($st_item);
+                                                $st_bg = hexToRgba($st_cfg['color'], 0.1);
+                                            }
+                                            ?>
+                                            <div
+                                                style="padding: 10px; <?php echo $min_h . $border; ?> display: flex; align-items: center;">
+                                                <?php if (!empty($st_item)): ?>
+                                                    <span class='status-badge'
+                                                        style="background-color: <?php echo $st_bg; ?>; color: <?php echo $st_cfg['color']; ?>; border: 1px solid <?php echo hexToRgba($st_cfg['color'], 0.2); ?>; font-size: 11px; white-space: nowrap;">
+                                                        <i class='fas <?php echo $st_cfg['icon']; ?>'></i> <?php echo $st_item; ?>
+                                                    </span>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php } ?>
                                     </td>
                                     <td style="font-weight:700; color:var(--ev-fuel-text);">
                                         <?php echo number_format($row['total_expense']); ?>
@@ -415,7 +604,7 @@ function hexToRgba($hex, $alpha = 0.1)
                                         <div style="display:flex; gap:5px; justify-content:center;">
                                             <button onclick='showDetail(<?php echo json_encode($row); ?>)' class="btn-view"
                                                 title="ดูรายละเอียด"><i class="fas fa-eye"></i></button>
-                                            <button onclick='openExpenseModal(<?php echo json_encode($row); ?>)'
+                                            <button style="display:none;" onclick='openExpenseModal(<?php echo json_encode($row); ?>)'
                                                 class="btn-action-edit" title="แก้ไขค่าใช้จ่าย"><i
                                                     class="fas fa-edit"></i></button>
                                         </div>
@@ -464,71 +653,106 @@ function hexToRgba($hex, $alpha = 0.1)
                     <h3><i class="fas fa-coins"></i> อัปเดตค่าใช้จ่าย</h3>
                     <span onclick="closeModal('expenseModal')" class="modal-close">&times;</span>
                 </div>
-                <div class="modal-body" style="padding: 25px;">
-
-                    <div style="border-bottom:1px dashed #e2e8f0; margin-bottom:15px; padding-bottom:10px;">
+                <div class="modal-body" style="padding: 25px; background-color: #f8fafc;">
+                    <div
+                        style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; border: 1px solid #e2e8f0;">
                         <div
-                            style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                            <label class="detail-label"><i class="fas fa-gas-pump"></i> ค่าน้ำมัน (หลายรายการ)</label>
+                            style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px;">
+                            <label class="detail-label" style="font-weight: 700; color: #334155; margin: 0;">
+                                <i class="fas fa-gas-pump" style="color: #ef4444; margin-right: 8px;"></i>ค่าน้ำมัน
+                                (ระบุเป็นรายการ)
+                            </label>
                             <button type="button" onclick="addFuelRowEdit()"
-                                style="background:#eff6ff; color:#2563eb; border:1px solid #bfdbfe; border-radius:6px; font-size:0.8rem; padding:4px 10px; cursor:pointer; transition:0.2s;">
+                                style="background:#f0f9ff; color:#0284c7; border:1px solid #bae6fd; border-radius:8px; font-size:0.75rem; padding:6px 12px; cursor:pointer; font-weight: 600; transition: all 0.2s;">
                                 <i class="fas fa-plus-circle"></i> เพิ่มช่อง
                             </button>
                         </div>
 
                         <div id="fuel_edit_container">
-                            <div class="fuel-row" style="display:flex; gap:10px; margin-bottom:10px;">
-                                <input type="number" step="0.01" name="fuel_cost[]" id="ex_fuel_0"
-                                    class="form-control fuel-calc" placeholder="บาท" oninput="calcTotalEdit()">
+                            <div class="fuel-row"
+                                style="display:flex; gap:10px; margin-bottom:12px; align-items: center;">
+                                <div style="position: relative; flex: 1;">
+                                    <span
+                                        style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 0.8rem;">฿</span>
+                                    <input type="number" step="0.01" name="fuel_cost[]" id="ex_fuel_0"
+                                        class="form-control fuel-calc" placeholder="0.00" oninput="calcTotalEdit()"
+                                        style="padding-left: 25px; border-radius: 8px;">
+                                </div>
 
-                                <div style="width:50%;">
-                                    <label class="upload-btn-mini">
-                                        <i class="fas fa-upload"></i> สลิป
+                                <div style="flex: 1;">
+                                    <label class="upload-btn-mini"
+                                        style="width: 100%; border-radius: 8px; justify-content: center; background: #f1f5f9; border: 1px dashed #cbd5e1;">
+                                        <i class="fas fa-camera"></i> สลิปน้ำมัน
                                         <input type="file" name="fuel_file[]" accept="image/*" hidden
                                             onchange="previewFile(this, 'prev_fuel_0')">
                                     </label>
-                                    <div id="prev_fuel_0" class="file-status"></div>
+                                    <div id="prev_fuel_0" class="file-status"
+                                        style="font-size: 10px; margin-top: 4px; text-align: center;"></div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="expense-edit-group">
-                        <label class="detail-label"><i class="fas fa-hotel"></i> ค่าที่พัก</label>
-                        <div style="display:flex; gap:10px;">
-                            <input type="number" step="0.01" name="accommodation_cost" id="ex_hotel"
-                                class="form-control" placeholder="0.00" oninput="calcTotalEdit()">
-                            <div style="width:50%;">
-                                <label class="upload-btn-mini"><i class="fas fa-upload"></i> เปลี่ยนสลิป
-                                    <input type="file" name="hotel_file" accept="image/*" hidden
-                                        onchange="previewFile(this, 'prev_hotel')">
-                                </label>
-                                <div id="prev_hotel" class="file-status"></div>
+                    <div style="display: grid; grid-template-columns: 1fr; gap: 15px;">
+
+                        <div
+                            style="background: white; padding: 18px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                            <label class="detail-label" style="font-weight: 700; color: #334155;"><i
+                                    class="fas fa-hotel"
+                                    style="color: #3b82f6; margin-right: 8px;"></i>ค่าที่พัก</label>
+                            <div style="display:flex; gap:10px; margin-top: 8px;">
+                                <input type="number" step="0.01" name="accommodation_cost" id="ex_hotel"
+                                    class="form-control" placeholder="0.00" oninput="calcTotalEdit()"
+                                    style="border-radius: 8px;">
+                                <div style="width:50%;">
+                                    <label class="upload-btn-mini"
+                                        style="width: 100%; border-radius: 8px; justify-content: center;">
+                                        <i class="fas fa-upload"></i> เปลี่ยนสลิป
+                                        <input type="file" name="hotel_file" accept="image/*" hidden
+                                            onchange="previewFile(this, 'prev_hotel')">
+                                    </label>
+                                    <div id="prev_hotel" class="file-status"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div
+                            style="background: white; padding: 18px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                            <label class="detail-label" style="font-weight: 700; color: #334155;"><i
+                                    class="fas fa-receipt"
+                                    style="color: #eab308; margin-right: 8px;"></i>ค่าใช้จ่ายอื่นๆ</label>
+                            <div style="display:flex; gap:10px; align-items: flex-start; margin-top: 8px;">
+                                <input type="number" step="0.01" name="other_cost" id="ex_other" class="form-control"
+                                    placeholder="0.00" oninput="calcTotalEdit()"
+                                    style="width: 30%; border-radius: 8px;">
+                                <input type="text" name="other_detail" id="ex_other_detail" class="form-control"
+                                    placeholder="รายละเอียด (เช่น ทางด่วน)" style="width: 40%; border-radius: 8px;">
+                                <div style="width: 30%;">
+                                    <label class="upload-btn-mini"
+                                        style="width: 100%; border-radius: 8px; justify-content: center;">
+                                        <i class="fas fa-upload"></i> สลิป
+                                        <input type="file" name="other_file" accept="image/*" hidden
+                                            onchange="previewFile(this, 'prev_other')">
+                                    </label>
+                                    <div id="prev_other" class="file-status"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="expense-edit-group">
-                        <label class="detail-label"><i class="fas fa-receipt"></i> อื่นๆ</label>
-                        <div style="display:flex; gap:10px;">
-                            <input type="number" step="0.01" name="other_cost" id="ex_other" class="form-control"
-                                placeholder="0.00" oninput="calcTotalEdit()">
-                            <div style="width:50%;">
-                                <label class="upload-btn-mini"><i class="fas fa-upload"></i> เปลี่ยนสลิป
-                                    <input type="file" name="other_file" accept="image/*" hidden
-                                        onchange="previewFile(this, 'prev_other')">
-                                </label>
-                                <div id="prev_other" class="file-status"></div>
-                            </div>
-                        </div>
+                    <div class="total-card"
+                        style="margin-top: 25px; background: linear-gradient(135deg, #475569 0%, #1e293b 100%); color: white; border-radius: 12px; padding: 20px; text-align: center; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);">
+                        <div
+                            style="font-size:0.85rem; opacity:0.8; margin-bottom:5px; text-transform: uppercase; letter-spacing: 1px;">
+                            ยอดรวมสุทธิใหม่</div>
+                        <div style="font-size:2.5rem; font-weight:800; line-height:1; text-shadow: 0 2px 4px rgba(0,0,0,0.3);"
+                            id="ex_total_display">0.00 ฿</div>
                     </div>
 
-                    <div class="total-card">
-                        <div style="font-size:0.9rem; opacity:0.8; margin-bottom:5px;">ยอดรวมสุทธิใหม่</div>
-                        <div style="font-size:2rem; font-weight:800; line-height:1;" id="ex_total_display">0.00 ฿</div>
-                    </div>
-
-                    <button type="submit" class="btn-save-orange"><i class="fas fa-save"></i> บันทึกการแก้ไข</button>
+                    <button type="button" onclick="saveEdit()" class="btn-save-orange"
+                        style="width: 100%; margin-top: 20px; padding: 15px; border-radius: 12px; font-size: 1.1rem; font-weight: 700; box-shadow: 0 4px 6px -1px rgba(249, 115, 22, 0.4); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;">
+                        <i class="fas fa-save"></i> บันทึกการแก้ไขข้อมูล
+                    </button>
                 </div>
             </form>
         </div>

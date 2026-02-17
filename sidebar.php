@@ -1064,8 +1064,9 @@ function getAvatar()
             </li>
         <?php endif; ?>
 
-        <?php if (canSeeMenu('Dashboard.php') || canSeeMenu('Report.php') || canSeeMenu('ManageCustomers.php') || canSeeMenu('MapDashboard.php') || canSeeMenu('ActivityManager.php') || canSeeMenu('StatusManager.php')||canSeeMenu('work_plan_add.php')||canSeeMenu('work_plan_dashboard.php')):
-            $sale_pages = ['Dashboard.php', 'Report.php', 'MapDashboard.php', 'ActivityManager.php', 'StatusManager.php', 'ManageCustomers.php'];
+        <?php if (canSeeMenu('Dashboard.php') || canSeeMenu('Report.php') || canSeeMenu('ManageCustomers.php') || canSeeMenu('MapDashboard.php') || canSeeMenu('ActivityManager.php') || canSeeMenu('StatusManager.php') || canSeeMenu('work_plan_add.php') || canSeeMenu('work_plan_dashboard.php')):
+            // เก็บรายชื่อหน้าเพื่อเช็คการเปิด Dropdown (เอา ActivityManager.php ออกจาก array ถ้าต้องการ)
+            $sale_pages = ['Dashboard.php', 'Report.php', 'MapDashboard.php', 'StatusManager.php', 'ManageCustomers.php', 'work_plan_dashboard.php', 'work_plan_add.php'];
             $sale_open = in_array($current_page, $sale_pages) ? 'open' : '';
             $sale_show = in_array($current_page, $sale_pages) ? 'show' : '';
             ?>
@@ -1073,24 +1074,33 @@ function getAvatar()
                 <a href="javascript:void(0);" onclick="toggleDropdown(event, this)"
                     style="display:flex; align-items:center; justify-content:space-between;">
                     <div style="display:flex; align-items:center;">
-                        <i class="fas fa-chart-line"></i> <span class="menu-text">ทีมเซลล์</span>
+                        <i class="fas fa-chart-line"></i> <span class="menu-text">ทีมการตลาด</span>
                     </div>
                     <i class="fas fa-chevron-down dropdown-icon"></i>
                 </a>
                 <ul class="submenu <?php echo $sale_show; ?>">
                     <?php if (canSeeMenu('Dashboard.php')): ?>
                         <li><a href="Dashboard.php" class="<?php echo isActive('Dashboard.php', $current_page); ?>"><i
-                                    class="fas fa-chart-pie"></i> Dashboard เซลล์</a></li><?php endif; ?>
+                                    class="fas fa-chart-pie"></i> Dashboard ประจำวันการตลาด</a></li><?php endif; ?>
                     <?php if (canSeeMenu('Report.php')): ?>
                         <li><a href="Report.php" class="<?php echo isActive('Report.php', $current_page); ?>"><i
                                     class="fas fa-edit"></i> รายงานประจำวัน</a></li><?php endif; ?>
                     <?php if (canSeeMenu('MapDashboard.php')): ?>
                         <li><a href="MapDashboard.php" class="<?php echo isActive('MapDashboard.php', $current_page); ?>"><i
-                                    class="fas fa-map-marked-alt"></i> แผนที่ติดตาม</a></li><?php endif; ?>
+                                    class="fas fa-map-marked-alt"></i> แผนที่ติดตามการตลาด</a></li><?php endif; ?>
+
                     <?php if (canSeeMenu('ActivityManager.php')): ?>
-                        <li><a href="ActivityManager.php"
-                                class="<?php echo isActive('ActivityManager.php', $current_page); ?>"><i
-                                    class="fas fa-clipboard-list"></i> จัดการกิจกรรม</a></li><?php endif; ?>
+                        <?php if (canSeeMenu('work_plan_dashboard.php')): ?>
+                            <li><a href="work_plan_dashboard.php"
+                                    class="<?php echo isActive('work_plan_dashboard.php', $current_page); ?>"><i
+                                        class="fas fa-chart-pie"></i> Dashboard งานการตลาด</a></li>
+                        <?php endif; ?>
+                        <?php if (canSeeMenu('work_plan_add.php')): ?>
+                            <li><a href="work_plan_add.php" class="<?php echo isActive('work_plan_add.php', $current_page); ?>"><i
+                                        class="fas fa-tasks"></i> สมุดลงแพลนงานการตลาด</a></li>
+                        <?php endif; ?>
+                    <?php endif; ?>
+
                     <?php if (canSeeMenu('StatusManager.php')): ?>
                         <li><a href="StatusManager.php" class="<?php echo isActive('StatusManager.php', $current_page); ?>"><i
                                     class="fas fa-tasks"></i> จัดการสถานะ</a></li><?php endif; ?>
@@ -1098,17 +1108,6 @@ function getAvatar()
                         <li><a href="ManageCustomers.php"
                                 class="<?php echo isActive('ManageCustomers.php', $current_page); ?>"><i
                                     class="fas fa-tasks"></i> จัดการชื่อหน่วยงาน</a></li><?php endif; ?>
-                    
-                    <?php if (canSeeMenu('work_plan_dashboard.php')): ?>
-                        <li><a href="work_plan_dashboard.php"
-                                class="<?php echo isActive('work_plan_dashboard.php', $current_page); ?>"><i
-                                    class="fas fa-chart-pie"></i> Dashboardเเพลนงาน</a></li>
-                    <?php endif; ?>
-                    <?php if (canSeeMenu('work_plan_add.php')): ?>
-                        <li><a href="work_plan_add.php"
-                                class="<?php echo isActive('work_plan_add.php', $current_page); ?>"><i
-                                    class="fas fa-tasks"></i> พิมพ์รายงานเเพลนงาน</a></li>
-                    <?php endif; ?>
                 </ul>
             </li>
         <?php endif; ?>

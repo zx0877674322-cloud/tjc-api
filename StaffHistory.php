@@ -669,168 +669,93 @@ function getStatusConfig($status)
         <div class="modal-content">
             <div class="modal-header">
                 <h3>รายละเอียดรายงาน</h3>
-                <div class="modal-close" onclick="closeModal()">&times;</div>
+                <div class="modal-close" onclick="closeModal('detailModal')">&times;</div>
             </div>
             <div class="modal-body" id="modalBody"></div>
         </div>
     </div>
 
-    <script>
-        // ฟังก์ชันสำหรับแสดง Modal รายละเอียด
-        function showDetail(data, tabType = null) {
+    <div id="expenseModal" class="modal" onclick="if(event.target==this)closeModal('expenseModal')">
+        <div class="modal-content" style="max-width: 550px;">
+            <form id="editExpenseForm" onsubmit="event.preventDefault(); saveEdit();">
+                <input type="hidden" name="action" value="update_expense">
+                <input type="hidden" name="report_id" id="ex_report_id">
 
-            // 1. กำหนดประเภท (ถ้าไม่ได้ส่งมา ให้เดาจาก PHP หรือตั้งเป็น Default)
-            // กรณี Sales เดิมอาจจะไม่ได้ส่ง tabType มา
-            let type = tabType || "<?php echo isset($current_tab) && $current_tab == 'sales' ? 'SALES' : 'OTHER'; ?>";
+                <div class="modal-header-orange">
+                    <h3><i class="fa-solid fa-coins"></i> อัปเดตรายละเอียดค่าใช้จ่าย</h3>
+                    <span onclick="closeModal('expenseModal')" class="modal-close">&times;</span>
+                </div>
 
-            // ส่วนหัว Modal (เหมือนกันทุก Tab)
-            let content = `
-            <div class="d-group" style="border-bottom:1px solid #e2e8f0; padding-bottom:15px; margin-bottom:15px;">
-                <div style="display:flex; justify-content:space-between;">
-                    <div>
-                        <div class="d-lbl">วันที่</div>
-                        <div class="d-val">${data.report_date || '-'}</div>
+                <div class="modal-body" style="padding: 25px; background: #fff;">
+                    <div class="expense-edit-group">
+                        <div
+                            style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                            <label class="detail-label"><i class="fa-solid fa-gas-pump"></i> ค่าน้ำมัน
+                                (ระบุเป็นรายการ)</label>
+                            <button type="button" onclick="addFuelRowEdit()" class="btn-view"
+                                style="width:auto; height:30px; padding:0 10px; font-size:12px; background:#eff6ff; color:#2563eb;">
+                                <i class="fa-solid fa-plus me-1"></i> เพิ่มบิล
+                            </button>
+                        </div>
+                        <div id="fuel_edit_container">
+                        </div>
                     </div>
-                    <div style="text-align:right;">
-                        <div class="d-lbl">เวลา</div>
-                        <div class="d-val">${(data.report_time || '').substring(0, 5)} น.</div>
-                    </div>
-                </div>
-                <div style="margin-top:10px;">
-                    <div class="d-lbl">ผู้รายงาน</div>
-                    <div style="font-weight:600; color:#1e293b;">
-                        <i class="fas fa-user-circle" style="color:#64748b;"></i> ${data.fullname || data.reporter_name || '-'}
-                    </div>
-                </div>
-            </div>
-        `;
 
-            // =========================================================
-            // 🟠 กรณี 1: DELIVERY (ฝ่ายจัดส่ง)
-            // =========================================================
-            if (type === 'DELIVERY') {
-                content += `
-                <div class="d-group" style="margin-top:20px;">
-                    <div class="d-lbl" style="color:#f59e0b; display:flex; align-items:center; gap:6px;">
-                        <i class="fas fa-truck"></i> รายละเอียดงาน / เส้นทาง (Note)
+                    <div class="expense-edit-group">
+                        <label class="detail-label"><i class="fa-solid fa-hotel"></i> ค่าที่พัก</label>
+                        <div style="display:flex; gap:10px;">
+                            <input type="number" step="0.01" name="accommodation_cost" id="ex_hotel"
+                                class="form-control" placeholder="0.00" oninput="calcTotalEdit()">
+                            <div style="width:50%;">
+                                <label class="upload-btn-mini">
+                                    <i class="fa-solid fa-cloud-arrow-up"></i> เปลี่ยนสลิป
+                                    <input type="file" name="hotel_file" accept="image/*" hidden
+                                        onchange="previewFile(this, 'prev_hotel')">
+                                </label>
+                                <div id="prev_hotel" class="file-status"></div>
+                            </div>
+                        </div>
                     </div>
-                    <div style="background:#fffbeb; border:1px solid #fcd34d; border-radius:12px; padding:15px; margin-top:8px; font-size:0.95rem; color:#78350f; line-height:1.6; white-space: pre-wrap;">${data.note}</div>
+
+                    <div class="expense-edit-group" style="border-bottom:none;">
+                        <label class="detail-label"><i class="fa-solid fa-receipt"></i> ค่าใช้จ่ายอื่นๆ</label>
+                        <div style="display:grid; grid-template-columns: 1fr 1.5fr 1fr; gap:10px;">
+                            <input type="number" step="0.01" name="other_cost" id="ex_other" class="form-control"
+                                placeholder="0.00" oninput="calcTotalEdit()">
+                            <input type="text" name="other_detail" id="ex_other_detail" class="form-control"
+                                placeholder="ระบุรายละเอียด">
+                            <div>
+                                <label class="upload-btn-mini">
+                                    <i class="fa-solid fa-upload"></i> สลิป
+                                    <input type="file" name="other_file" accept="image/*" hidden
+                                        onchange="previewFile(this, 'prev_other')">
+                                </label>
+                                <div id="prev_other" class="file-status"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="total-card">
+                        <div style="font-size:0.85rem; opacity:0.8; margin-bottom:5px;">ยอดเบิกรวมสุทธิใหม่</div>
+                        <div style="font-size:2.2rem; font-weight:800;" id="ex_total_display">0.00 ฿</div>
+                    </div>
+
+                    <button type="submit" class="btn-save-orange">
+                        <i class="fa-solid fa-floppy-disk me-2"></i> บันทึกการอัปเดต
+                    </button>
                 </div>
-                
-                <div style="text-align:right; margin-top:15px; font-size:0.8rem; color:#94a3b8;">
-                    Delivery ID: #${data.id}
-                </div>
-            `;
-            }
-            else if (type === 'WAREHOUSE') {
-                content += `
-        <div class="d-group" style="margin-top:20px;">
-            <div class="d-lbl" style="color:#0d9488; display:flex; align-items:center; gap:6px;">
-                <i class="fas fa-clipboard-list"></i> รายละเอียดงาน / สต็อก (Note)
-            </div>
-            <div style="background:#f0fdfa; border:1px solid #ccfbf1; border-radius:12px; padding:15px; margin-top:8px; font-size:0.95rem; color:#134e4a; line-height:1.6; white-space: pre-wrap;">${data.note}</div>
+            </form>
         </div>
-        
-        <div style="text-align:right; margin-top:15px; font-size:0.8rem; color:#94a3b8;">
-            Warehouse ID: #${data.id}
-        </div>
-    `;
+    </div>
+
+    <script>const uploadPath = 'uploads/';</script>
+
+    <script src="js/dashboard_script.js">
+        window.onclick = function (e) {
+            if (e.target == document.getElementById('detailModal')) {
+                closeModal('detailModal'); // เติม ID ลงไปในนี้ด้วย
             }
-            // =========================================================
-            // 🔵 กรณี 2: HR (ฝ่ายบุคคล)
-            // =========================================================
-            else if (type === 'HR') {
-                content += `
-                <div class="d-group" style="margin-top:20px;">
-                    <div class="d-lbl" style="color:#4f46e5; display:flex; align-items:center; gap:6px;">
-                        <i class="fas fa-clipboard-list"></i> รายละเอียด / บันทึก (Note)
-                    </div>
-                    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:15px; margin-top:8px; font-size:0.95rem; color:#334155; line-height:1.6; white-space: pre-wrap;">${data.note}</div>
-                </div>
-                
-                <div style="text-align:right; margin-top:15px; font-size:0.8rem; color:#94a3b8;">
-                    HR Record ID: #${data.id}
-                </div>
-            `;
-            }
-            // =========================================================
-            // 🟢 กรณี 3: SALES (ฝ่ายขาย - ข้อมูลเยอะ)
-            // =========================================================
-            else if (type === 'SALES') {
-                let f = parseFloat(data.std_fuel || 0);
-                let h = parseFloat(data.std_hotel || 0);
-                let o = parseFloat(data.std_other || 0);
-
-                let locationHtml = '';
-                if (data.gps && data.gps !== 'Office') {
-                    locationHtml = `
-                    <div class="d-group" style="background:#f1f5f9; padding:15px; border-radius:10px; border:1px solid #e2e8f0; margin-bottom:15px;">
-                        <div class="d-lbl" style="color:#4f46e5;"><i class="fas fa-map-marked-alt"></i> สถานที่ (GPS)</div>
-                        <div style="font-size:14px; margin-bottom:4px; color:#1e293b;"><b>โซน:</b> ${data.area || '-'} <span style="margin:0 8px;">|</span> <b>จังหวัด:</b> ${data.province || '-'}</div>
-                        <div style="font-size:13px; color:#64748b;"><i class="fas fa-map-pin"></i> ${data.gps_address || data.gps}</div>
-                    </div>
-                `;
-                }
-
-                content += `
-                <div class="d-group"><div class="d-lbl">ลูกค้า</div><div class="d-val">${data.work_result || '-'}</div></div>
-                <div class="d-group"><div class="d-lbl">โครงการ</div><div class="d-val">${data.project_name || '-'}</div></div>
-                
-                ${locationHtml}
-
-                <div class="d-group">
-                    <div class="d-lbl">ค่าใช้จ่าย</div>
-                    <div class="expense-box-row" style="display:flex; gap:10px; margin-top:5px;">
-                        <div style="flex:1; background:#fee2e2; padding:10px; border-radius:8px; text-align:center;">
-                            <div style="font-size:0.75rem; color:#b91c1c;">น้ำมัน</div>
-                            <div style="font-weight:700; color:#b91c1c;">${f.toLocaleString()}</div>
-                        </div>
-                        <div style="flex:1; background:#dbeafe; padding:10px; border-radius:8px; text-align:center;">
-                            <div style="font-size:0.75rem; color:#1d4ed8;">ที่พัก</div>
-                            <div style="font-weight:700; color:#1d4ed8;">${h.toLocaleString()}</div>
-                        </div>
-                        <div style="flex:1; background:#fef3c7; padding:10px; border-radius:8px; text-align:center;">
-                            <div style="font-size:0.75rem; color:#b45309;">อื่นๆ</div>
-                            <div style="font-weight:700; color:#b45309;">${o.toLocaleString()}</div>
-                        </div>
-                    </div>
-                </div>
-
-                ${data.additional_notes ? `
-                    <div class="d-group" style="margin-top:15px;">
-                        <div class="d-lbl"><i class="fas fa-pen"></i> บันทึกเพิ่มเติม</div>
-                        <div style="background:#f8fafc; border:1px solid #e2e8f0; padding:15px; border-radius:12px; margin-top:5px; white-space: pre-wrap;">${data.additional_notes.replace(/\[Memo: |\]/g, '').trim()}</div>
-                    </div>
-                ` : ''}
-
-                <div class="d-group" style="margin-top:20px;">
-                    <div class="d-lbl">สถานะ</div>
-                    <div style="font-weight:700;">${data.job_status || '-'}</div>
-                </div>
-            `;
-            }
-            // =========================================================
-            // ⚫ กรณีอื่นๆ (Fallback)
-            // =========================================================
-            else {
-                if (data.note) {
-                    content += `
-                    <div class="d-group" style="margin-top:20px;">
-                        <div class="d-lbl">รายละเอียด</div>
-                        <div style="white-space: pre-wrap; background:#f8fafc; padding:15px; border-radius:10px; border:1px solid #e2e8f0;">${data.note}</div>
-                    </div>`;
-                }
-            }
-
-
-            // แสดงผลใน Modal
-            document.getElementById('modalBody').innerHTML = content;
-            document.getElementById('detailModal').style.display = 'flex';
         }
-
-        // ฟังก์ชันปิด Modal
-        function closeModal() { document.getElementById('detailModal').style.display = 'none'; }
-        window.onclick = function (e) { if (e.target == document.getElementById('detailModal')) closeModal(); }
     </script>
 </body>
 

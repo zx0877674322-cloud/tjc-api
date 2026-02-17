@@ -1,13 +1,43 @@
-// work_plan_dashboard.js
 
-// ฟังก์ชันเปิด Modal สรุปงาน
-function openSummaryModal(id, summary, statusId) {
-    document.getElementById('modal_plan_id').value = id;
-    document.getElementById('modal_summary').value = summary; 
-    document.getElementById('modal_status_id').value = statusId;
-    
-    var myModal = new bootstrap.Modal(document.getElementById('summaryModal'));
-    myModal.show();
+// ✅ แก้ไขฟังก์ชันเปิด Modal
+function openSummaryModal(planId, summary, statusId) {
+    document.getElementById('modal_plan_id').value = planId;
+    document.getElementById('modal_summary').value = summary;
+    const statusSelect = document.getElementById('modal_status_id');
+
+    if (!summary || summary.trim() === "") {
+        for (let i = 0; i < statusSelect.options.length; i++) {
+            if (statusSelect.options[i].text.toUpperCase().includes('PLAN')) {
+                statusSelect.selectedIndex = i; break;
+            }
+        }
+    } else { statusSelect.value = statusId; }
+    new bootstrap.Modal(document.getElementById('summaryModal')).show();
+}
+
+// 🟢 บันทึกข้อมูลพร้อมแจ้งเตือนถ้ายังเป็น Plan
+document.getElementById('summaryForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const selText = document.getElementById('modal_status_id').options[document.getElementById('modal_status_id').selectedIndex].text.toUpperCase();
+
+    if (selText.includes('PLAN')) {
+        Swal.fire({
+            title: 'ยังเป็น Plan?',
+            text: "คุณยังไม่ได้เปลี่ยนสถานะงาน ยืนยันจะบันทึกใช่หรือไม่?",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'ใช่, บันทึกเลย'
+        }).then((res) => { if (res.isConfirmed) saveSummaryData(); });
+    } else { saveSummaryData(); }
+});
+
+async function saveSummaryData() {
+    const formData = new FormData(document.getElementById('summaryForm'));
+    try {
+        const res = await fetch('work_plan_dashboard.php', { method: 'POST', body: formData, headers: {'X-Requested-With': 'XMLHttpRequest'} });
+        const data = await res.json();
+        if (data.success) Swal.fire('สำเร็จ', 'บันทึกเรียบร้อย', 'success').then(() => location.reload());
+    } catch (e) { Swal.fire('ผิดพลาด', 'บันทึกไม่สำเร็จ', 'error'); }
 }
 
 // ฟังก์ชันยืนยันการลบ (SweetAlert2)
@@ -47,30 +77,30 @@ function confirmDelete(id) {
     return "hsl($hue, 70%, 50%)"; 
 }
 async function updateDashboard() {
-    const form = document.getElementById('filterForm');
-    const formData = new FormData(form);
+    const formData = new FormData(document.getElementById('filterForm'));
+    formData.append('ajax', '1'); // 🟢 สำคัญมาก
     const params = new URLSearchParams(formData).toString();
+    const tableCard = document.querySelector('.table-card');
 
-    // เพิ่ม Effect Loading (ถ้าต้องการ)
-    document.querySelector('.table-card').style.opacity = '0.5';
-
+    tableCard.style.opacity = '0.5';
     try {
         const response = await fetch(`work_plan_dashboard.php?${params}`);
-        const html = await response.text();
-        
-        // สร้าง Parser เพื่อดึงเฉพาะส่วนที่ต้องการเปลี่ยน
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
+        const data = await response.json();
+        if (data && data.html_content) {
+            document.querySelector('tbody').innerHTML = data.html_content;
+            // อัปเดตตัวเลขการ์ด (ถ้ามีฟังก์ชัน)
+        }
+    } catch (e) { console.error('Error:', e); }
+    finally { tableCard.style.opacity = '1'; } // 🟢 หายจางแน่นอน
+}
 
-        // 1. เปลี่ยนการ์ดสถานะ
-        document.querySelector('.status-grid').innerHTML = doc.querySelector('.status-grid').innerHTML;
-        // 2. เปลี่ยนเนื้อหาตาราง
-        document.querySelector('tbody').innerHTML = doc.querySelector('tbody').innerHTML;
-        
-        document.querySelector('.table-card').style.opacity = '1';
-    } catch (error) {
-        console.error('Error:', error);
-    }
+// ฟังก์ชันช่วยอัปเดตตัวเลขบน Card (แถมให้ครับ)
+function updateStatusNumbers(counts, total) {
+    const totalEl = document.querySelector('.status-card[onclick*="selectStatus(\'\')"] .sc-count');
+    if (totalEl) totalEl.innerText = total;
+    
+    // วนลูปอัปเดตเลขตามสถานะต่างๆ
+    // (ลูกพี่อาจต้องเพิ่ม class หรือ id ให้ sc-count แต่ละตัวเพื่อให้เจาะจงได้ง่ายขึ้น)
 }
 
 // 🟢 เมื่อมีการกดยืนยันฟอร์ม (ค้นหา)
@@ -103,54 +133,8 @@ document.getElementById('btnClear').addEventListener('click', function() {
 document.querySelectorAll('.form-select-custom').forEach(select => {
     select.addEventListener('change', updateDashboard);
 });
-// 🟢 [เพิ่มใหม่] ควบคุมการส่งฟอร์มจาก Modal สรุปผล
-// 🟢 ส่วนควบคุมการบันทึกสรุปผลแบบห้ามรีเฟรช
-document.getElementById('summaryForm').addEventListener('submit', function(e) {
-    e.preventDefault(); // 🛑 หยุดการ Refresh หน้าจอทันที
 
-    const formData = new FormData(this);
-    formData.append('action', 'save_summary'); // ส่ง action ไปให้ PHP รู้
 
-    // ส่งข้อมูลแบบ AJAX
-    fetch('work_plan_dashboard.php', {
-        method: 'POST',
-        body: formData,
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest' // บอก PHP ว่านี่คือ AJAX
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // 1. ปิด Modal สรุปผล
-            const modalElement = document.getElementById('summaryModal');
-            const modal = bootstrap.Modal.getInstance(modalElement);
-            modal.hide();
-
-            // 2. เคลียร์ค่าในฟอร์ม
-            this.reset();
-
-            // 3. แจ้งเตือนสำเร็จแบบสวยๆ
-            Swal.fire({
-                icon: 'success',
-                title: 'บันทึกสำเร็จ',
-                showConfirmButton: false,
-                timer: 1500,
-                background: '#ffffff',
-                customClass: { popup: 'rounded-4' }
-            });
-
-            // 4. 🚀 สั่งอัปเดตตารางและการ์ดสถานะใหม่ (โดยไม่รีเฟรชหน้า)
-            updateDashboard(); 
-        } else {
-            Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกได้', 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        // ถ้าพัง ให้ลองเช็คว่า PHP พ่น Error อะไรออกมาใน Network Tab ครับ
-    });
-});
 // ฟังก์ชันกดแล้วดาวน์โหลด Excel
 function exportToExcel() {
     // 1. ดึงค่าจาก Filter ปัจจุบัน

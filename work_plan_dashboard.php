@@ -49,6 +49,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
     $summary = trim($_POST['summary']);
     $status_id = intval($_POST['status_id']);
 
+    $my_name = $_SESSION['fullname'];
+
     // 🟢 1. [เพิ่ม] ไปดึงชื่อสถานะ (Text) มาก่อน จะได้เอาไปบันทึกด้วย
     $status_text = "Plan"; // ค่าเริ่มต้น
     $q_name = $conn->prepare("SELECT status_name FROM master_job_status WHERE id = ?");
@@ -61,9 +63,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
     $q_name->close();
 
     // 🟢 2. [แก้ไข] อัปเดตทั้ง summary, status_id และ status (Text) พร้อมกัน
-    $stmt = $conn->prepare("UPDATE work_plans SET summary = ?, status_id = ?, status = ? WHERE id = ?");
-    // sisi = string, int, string, int
-    $stmt->bind_param("sisi", $summary, $status_id, $status_text, $plan_id);
+    $stmt = $conn->prepare("UPDATE work_plans SET summary = ?, status_id = ?, status = ?, summary_by = ? WHERE id = ?");
+    // sissi = string, int, string, string, int
+    $stmt->bind_param("sissi", $summary, $status_id, $status_text, $my_name, $plan_id);
     $success = $stmt->execute();
     $stmt->close();
 
@@ -80,9 +82,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
 // --- Logic Delete ---
 if (isset($_GET['delete_id'])) {
     $del_id = intval($_GET['delete_id']);
+    // 🟢 แก้จาก $current_user เป็น $_SESSION['fullname']
+    $my_name = $_SESSION['fullname'];
+
     $sql_del = "DELETE FROM work_plans WHERE id = ? AND reporter_name = ?";
     if ($stmt = $conn->prepare($sql_del)) {
-        $stmt->bind_param("is", $del_id, $current_user);
+        $stmt->bind_param("is", $del_id, $my_name);
         $stmt->execute();
         $stmt->close();
         $_SESSION['swal_msg'] = "ลบข้อมูลเรียบร้อย";
@@ -118,19 +123,35 @@ while ($w = $q_worker->fetch_assoc()) {
     }
 }
 // --- Filter Variables ---
-$month = $_GET['month'] ?? date('m');
-$year = $_GET['year'] ?? date('Y');
+$start_date = $_GET['start_date'] ?? '';
+$end_date = $_GET['end_date'] ?? '';
 $filter_team = $_GET['filter_team'] ?? '';
 $filter_status = $_GET['filter_status'] ?? '';
 $filter_user = $_GET['filter_user'] ?? '';
 $filter_worker = $_GET['filter_worker'] ?? '';
 
-// 🟢 1. สร้างเงื่อนไข "พื้นฐาน" (Base Clauses) 
-// (ใช้สำหรับนับจำนวนการ์ดด้วยเงื่อนไขนี้ โดย *ไม่รวม* สถานะ เพื่อให้เห็นภาพรวม)
-$base_clauses = ["MONTH(wp.plan_date) = ?", "YEAR(wp.plan_date) = ?"];
-$base_params = [$month, $year];
-$base_types = "ss";
+// --- 🟢 ส่วนที่ 2: สร้างอาเรย์เงื่อนไขแบบ "ตามจริง" ---
+$base_clauses = [];
+$base_params = [];
+$base_types = "";
 
+// ถ้ามีการระบุวันที่เริ่ม ให้เพิ่มเงื่อนไข
+if (!empty($start_date)) {
+    $db_start = DateTime::createFromFormat('d/m/Y', $start_date)->format('Y-m-d');
+    $base_clauses[] = "wp.plan_date >= ?";
+    $base_params[] = $db_start;
+    $base_types .= "s";
+}
+
+// ถ้ามีการระบุวันที่สิ้นสุด ให้เพิ่มเงื่อนไข
+if (!empty($end_date)) {
+    $db_end = DateTime::createFromFormat('d/m/Y', $end_date)->format('Y-m-d');
+    $base_clauses[] = "wp.plan_date <= ?";
+    $base_params[] = $db_end;
+    $base_types .= "s";
+}
+
+// --- 🟢 3. เงื่อนไขอื่นๆ (คงเดิม แต่อย่าลืมเปลี่ยนเป็นการ .push หรือ +=) ---
 if (!empty($filter_user)) {
     $base_clauses[] = "wp.reporter_name = ?";
     $base_params[] = $filter_user;
@@ -148,12 +169,14 @@ if (!empty($filter_worker)) {
     $base_types .= "ss";
 }
 
-// 🟢 2. ยิง Query นับจำนวน (แก้ Logic ให้ตรงกับตารางเป๊ะๆ)
+$where_cond = !empty($base_clauses) ? implode(" AND ", $base_clauses) : "1=1";
+
+
+
+// 🟢 2. ยิง Query นับจำนวน (ใช้ $where_cond แทนการ implode สด)
 $status_counts = [];
 $total_jobs = 0;
 
-// ใช้ CASE WHEN: ถ้า Summary ว่าง -> ให้นับเป็น ID 0 (Plan/รอสรุป) 
-// ถ้าไม่ว่าง -> ให้นับตาม status_id จริงๆ
 $sql_count = "SELECT 
                 CASE 
                     WHEN wp.summary IS NULL OR wp.summary = '' THEN 0 
@@ -161,10 +184,11 @@ $sql_count = "SELECT
                 END as computed_status_id, 
                 COUNT(*) as total 
               FROM work_plans wp 
-              WHERE " . implode(" AND ", $base_clauses) . " 
+              WHERE $where_cond 
               GROUP BY computed_status_id";
 
 if ($stmt = $conn->prepare($sql_count)) {
+    // ตรวจสอบว่ามี Params ไหม ถ้ามีค่อย Bind (ถ้าโชว์ทั้งหมด $base_params จะว่าง)
     if (!empty($base_params)) {
         $stmt->bind_param($base_types, ...$base_params);
     }
@@ -172,34 +196,37 @@ if ($stmt = $conn->prepare($sql_count)) {
     $res_count = $stmt->get_result();
     while ($row_c = $res_count->fetch_assoc()) {
         $status_counts[$row_c['computed_status_id']] = $row_c['total'];
-        $total_jobs += $row_c['total']; // รวมงานทั้งหมด
+        $total_jobs += $row_c['total'];
     }
     $stmt->close();
 }
 
-// 🟢 3. สร้าง Query หลักสำหรับแสดงตาราง (Main Query)
-// เอาเงื่อนไขพื้นฐานมา + เงื่อนไขสถานะ (ถ้ามีการเลือก)
+// ---------------------------------------------------------
+// 🟢 3. อย่าลืมแก้ในส่วน Query หลัก (Main Query) 
+// ---------------------------------------------------------
+
+// สร้างเงื่อนไขหลัก (ถ้ามี filter_status ให้เอาไปบวกเพิ่ม)
 $main_clauses = $base_clauses;
 $main_params = $base_params;
 $main_types = $base_types;
 
-if ($filter_status !== '') { // เช็คว่าไม่ว่าง (รองรับเลข 0)
+if ($filter_status !== '') {
     if ($filter_status == '0') {
-        // 🟢 ถ้าเลือกดู Plan -> กรองเฉพาะที่ Summary ว่าง
         $main_clauses[] = "(wp.summary IS NULL OR wp.summary = '')";
     } else {
-        // 🟢 ถ้าเลือกสถานะอื่น -> กรองตาม ID และต้องมี Summary แล้ว
         $main_clauses[] = "wp.status_id = ? AND wp.summary != ''";
         $main_params[] = $filter_status;
         $main_types .= "i";
     }
 }
 
+$final_where = !empty($main_clauses) ? implode(" AND ", $main_clauses) : "1=1";
+
 $sql = "SELECT wp.*, c.company_shortname, ms.status_name, ms.id as master_status_id 
         FROM work_plans wp
         LEFT JOIN companies c ON wp.company = c.company_name COLLATE utf8mb4_general_ci
         LEFT JOIN master_job_status ms ON wp.status_id = ms.id
-        WHERE " . implode(" AND ", $main_clauses) . "
+        WHERE $final_where
         ORDER BY wp.plan_date ASC";
 
 $plans = [];
@@ -221,17 +248,74 @@ function thaiMonth($m)
     return $thai_months[$m];
 }
 
+// --- 🟢 ส่วน AJAX: ส่งข้อมูลกลับเป็น JSON (เวอร์ชันอัปเกรด: แสดงคนบันทึก + แก้สถานะตกบรรทัด) ---
+// --- 🟢 ส่วน AJAX: ส่งข้อมูลกลับเป็น JSON (ฉบับสมบูรณ์ที่สุด) ---
 if (isset($_GET['ajax'])) {
-    // 1. ส่งข้อมูลการ์ด (Counts) และ ตาราง (Table Rows) กลับไปเป็น JSON
+    if (ob_get_length()) ob_clean();
     ob_start();
-    include 'work_plan_dashboard_rows.php'; // แยกไฟล์แสดงผลแถวตาราง (ถ้ามี) หรือเขียน Loop ตรงนี้
+
+    if (count($plans) > 0) {
+        foreach ($plans as $row) {
+            $d_display = date('d/m/Y', strtotime($row['plan_date']));
+            $worker = !empty($row['team_member']) ? $row['team_member'] : $row['reporter_name'];
+            $hasSummary = !empty($row['summary']);
+
+            // 1. จัดการ Logic สถานะ (ล็อคสีและชื่อ)
+            $showStatus = ($hasSummary && !empty($row['status_name'])) ? $row['status_name'] : ($row['status'] ?? 'Plan');
+            $statusIdColor = ($hasSummary && !empty($row['status_name'])) ? (int)$row['master_status_id'] : 999;
+            $themeColor = getStatusThemeColor($showStatus, $statusIdColor);
+
+            // 2. สไตล์สถานะ (Pill) - บังคับ inline-block และ nowrap เพื่อไม่ให้ข้อความตกบรรทัด
+            $statusPillStyle = "display: inline-block; white-space: nowrap; background: $themeColor; color: white; border-radius: 6px; padding: 4px 12px; font-weight: 500; box-shadow: 0 2px 4px rgba(0,0,0,0.15); border: 1px solid rgba(255,255,255,0.2); text-align: center; min-width: 100px;";
+
+            // 3. เตรียม HTML สำหรับ "ผู้บันทึกสรุป"
+            $summary_by_html = "";
+            if ($hasSummary && !empty($row['summary_by'])) {
+                $summary_by_html = "<div class='small text-muted mt-1' style='font-size: 10px; line-height: 1.2;'>
+                                        <i class='fas fa-user-edit me-1'></i>{$row['summary_by']}
+                                    </div>";
+            }
+
+            // 4. แปลง Summary เป็น JS-Safe string (ป้องกันเครื่องหมาย ' หรือ " ทำเครื่องพัง)
+            $safe_summary = htmlspecialchars($row['summary'] ?? '', ENT_QUOTES, 'UTF-8');
+            $current_status_id = (int)($row['status_id'] ?? 0);
+
+            echo "<tr>
+                    <td><span class='fw-bold text-primary'>$d_display</span></td>
+                    <td>" . (($row['team_type'] == 'Auction') ? '<span class="badge bg-warning text-dark rounded-pill">ทีมประมูล</span>' : '<span class="badge bg-info text-dark rounded-pill">การตลาด</span>') . "</td>
+                    <td><small class='text-muted'>{$row['reporter_name']}</small></td>
+                    <td>
+                        <div class='fw-bold text-dark'>$worker</div>
+                        <div class='small text-muted fw-normal'><i class='fas fa-building me-1'></i>{$row['company_shortname']}</div>
+                    </td>
+                    <td>{$row['contact_person']}</td>
+                    <td><div class='text-truncate text-muted' style='max-width: 150px;'>{$row['work_detail']}</div></td>
+                    <td class='text-center'>
+                        <button class='btn btn-sm btn-light border text-success shadow-sm' 
+                                onclick=\"openSummaryModal({$row['id']}, '$safe_summary', $current_status_id)\">
+                            <i class='fas " . ($hasSummary ? 'fa-check-double' : 'fa-plus') . "'></i> " . ($hasSummary ? 'สรุปแล้ว' : 'บันทึกผล') . "
+                        </button>
+                        $summary_by_html
+                    </td>
+                    <td class='text-center'>
+                        <span class='status-pill' style='$statusPillStyle'>$showStatus</span>
+                    </td>
+                    <td class='text-center'>
+                        <a href='work_plan_add.php?edit_id={$row['id']}' class='text-warning me-2'><i class='fas fa-pen'></i></a>
+                        <a href='#' onclick='confirmDelete({$row['id']})' class='text-danger'><i class='fas fa-trash'></i></a>
+                    </td>
+                  </tr>";
+        }
+    } else {
+        echo '<tr><td colspan="9" class="text-center py-5 text-muted">ไม่พบข้อมูลแผนงานในช่วงวันที่เลือก</td></tr>';
+    }
     $table_html = ob_get_clean();
 
+    header('Content-Type: application/json');
     echo json_encode([
-        'total_jobs' => $total_jobs,
+        'total_jobs' => (int) $total_jobs,
         'status_counts' => $status_counts,
         'plans_count' => count($plans),
-        // ส่วนนี้ส่ง HTML ของตารางและ Grid กลับไป
         'html_content' => $table_html
     ]);
     exit;
@@ -242,6 +326,7 @@ if (isset($_GET['ajax'])) {
 <html lang="th">
 
 <head>
+    <?php include 'Logowab.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>รายการแผนงาน - Dashboard</title>
@@ -249,6 +334,10 @@ if (isset($_GET['ajax'])) {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/work_plan_dashboard.css">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/l10n/th.min.js"></script>
 </head>
 
 <body>
@@ -360,27 +449,16 @@ if (isset($_GET['ajax'])) {
 
         <form method="GET" class="filter-card" id="filterForm">
             <div>
-                <label class="form-label-sm">เดือน</label>
-                <select name="month" class="form-select form-select-custom">
-                    <?php for ($i = 1; $i <= 12; $i++):
-                        $m_val = sprintf('%02d', $i); ?>
-                        <option value="<?php echo $m_val; ?>" <?php if ($month == $m_val)
-                               echo 'selected'; ?>>
-                            <?php echo thaiMonth($m_val); ?>
-                        </option>
-                    <?php endfor; ?>
-                </select>
+                <label class="form-label-sm">วันที่เริ่ม</label>
+                <input type="text" name="start_date" id="start_date" class="form-control form-select-custom datepicker"
+                    placeholder="วว/ดด/ปปปป" value="<?php echo htmlspecialchars($start_date); ?>" readonly>
             </div>
             <div>
-                <label class="form-label-sm">ปี</label>
-                <select name="year" class="form-select form-select-custom">
-                    <?php for ($y = date('Y'); $y >= 2024; $y--): ?>
-                        <option value="<?php echo $y; ?>" <?php if ($year == $y)
-                               echo 'selected'; ?>><?php echo $y + 543; ?>
-                        </option>
-                    <?php endfor; ?>
-                </select>
+                <label class="form-label-sm">ถึงวันที่</label>
+                <input type="text" name="end_date" id="end_date" class="form-control form-select-custom datepicker"
+                    placeholder="วว/ดด/ปปปป" value="<?php echo htmlspecialchars($end_date); ?>" readonly>
             </div>
+
             <div>
                 <label class="form-label-sm">ประเภททีม</label>
                 <select name="filter_team" class="form-select form-select-custom">
@@ -406,6 +484,7 @@ if (isset($_GET['ajax'])) {
                     <?php endforeach; ?>
                 </select>
             </div>
+
             <div>
                 <label class="form-label-sm">ผู้บันทึก</label>
                 <select name="filter_user" class="form-select form-select-custom" style="min-width: 180px;">
@@ -418,8 +497,10 @@ if (isset($_GET['ajax'])) {
                     <?php endforeach; ?>
                 </select>
             </div>
+
             <input type="hidden" name="filter_status" id="filter_status_input"
                 value="<?php echo htmlspecialchars($filter_status); ?>">
+
             <button type="submit" class="btn-search"><i class="fas fa-search me-1"></i> ค้นหา</button>
 
             <button type="button" id="btnClear" class="btn btn-light border-0 shadow-sm"
@@ -452,7 +533,7 @@ if (isset($_GET['ajax'])) {
                     <tbody>
                         <?php if (count($plans) > 0): ?>
                             <?php foreach ($plans as $row):
-                                $d = date('d/m', strtotime($row['plan_date']));
+                                $d = date('d/m/Y', strtotime($row['plan_date']));
                                 $worker = !empty($row['team_member']) ? $row['team_member'] : $row['reporter_name'];
                                 $hasSummary = !empty($row['summary']);
 
@@ -490,10 +571,16 @@ if (isset($_GET['ajax'])) {
 
                                     <td>
                                         <button class="btn btn-sm btn-light border mt-1 text-success"
-                                            onclick="openSummaryModal(<?php echo $row['id']; ?>, '<?php echo htmlspecialchars($row['summary'] ?? ''); ?>', <?php echo $row['status_id']; ?>)">
+                                            onclick="openSummaryModal(<?php echo $row['id']; ?>, '<?php echo htmlspecialchars($row['summary'] ?? ''); ?>', <?php echo (int) $row['status_id']; ?>)">
                                             <i class="fas <?php echo $hasSummary ? 'fa-check-double' : 'fa-plus'; ?>"></i>
                                             <?php echo $hasSummary ? 'สรุปแล้ว' : 'บันทึกผล'; ?>
                                         </button>
+
+                                        <?php if ($hasSummary && !empty($row['summary_by'])): ?>
+                                            <div class="small text-muted mt-1" style="font-size: 10px;">
+                                                <i class="fas fa-user-edit me-1"></i><?php echo $row['summary_by']; ?>
+                                            </div>
+                                        <?php endif; ?>
                                     </td>
 
                                     <td>
@@ -503,10 +590,12 @@ if (isset($_GET['ajax'])) {
                                     </td>
 
                                     <td class="text-center">
-                                        <a href="work_plan_add.php?edit_id=<?php echo $row['id']; ?>"
-                                            class="text-warning me-2"><i class="fas fa-pen"></i></a>
-                                        <a href="#" onclick="confirmDelete(<?php echo $row['id']; ?>)" class="text-danger"><i
-                                                class="fas fa-trash"></i></a>
+                                        <a href="work_plan_add.php?edit_id=<?php echo $row['id']; ?>" class="text-warning me-2">
+                                            <i class="fas fa-pen"></i>
+                                        </a>
+                                        <a href="#" onclick="confirmDelete(<?php echo $row['id']; ?>)" class="text-danger">
+                                            <i class="fas fa-trash"></i>
+                                        </a>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -645,6 +734,20 @@ if (isset($_GET['ajax'])) {
         unset($_SESSION['swal_msg']);
     }
     ?>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // เช็คก่อนว่ามีตัวแปร flatpickr มาหรือยัง
+            if (typeof flatpickr !== 'undefined') {
+                flatpickr(".datepicker", {
+                    dateFormat: "d/m/Y",
+                    locale: "th",
+                    allowInput: true
+                });
+            } else {
+                console.error("❌ Flatpickr Library ยังไม่ถูกโหลด!");
+            }
+        });
+    </script>
 </body>
 
 </html>

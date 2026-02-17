@@ -32,20 +32,20 @@ if ($res_prov && $res_prov->num_rows > 0) {
 // =========================================================
 $customers_data = [];
 $my_name = $conn->real_escape_string($_SESSION['fullname']);
-
-// 🟢 [Logic ใหม่] ดึงจาก work_plans โดยกรองเฉพาะ reporter_name ของคนนี้
-$sql_cus = "SELECT DISTINCT contact_person 
-            FROM work_plans 
-            WHERE reporter_name = '$my_name' 
-              AND contact_person IS NOT NULL 
-              AND contact_person != '' 
+$sql_cus = "SELECT DISTINCT contact_person FROM work_plans 
+            WHERE reporter_name = '$my_name' AND contact_person != '' 
             ORDER BY contact_person ASC";
-
 $res_cus = $conn->query($sql_cus);
-if ($res_cus && $res_cus->num_rows > 0) {
-    while ($row = $res_cus->fetch_assoc()) {
-        $customers_data[] = $row['contact_person'];
-    }
+while ($row = $res_cus->fetch_assoc()) {
+    $customers_data[] = $row['contact_person'];
+}
+
+// --- 2. รายชื่อสำหรับเช็ค เก่า/ใหม่ (ดึงจากฐานข้อมูลลูกค้าหลัก) ---
+$master_customers_list = [];
+$sql_master = "SELECT customer_name FROM master_customers";
+$res_master = $conn->query($sql_master);
+while ($row = $res_master->fetch_assoc()) {
+    $master_customers_list[] = $row['customer_name'];
 }
 
 // --- PHP Functions (Upload) ---
@@ -126,89 +126,107 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // 2. รับค่าส่วน Work Details (Loop Box)
     $work_results = $_POST['work_result'] ?? [];
     $project_names = $_POST['project_name'] ?? [];
-    // $customer_types จัดการใน Loop
+    $visit_summaries = $_POST['visit_summary'] ?? [];
     $job_statuses = $_POST['job_status'] ?? [];
     $next_appointments = $_POST['next_appointment'] ?? [];
-    $visit_summaries = $_POST['visit_summary'] ?? [];
-    $additional_notes = $_POST['additional_notes'] ?? [];
+    $additional_notes_arr = $_POST['additional_notes'] ?? [];
 
+    $combined_customers = [];
+    $combined_projects = [];
+    $combined_summaries = [];
+    $combined_statuses = [];    // 🟢 เพิ่มใหม่: เก็บสถานะทั้งหมด
+    $combined_next_apps = [];   // 🟢 เพิ่มใหม่: เก็บวันนัดหมายทั้งหมด
+
+    for ($i = 0; $i < count($work_results); $i++) {
+        $name = trim($work_results[$i]);
+        if (empty($name))
+            continue;
+
+        $combined_customers[] = $name;
+        if (!empty($project_names[$i]))
+            $combined_projects[] = $project_names[$i];
+
+        // รวมสถานะของทุกคน (คั่นด้วยคอมม่าเพื่อให้ระเบิดออกใน Dashboard ได้)
+        $combined_statuses[] = !empty($job_statuses[$i]) ? $job_statuses[$i] : '-';
+
+        // รวมวันนัดหมาย (คั่นด้วยคอมม่า)
+        $combined_next_apps[] = !empty($next_appointments[$i]) ? $next_appointments[$i] : '-';
+
+        // รวมรายละเอียดการเข้าพบลูกค้าแต่ละราย
+        $combined_summaries[] = "• " . $name . ": " . ($visit_summaries[$i] ?? '-');
+
+        // --- ส่วนการบันทึก Master Customers (คงไว้เหมือนเดิม) ---
+        $check_sql = "SELECT id FROM master_customers WHERE customer_name = ?";
+        if ($chk_stmt = $conn->prepare($check_sql)) {
+            $chk_stmt->bind_param("s", $name);
+            $chk_stmt->execute();
+            $chk_stmt->store_result();
+            if ($chk_stmt->num_rows == 0) {
+                $add_sql = "INSERT INTO master_customers (customer_name) VALUES (?)";
+                if ($add_stmt = $conn->prepare($add_sql)) {
+                    $add_stmt->bind_param("s", $name);
+                    $add_stmt->execute();
+                    $add_stmt->close();
+                }
+            }
+            $chk_stmt->close();
+        }
+    }
+
+    // 🟢 แปลง Array เป็น String เพื่อลง Database 1 แถว
+    $final_work_result = implode(', ', $combined_customers);
+    $final_project_name = implode(', ', array_unique($combined_projects));
+    $final_job_status = implode(', ', $combined_statuses);      // 🟢 รวมสถานะทั้งหมด
+    $final_next_app = implode(', ', $combined_next_apps);       // 🟢 รวมวันนัดหมายทั้งหมด
+    $final_activity_detail = implode("\n", $combined_summaries);
+    $final_notes = implode("\n", array_filter($additional_notes_arr));
+
+    // ส่วนค่าใช้จ่าย
+    $fuel_cost_sum = array_sum(array_map('floatval', $fuel_costs_array));
+
+    // =========================================================
+    // 🔵 3. สั่ง INSERT เพียงครั้งเดียว (Single Row)
+    // =========================================================
     $sql = "INSERT INTO reports (report_date, reporter_name, area, province, gps, gps_address, work_result, customer_type, project_name, additional_notes, job_status, next_appointment, activity_detail, fuel_cost, fuel_receipt, accommodation_cost, accommodation_receipt, other_cost, other_receipt, other_cost_detail, total_expense, problem, suggestion) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     if ($stmt = $conn->prepare($sql)) {
-        $successCount = 0;
+        $cus_type_first = $_POST['customer_type_1'] ?? 'ลูกค้าใหม่';
 
-        for ($i = 0; $i < count($work_results); $i++) {
-            $w_result = trim($work_results[$i]);
-            if (empty($w_result))
-                continue;
+        $stmt->bind_param(
+            "sssssssssssssdssdssdsss",
+            $report_date,
+            $reporter_name,
+            $area,
+            $province,
+            $gps,
+            $gps_address,
+            $final_work_result,
+            $cus_type_first,
+            $final_project_name,
+            $final_notes,
+            $final_job_status,     // 🟢 ใช้ค่าที่รวมแล้ว (แทน $last_status)
+            $final_next_app,       // 🟢 ใช้ค่าที่รวมแล้ว (แทน $last_next_app)
+            $final_activity_detail,
+            $fuel_cost_sum,
+            $fuel_receipt,
+            $accommodation_cost,
+            $accommodation_receipt,
+            $other_cost,
+            $other_receipt,
+            $other_cost_detail,
+            $total_expense,
+            $problem,
+            $suggestion
+        );
 
-            $w_project = $project_names[$i] ?? '';
-            $w_cus_type = $_POST['customer_type_' . ($i + 1)] ?? 'ลูกค้าใหม่';
-            $w_status = $job_statuses[$i] ?? '';
-            $w_next = !empty($next_appointments[$i]) ? $next_appointments[$i] : NULL;
-            $w_summary = $visit_summaries[$i] ?? '';
-            $w_note = $additional_notes[$i] ?? '';
-
-            // ⭐ AUTO-SAVE: ยังคงบันทึกชื่อลูกค้าลง Master ถ้าเป็นชื่อใหม่ (เพื่อให้ระบบจำได้ในอนาคต)
-            $check_sql = "SELECT id FROM master_customers WHERE customer_name = ?";
-            if ($chk_stmt = $conn->prepare($check_sql)) {
-                $chk_stmt->bind_param("s", $w_result);
-                $chk_stmt->execute();
-                $chk_stmt->store_result();
-                if ($chk_stmt->num_rows == 0) {
-                    $add_sql = "INSERT INTO master_customers (customer_name) VALUES (?)";
-                    if ($add_stmt = $conn->prepare($add_sql)) {
-                        $add_stmt->bind_param("s", $w_result);
-                        $add_stmt->execute();
-                        $add_stmt->close();
-                    }
-                }
-                $chk_stmt->close();
-            }
-
-            $stmt->bind_param(
-                "sssssssssssssdssdssdsss",
-                $report_date,
-                $reporter_name,
-                $area,
-                $province,
-                $gps,
-                $gps_address,
-                $w_result,
-                $w_cus_type,
-                $w_project,
-                $w_note,
-                $w_status,
-                $w_next,
-                $w_summary,
-                $fuel_cost,
-                $fuel_receipt,
-                $accommodation_cost,
-                $accommodation_receipt,
-                $other_cost,
-                $other_receipt,
-                $other_cost_detail,
-                $total_expense,
-                $problem,
-                $suggestion
-            );
-
-            if ($stmt->execute()) {
-                $successCount++;
-            }
-        }
-
-        $stmt->close();
-        if ($successCount > 0) {
+        if ($stmt->execute()) {
             header("Location: StaffHistory.php");
             exit();
         } else {
-            $message = "Error: ไม่สามารถบันทึกข้อมูลได้";
+            $message = "Error: " . $stmt->error;
         }
-    } else {
-        $message = "Prepare Error: " . $conn->error;
+        $stmt->close();
     }
-    $conn->close();
 }
 ?>
 
@@ -282,43 +300,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     </div>
 
                     <div id="outsideOptions" class="gps-panel hidden card">
-                        <div class="form-grid-2">
-                            <div class="form-group">
-                                <label>เลือกภาค/โซน <span style="color:red">*</span></label>
-                                <select name="area_zone" id="areaSelect" class="form-select"
-                                    onchange="updateProvinces()">
-                                    <option value="">-- กรุณาเลือกภาค --</option>
-                                    <?php foreach ($provinces_data as $region => $list): ?>
-                                        <option value="<?php echo htmlspecialchars($region); ?>">
-                                            <?php echo htmlspecialchars($region); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>จังหวัด</label>
-                                <select name="province" id="provinceSelect" class="form-select">
-                                    <option value="">-- รอเลือกภาค --</option>
-                                </select>
-                            </div>
-                        </div>
+
                         <div class="form-group">
                             <label>พิกัดปัจจุบัน <span style="color:red">*</span></label>
                             <div class="gps-actions">
                                 <input type="text" id="gpsInput" name="gps" class="form-input"
                                     placeholder="กดปุ่มเพื่อจับพิกัด..." readonly>
-                                <button type="button" class="btn-gps" onclick="getLocation()"><i
-                                        class="fas fa-satellite-dish"></i> จับพิกัด GPS</button>
+                                <button type="button" class="btn-gps" onclick="getLocation()">
+                                    <i class="fas fa-satellite-dish"></i> จับพิกัด GPS
+                                </button>
                             </div>
-                            <div style="margin-top:5px;"><a id="googleMapLink" href="#" target="_blank"
-                                    style="display:none; color:var(--primary-color); font-weight:bold;">ดูใน Google
-                                    Maps</a></div>
+                            <div style="margin-top:5px;">
+                                <a id="googleMapLink" href="#" target="_blank"
+                                    style="display:none; color:var(--primary-color); font-weight:bold;">
+                                    <i class="fas fa-map-marker-alt"></i> ดูใน Google Maps
+                                </a>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label>ที่อยู่</label>
-                            <input type="text" id="addressInput" name="gps_address" class="form-input"
-                                placeholder="ที่อยู่จาก GPS" readonly>
-                        </div>
+
                     </div>
                 </div>
 
@@ -483,6 +482,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         // 🟢 บรรทัดนี้สำคัญมาก! ถ้าไม่มี ข้อมูลจะไม่มา
         const customerList = <?php echo json_encode($customers_data, JSON_UNESCAPED_UNICODE); ?>;
+        const masterCustomerList = <?php echo json_encode($master_customers_list, JSON_UNESCAPED_UNICODE); ?>;
+</script>
     </script>
 
     <script src="js/report_script.js"></script>

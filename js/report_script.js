@@ -14,65 +14,128 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // ฟังก์ชันเพิ่มกล่องงาน
 function addWorkBox() {
-    workBoxCount++;
+    // 1. หา Container
     const container = document.getElementById('work-container');
+    
+    // 2. Clone กล่องต้นแบบ (กล่องที่ 1)
     const template = document.getElementById('work-box-1').cloneNode(true);
     
-    template.id = 'work-box-' + workBoxCount;
-    template.querySelector('.work-box-title').innerText = 'งานที่ ' + workBoxCount;
-    
-    // เคลียร์ค่าเก่า
+    // 3. เคลียร์ค่า input/select/textarea ในกล่องใหม่ให้ว่าง
     template.querySelectorAll('input:not([type="radio"]), textarea, select').forEach(input => {
         input.value = '';
     });
     
-    // เคลียร์กล่อง Autocomplete เก่าที่ติดมาตอน Clone (สำคัญ!)
-    const oldList = template.querySelector('.autocomplete-items');
-    if(oldList) oldList.innerHTML = ''; 
+    // 4. เคลียร์ Flatpickr เก่าที่ติดมา (ไม่งั้นกดปฏิทินไม่ติด)
+    const oldDateInput = template.querySelector('.next-appt');
+    if (oldDateInput._flatpickr) {
+        oldDateInput._flatpickr.destroy();
+        oldDateInput.value = ''; // เคลียร์ค่าวันที่
+    }
 
-    // จัดการ Radio Button
-    const radios = template.querySelectorAll('input[type="radio"]');
-    radios.forEach(radio => {
-        radio.name = 'customer_type_' + workBoxCount;
-        if(radio.value === 'ลูกค้าใหม่') radio.checked = true;
-    });
+    // 5. ล้าง autocomplete ที่ติดมา
+    const oldAutocomplete = template.querySelector('.autocomplete-items');
+    if (oldAutocomplete) oldAutocomplete.innerHTML = '';
 
-    // ปุ่มลบ
-    const header = template.querySelector('.work-box-header');
-    if(!header.querySelector('.btn-remove-box')) {
+    // 6. เพิ่มปุ่ม "ลบ" (Delete Button)
+    // เช็คก่อนว่ามีปุ่มลบหรือยัง (กล่อง 1 ไม่มี แต่ถ้า clone มาจากกล่องอื่นอาจมีติดมา)
+    let header = template.querySelector('.work-box-header');
+    if (!header.querySelector('.btn-remove-box')) {
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.className = 'btn-remove-box';
-        removeBtn.innerHTML = '<i class="fas fa-trash"></i> ลบรายการ';
-        removeBtn.onclick = function() { template.remove(); };
+        removeBtn.innerHTML = '<i class="fas fa-trash-alt"></i> ลบรายการนี้';
+        
+        // 🔴 เมื่อกดลบ -> ให้ลบกล่องนี้ทิ้ง แล้วเรียงเลขใหม่
+        removeBtn.onclick = function() {
+            template.remove();
+            reorderWorkBoxes(); // 👈 เรียกฟังก์ชันเรียงเลข
+        };
         header.appendChild(removeBtn);
+    } else {
+        // ถ้ามีปุ่มลบติดมาอยู่แล้ว (กรณี clone จากกล่อง 2,3) ให้แก้ onclick
+        header.querySelector('.btn-remove-box').onclick = function() {
+            template.remove();
+            reorderWorkBoxes();
+        };
     }
-    
+
+    // 7. เอาไปแปะใน Container
     container.appendChild(template);
 
-    // Re-init Flatpickr
-    const newDateInput = template.querySelector('.next-appt');
-    if(newDateInput._flatpickr) newDateInput._flatpickr.destroy();
-    initFlatpickr(newDateInput, null);
+    // 8. เรียงเลขงานใหม่ทั้งหมด (เพื่อให้งานล่าสุดได้เลขที่ถูกต้อง)
+    reorderWorkBoxes();
 
-    // ✅ เปิดใช้งาน Autocomplete ให้กล่องใหม่ด้วย
+    // 9. Re-init ระบบต่างๆ ให้กล่องใหม่
+    // - สร้างปฏิทินใหม่
+    initFlatpickr(template.querySelector('.next-appt'), null);
+    // - เปิดใช้งาน Autocomplete
     setupAutocomplete(template.querySelector('.customer-input'), customerList);
 }
 
-// ฟังก์ชันเช็คประเภทลูกค้า (เก่า/ใหม่) ตาม Box
+// 🔄 ฟังก์ชันเรียงเลขงานใหม่ (Re-index)
+function reorderWorkBoxes() {
+    const allBoxes = document.querySelectorAll('.work-box');
+    
+    allBoxes.forEach((box, index) => {
+        const workNumber = index + 1; // ลำดับที่เริ่มจาก 1
+        
+        // 1. อัปเดต ID ของกล่อง
+        box.id = 'work-box-' + workNumber;
+        
+        // 2. อัปเดตหัวข้อ (งานที่ X)
+        const title = box.querySelector('.work-box-title');
+        title.innerHTML = `<i class="fas fa-briefcase"></i> งานที่ ${workNumber}`;
+        
+        // 3. อัปเดต Radio Name (เพื่อให้เลือกแยกกันได้)
+        // เช่น customer_type_1, customer_type_2, ...
+        const radios = box.querySelectorAll('input[type="radio"]');
+        radios.forEach(radio => {
+            radio.name = 'customer_type_' + workNumber;
+        });
+
+        // 4. ตั้งค่าเริ่มต้น Radio (เฉพาะกล่องใหม่ที่ยังไม่ได้เลือก)
+        // ถ้าเป็นกล่องแรก หรือกล่องที่เพิ่งเพิ่มมา ให้ Default เป็น "ลูกค้าใหม่"
+        const radioNew = box.querySelector('.cust-type-new');
+        const radioOld = box.querySelector('.cust-type-old');
+        if (!radioNew.checked && !radioOld.checked) {
+             radioNew.checked = true;
+        }
+    });
+    
+    // อัปเดตตัวแปร global (ถ้ามีใช้)
+    workBoxCount = allBoxes.length;
+}
+
+// ✅ ฟังก์ชันเช็คประเภทลูกค้า (แยกแหล่งข้อมูล)
 function checkCustomerType(inputElement) {
     const val = inputElement.value.trim();
-    // หา container ของ box นี้ (closest)
+    if (!val) return;
+
     const box = inputElement.closest('.work-box');
+    if (!box) return;
+
     const radioOld = box.querySelector('.cust-type-old');
     const radioNew = box.querySelector('.cust-type-new');
 
-    if (customerList.includes(val)) {
-        radioOld.checked = true;
+    // 🟢 เปลี่ยนมาเช็คกับ masterCustomerList (รายชื่อจากตาราง master_customers)
+    const isExisting = masterCustomerList.some(c => 
+        c.trim().toLowerCase() === val.toLowerCase()
+    );
+
+    if (isExisting) {
+        radioOld.checked = true; // มีชื่อในตารางหลัก = ลูกค้าเก่า
     } else {
-        radioNew.checked = true;
+        radioNew.checked = true; // ไม่มีชื่อในตารางหลัก = ลูกค้าใหม่
     }
 }
+
+// 🟢 (แถม) ดักจับตอนพิมพ์เองแล้วกดออก (Blur) ให้เช็คด้วย
+document.addEventListener('focusout', function(e) {
+    if (e.target && e.target.classList.contains('customer-input')) {
+        checkCustomerType(e.target);
+    }
+});
+
 
 // Flatpickr Helper
 function initFlatpickr(selector, hiddenInputId) {
@@ -201,88 +264,87 @@ document.getElementById('reportForm').addEventListener('submit', function(e) {
         if (result.isConfirmed) this.submit();
     });
 });
-// ✅ ฟังก์ชัน CUSTOM AUTOCOMPLETE (เวอร์ชั่นใหม่: จิ้มปุ๊บเด้งปั๊บ)
+// ✅ ฟังก์ชัน CUSTOM AUTOCOMPLETE (เวอร์ชั่นสมบูรณ์: จิ้มก็เด้ง พิมพ์ก็เด้ง)
 function setupAutocomplete(inp, arr) {
     if (!inp) return;
-    let currentFocus;
+    
+    var currentFocus;
 
-    // ฟังก์ชันวาดรายการ (แยกออกมาเพื่อเรียกใช้ซ้ำ)
+    // ฟังก์ชันวาดรายการ
     function renderList(val) {
-        let a, b, i, count = 0;
+        var a, b, i, valUpper = val.toUpperCase();
         
-        // ปิดรายการเก่าก่อนเสมอ
+        // ปิดรายการเก่าของทุก Box ทิ้งก่อน (เพื่อไม่ให้ซ้อนกัน)
         closeAllLists();
         
+        if (!val) { val = ""; }
         currentFocus = -1;
         
-        // สร้าง div แม่ข่าย (ถ้ายังไม่มี)
-        let wrapper = inp.parentElement;
-        a = wrapper.querySelector('.autocomplete-items');
-        if (!a) {
-            a = document.createElement("div");
-            a.className = "autocomplete-items";
-            wrapper.appendChild(a);
-        }
+        // สร้าง div แม่ข่าย
+        a = document.createElement("div");
+        a.setAttribute("id", this.id + "autocomplete-list");
+        a.setAttribute("class", "autocomplete-items");
         
-        a.innerHTML = ""; // เคลียร์ของเก่า
-        a.style.display = "block"; // โชว์กล่อง
+        // ป้องกันการคลิกที่ List แล้วปิดตัวเอง
+        a.addEventListener("click", function(e) {
+            e.stopPropagation(); 
+        });
 
-        // วนลูปข้อมูล
+        // ใส่ div ต่อท้าย input
+        inp.parentElement.appendChild(a);
+
+        var count = 0;
         for (i = 0; i < arr.length; i++) {
-            // เงื่อนไข: ถ้าช่องว่าง (จิ้มเฉยๆ) ให้โชว์หมด หรือ ถ้าพิมพ์ให้กรองตามคำ
-            if (val === "" || arr[i].toUpperCase().indexOf(val.toUpperCase()) > -1) {
-                
+            if (val === "" || arr[i].toUpperCase().indexOf(valUpper) > -1) {
                 b = document.createElement("div");
                 b.className = "autocomplete-item";
                 
-                // การแสดงผลตัวหนังสือ
-                if (val === "") {
-                    // ถ้าไม่ได้พิมพ์อะไร ให้โชว์ชื่อเต็มๆ
-                    b.innerHTML = `<i class="fas fa-user-tag"></i> ` + arr[i];
+                if (val !== "" && arr[i].toUpperCase().indexOf(valUpper) === 0) {
+                     b.innerHTML = "<strong>" + arr[i].substr(0, val.length) + "</strong>" + arr[i].substr(val.length);
                 } else {
-                    // ถ้าพิมพ์ ให้ทำตัวหนาตรงคำที่ค้นหา
-                    let matchIndex = arr[i].toUpperCase().indexOf(val.toUpperCase());
-                    b.innerHTML = `<i class="fas fa-user-tag"></i> ` + 
-                                  arr[i].substr(0, matchIndex) + 
-                                  "<strong>" + arr[i].substr(matchIndex, val.length) + "</strong>" + 
-                                  arr[i].substr(matchIndex + val.length);
+                     b.innerHTML = arr[i];
                 }
-
-                // ใส่ค่าที่จะส่งไป input
+                
+                b.innerHTML = `<i class="fas fa-user-tag"></i> ` + b.innerHTML;
                 b.innerHTML += "<input type='hidden' value='" + arr[i] + "'>";
                 
-                // คลิกเลือกรายการ
                 b.addEventListener("click", function(e) {
+                    e.stopPropagation(); // 🟢 สำคัญ: คลิกเลือกแล้วห้ามส่ง event ต่อ
                     inp.value = this.getElementsByTagName("input")[0].value;
-                    checkCustomerType(inp); // เช็คประเภทลูกค้า
+                    if(typeof checkCustomerType === 'function') {
+                        checkCustomerType(inp); 
+                    }
                     closeAllLists();
                 });
-                
                 a.appendChild(b);
                 count++;
             }
         }
         
-        if (count === 0) {
-             // ถ้าค้นไม่เจอ ให้ปิด (หรือจะโชว์ว่า "ไม่พบข้อมูล" ก็ได้)
-             a.style.display = "none";
-        }
+        if (count > 0) a.style.display = "block";
     }
 
-    // 🟢 Event 1: เมื่อพิมพ์ (Input) -> กรองข้อมูล
+    // 🟢 1. Event Input: พิมพ์แล้วกรอง (เพิ่ม stopPropagation)
     inp.addEventListener("input", function(e) {
+        e.stopPropagation(); // ห้ามบอกคนอื่น
         renderList(this.value);
     });
 
-    // 🟢 Event 2: เมื่อจิ้ม (Click) -> โชว์ทั้งหมดทันที
+    // 🟢 2. Event Click: คลิกแล้วโชว์ (เพิ่ม stopPropagation)
     inp.addEventListener("click", function(e) {
-        // ถ้าค่าว่าง หรือมีค่าอยู่แล้ว ก็ให้เรียก renderList เพื่อโชว์ Dropdown
-        renderList(this.value); 
+        e.stopPropagation(); // 🟢 จุดสำคัญ! หยุดไม่ให้ Box อื่นรู้ว่ามีการคลิกที่นี่
+        renderList(this.value);
     });
 
-    // ปุ่มกดคีย์บอร์ด (ลง, ขึ้น, Enter)
+    // 🟢 3. Event Focus: เผื่อกด Tab เข้ามา
+    inp.addEventListener("focus", function(e) {
+        e.stopPropagation(); // ห้ามบอกคนอื่น
+        renderList(this.value);
+    });
+
+    // ปุ่มคีย์บอร์ด
     inp.addEventListener("keydown", function(e) {
-        let x = this.parentElement.querySelector('.autocomplete-items');
+        var x = this.parentElement.querySelector('.autocomplete-items');
         if (x) x = x.getElementsByTagName("div");
         if (e.keyCode == 40) { // ลง
             currentFocus++;
@@ -303,28 +365,31 @@ function setupAutocomplete(inp, arr) {
         removeActive(x);
         if (currentFocus >= x.length) currentFocus = 0;
         if (currentFocus < 0) currentFocus = (x.length - 1);
-        x[currentFocus].classList.add("active"); // ใช้ CSS .active ที่ทำไว้
+        x[currentFocus].classList.add("active");
         x[currentFocus].scrollIntoView({block: "nearest"});
     }
 
     function removeActive(x) {
-        for (let i = 0; i < x.length; i++) {
+        for (var i = 0; i < x.length; i++) {
             x[i].classList.remove("active");
         }
     }
 
     function closeAllLists(elmnt) {
-        let x = document.getElementsByClassName("autocomplete-items");
-        for (let i = 0; i < x.length; i++) {
+        var x = document.getElementsByClassName("autocomplete-items");
+        for (var i = 0; i < x.length; i++) {
             if (elmnt != x[i] && elmnt != inp) {
-                x[i].innerHTML = "";
-                x[i].style.display = "none";
+                x[i].parentNode.removeChild(x[i]);
             }
         }
     }
 
-    // คลิกที่อื่นเพื่อปิด
-    document.addEventListener("click", function (e) {
-        closeAllLists(e.target);
-    });
+    // 🟢 Event Global: คลิกที่ว่างๆ ถึงจะปิด (ต้องเช็คดีๆ)
+    // เราจะใช้ Listener ตัวเดียวที่ document แทนการสร้างใหม่ทุกครั้ง
+    if (!window.hasGlobalClickListener) {
+        document.addEventListener("click", function (e) {
+            closeAllLists(e.target);
+        });
+        window.hasGlobalClickListener = true; // ป้องกันการสร้าง Listener ซ้ำซ้อน
+    }
 }
