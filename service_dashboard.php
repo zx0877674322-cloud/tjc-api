@@ -91,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         try {
             $req_id = intval($_POST['req_id']);
-            $user_name = $_SESSION['fullname'] ?? 'Unknown'; 
+            $user_name = $_SESSION['fullname'] ?? 'Unknown';
             $items_post = $_POST['items'] ?? [];
 
             if (empty($items_post)) {
@@ -99,24 +99,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 exit;
             }
 
-            // 1. ระบบจัดการไฟล์ (Mapping)
+            // 1. ระบบจัดการไฟล์ (Mapping ตาม Key รายชิ้นเท่านั้น)
             $upload_dir = 'uploads/proofs/';
-            if (!is_dir($upload_dir)) mkdir($upload_dir, 0777, true);
+            if (!is_dir($upload_dir))
+                mkdir($upload_dir, 0777, true);
 
             $file_map = [];
-            $global_file = null;
 
             if (!empty($_FILES)) {
                 foreach ($_FILES as $key => $file) {
                     if ($file['error'] == 0) {
                         $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
                         $new_filename = 'rec_' . $req_id . '_' . time() . '_' . $key . '.' . $ext;
-                        
+
                         if (move_uploaded_file($file['tmp_name'], $upload_dir . $new_filename)) {
+                            // เก็บชื่อไฟล์คู่กับ Key (เช่น item_files_0 => rec_...jpg)
                             $file_map[$key] = $new_filename;
-                            if (in_array($key, ['receive_proof', 'proof_file', 'file', 'image', 'item_files_0'])) {
-                                $global_file = $new_filename;
-                            }
                         }
                     }
                 }
@@ -126,10 +124,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $res_log = $conn->query("SELECT received_item_list, progress_logs FROM service_requests WHERE id = $req_id");
             $row_log = $res_log->fetch_assoc();
             $old_data = json_decode($row_log['received_item_list'] ?? '{}', true) ?: [];
-            
+
             $raw_logs = $row_log['progress_logs'];
             $logs = json_decode($raw_logs, true);
-            if (json_last_error() !== JSON_ERROR_NONE || !is_array($logs)) { $logs = []; }
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($logs)) {
+                $logs = [];
+            }
 
             $accumulated_moved = $old_data['accumulated_moved'] ?? [];
             $items_status = $old_data['items_status'] ?? [];
@@ -137,187 +137,206 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $existing_moves = $old_data['items_moved'] ?? [];
             $items_moved_this_round = [];
 
-            // 3. จัดกลุ่มรายการ
+            // 3. จัดกลุ่มรายการ (Grouping)
             $grouped_batches = [];
             foreach ($items_post as $index => $item) {
                 $dest = $item['destination'] ?? 'office';
                 $shop = ($dest === 'external') ? trim($item['shop_name'] ?? '') : 'OFFICE';
                 $group_key = $dest . '_' . $shop;
-                
-                if (!isset($grouped_batches[$group_key])) { $grouped_batches[$group_key] = []; }
-                
-                // Map ไฟล์
+
+                if (!isset($grouped_batches[$group_key])) {
+                    $grouped_batches[$group_key] = [];
+                }
+
+                // จับคู่ไฟล์ (เฉพาะของรายการนี้)
                 $my_file_key = 'item_files_' . $index;
                 $item['attached_file'] = isset($file_map[$my_file_key]) ? $file_map[$my_file_key] : null;
-                
+
                 $grouped_batches[$group_key][] = $item;
             }
 
             // 4. วนลูปสร้างการ์ด (ทีละกลุ่มร้าน)
+            $all_new_logs_html = "";
             foreach ($grouped_batches as $group_key => $batch_items) {
-                
+
                 $first_in_batch = $batch_items[0];
                 $main_type = $first_in_batch['destination'];
-                
+
                 $s_name = ($first_in_batch['shop_name'] === 'undefined') ? '-' : ($first_in_batch['shop_name'] ?? '-');
                 $s_owner = ($first_in_batch['shop_owner'] === 'undefined') ? '-' : ($first_in_batch['shop_owner'] ?? '-');
                 $s_phone = ($first_in_batch['shop_phone'] === 'undefined') ? '-' : ($first_in_batch['shop_phone'] ?? '-');
 
-                // --- 🔥 กำหนดธีมสี ---
+                // 🎨 กำหนดธีมสีสไตล์ Premium 3D
                 if ($main_type === 'external') {
-                    // 🟠 ธีมส้ม
-                    $header_bg = 'linear-gradient(135deg, #f59e0b, #d97706)';
-                    $border_left = '#f59e0b';
-                    $info_bg = '#fffbeb';
-                    $info_border = '#fcd34d';
+                    // 🟠 ธีมส้ม (ร้านนอก)
+                    $header_bg = 'linear-gradient(135deg, #f97316, #ea580c)';
+                    $border_left = '#ea580c';
+                    $info_bg = '#fff7ed';
+                    $info_border = '#fdba74';
                     $icon = 'fa-store';
                     $title = 'ส่งซ่อมร้านภายนอก';
-                    $btn_grad = 'linear-gradient(to right, #f59e0b, #b45309)';
-                    $btn_shadow = 'rgba(245, 158, 11, 0.4)';
-                    $pulse_color = 'rgba(249, 115, 22, 0.5)'; // สี Pulse ส้ม
+                    $btn_grad = 'linear-gradient(135deg, #f97316, #ea580c)';
+                    $btn_shadow = 'rgba(234, 88, 12, 0.3)';
+                    $pulse_color = 'rgba(234, 88, 12, 0.4)';
+                    $text_dark = '#9a3412';
                 } else {
-                    // 🔵 ธีมฟ้า
+                    // 🔵 ธีมฟ้า (กลับบริษัท)
                     $header_bg = 'linear-gradient(135deg, #3b82f6, #1d4ed8)';
                     $border_left = '#3b82f6';
                     $info_bg = '#eff6ff';
                     $info_border = '#bfdbfe';
                     $icon = 'fa-building';
                     $title = 'นำของกลับบริษัท';
-                    $btn_grad = 'linear-gradient(to right, #3b82f6, #1e40af)';
-                    $btn_shadow = 'rgba(59, 130, 246, 0.4)';
-                    $pulse_color = 'rgba(59, 130, 246, 0.5)'; // สี Pulse ฟ้า
+                    $btn_grad = 'linear-gradient(135deg, #3b82f6, #2563eb)';
+                    $btn_shadow = 'rgba(37, 99, 235, 0.3)';
+                    $pulse_color = 'rgba(59, 130, 246, 0.4)';
+                    $text_dark = '#1e3a8a';
                 }
 
                 $progress_msg = "
                 <style>
-                    @keyframes fadeInUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
-                    /* 🔥 เพิ่ม Keyframes Pulse แบบเดียวกับร้านซ่อม แต่เปลี่ยนสีได้ */
-                    @keyframes pulseIcon { 0% { box-shadow: 0 0 0 0 {$pulse_color}; } 70% { box-shadow: 0 0 0 10px rgba(0,0,0,0); } 100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); } }
+                    @keyframes fadeInUpVal { from { opacity:0; transform:translateY(15px); } to { opacity:1; transform:translateY(0); } }
+                    @keyframes pulseIconVal { 0% { box-shadow: 0 0 0 0 {$pulse_color}; } 70% { box-shadow: 0 0 0 8px rgba(0,0,0,0); } 100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); } }
                     
-                    .log-anim { animation: fadeInUp 0.5s ease forwards; }
+                    .log-anim-val { animation: fadeInUpVal 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; opacity: 0; }
                     
-                    .btn-smart-action {
-                        display: flex; align-items: center; justify-content: center; gap: 8px;
-                        width: 100%; padding: 12px; border-radius: 8px;
-                        color: #fff !important; font-weight: 700; text-decoration: none; font-size: 0.95rem;
-                        transition: all 0.2s; border: none; margin-top: 10px;
-                        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.15);
+                    .btn-smart-val {
+                        display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+                        padding: 8px 16px; border-radius: 50px;
+                        color: #fff !important; font-weight: 700; text-decoration: none; font-size: 0.85rem;
+                        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); border: none; margin-top: 10px;
                     }
-                    .btn-smart-action:hover { transform: translateY(-2px); filter: brightness(1.1); }
+                    .btn-smart-val:hover { transform: translateY(-3px); filter: brightness(1.1); }
                 </style>
-                <div style='font-family:Prompt, sans-serif; position:relative;'>";
+                <div style='font-family:Prompt, sans-serif; position:relative; margin-bottom:15px; padding:18px; background:#fff; border-radius:16px; border:1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);'>";
 
-                // Header (เพิ่ม Pulse Animation ที่กล่องไอคอน)
+                // --- 1. Header ---
                 $progress_msg .= "
-                <div class='log-anim' style='display:flex; align-items:center; gap:12px; margin-bottom:15px;'>
-                    <div style='width:48px; height:48px; background:{$header_bg}; color:#fff; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:1.3rem; animation: pulseIcon 2s infinite;'>
+                <div class='log-anim-val' style='display:flex; align-items:center; gap:15px; margin-bottom:18px;'>
+                    <div style='width:50px; height:50px; background:{$header_bg}; color:#fff; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:1.4rem; box-shadow: 0 4px 10px {$btn_shadow}; animation: pulseIconVal 2s infinite;'>
                         <i class='fas {$icon}'></i>
                     </div>
                     <div>
-                        <div style='font-weight:800; color:#1e293b; font-size:1.05rem;'>{$title}</div>
-                        <div style='font-size:0.85rem; color:#64748b;'>ผู้ดำเนินการ: <b>{$user_name}</b></div>
+                        <div style='font-weight:800; color:#1e293b; font-size:1.1rem; letter-spacing:-0.5px;'>{$title}</div>
+                        <div style='font-size:0.8rem; color:#64748b;'>ผู้ดำเนินการ: <b style='color:{$text_dark};'>{$user_name}</b></div>
                     </div>
                 </div>";
 
-                // Info Box (ร้านค้า)
+                // --- 2. Info Box (เฉพาะร้านนอก) ---
                 if ($main_type === 'external') {
                     $progress_msg .= "
-                    <div class='log-anim' style='background:{$info_bg}; border:1px solid {$info_border}; border-left:4px solid {$border_left}; padding:10px 15px; border-radius:8px; margin-bottom:15px; animation-delay: 0.1s;'>
-                        <div style='display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:5px;'>
-                            <div style='font-size:0.9rem; font-weight:700; color:#92400e;'>{$s_name}</div>
-                            <div style='font-size:0.85rem; font-weight:600; color:#b45309; background:#fff; padding:4px 10px; border-radius:15px; border:1px solid {$info_border};'><i class='fas fa-phone-alt'></i> {$s_phone}</div>
+                    <div class='log-anim-val' style='background:{$info_bg}; border:1px solid {$info_border}; border-left:4px solid {$border_left}; padding:12px 15px; border-radius:10px; margin-bottom:18px; animation-delay: 0.1s;'>
+                        <div style='display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;'>
+                            <div style='font-size:0.95rem; font-weight:800; color:{$text_dark};'>{$s_name}</div>
+                            <div style='font-size:0.8rem; font-weight:700; color:{$text_dark}; background:#fff; padding:4px 12px; border-radius:50px; border:1px solid {$info_border}; box-shadow:0 2px 4px rgba(0,0,0,0.02);'><i class='fas fa-phone-alt' style='margin-right:4px;'></i> {$s_phone}</div>
                         </div>
-                        <div style='font-size:0.8rem; color:#d97706; margin-top:4px;'><i class='fas fa-user'></i> ติดต่อ: {$s_owner}</div>
+                        <div style='font-size:0.8rem; color:{$text_dark}; margin-top:6px; opacity:0.9;'><i class='fas fa-user-tie' style='margin-right:4px;'></i> ติดต่อ: {$s_owner}</div>
                     </div>";
                 }
 
-                // Item List Loop
-                $progress_msg .= "<div class='log-anim' style='margin-bottom:15px; animation-delay: 0.2s;'>";
-                $progress_msg .= "<div style='font-size:0.75rem; font-weight:700; color:#64748b; margin-bottom:5px; text-transform:uppercase;'>รายการที่ดำเนินการ</div>";
-                $progress_msg .= "<div style='display:flex; flex-direction:column; gap:8px;'>";
+                // --- 3. Item List Loop ---
+                $progress_msg .= "<div class='log-anim-val' style='margin-bottom:10px; animation-delay: 0.2s;'>";
+                $progress_msg .= "<div style='font-size:0.75rem; font-weight:800; color:#64748b; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;'>รายการที่ดำเนินการ</div>";
+                $progress_msg .= "<div style='display:flex; flex-direction:column; gap:10px;'>";
 
-                // 🔥 เตรียมไฟล์ที่จะสร้างปุ่ม (เฉพาะกลุ่มนี้)
                 $files_to_render = [];
-                if ($global_file) $files_to_render[] = ['file' => $global_file, 'label' => 'หลักฐานรวม'];
 
-                foreach ($batch_items as $item_data) {
+                foreach ($batch_items as $idx_item => $item_data) {
                     $item_name = trim($item_data['name']);
-                    $itm_rem = isset($item_data['remark']) && $item_data['remark'] !== 'undefined' ? $item_data['remark'] : '';
-                    
-                    // เก็บไฟล์รายชิ้นเข้า list ปุ่ม
+                    $itm_rem = isset($item_data['remark']) && $item_data['remark'] !== 'undefined' ? trim($item_data['remark']) : '';
+
                     if (!empty($item_data['attached_file'])) {
                         $files_to_render[] = ['file' => $item_data['attached_file'], 'label' => $item_name];
                     }
 
+                    $item_delay = 0.25 + ($idx_item * 0.05);
+
                     $progress_msg .= "
-                    <div style='background:#fff; border:1px solid #e2e8f0; border-left:5px solid {$border_left}; padding:12px 15px; border-radius:8px; display:flex; flex-direction:column; gap:5px; box-shadow:0 2px 4px rgba(0,0,0,0.02);'>
+                    <div class='log-anim-val' style='background:#f8fafc; border:1px solid #e2e8f0; border-left:4px solid {$border_left}; padding:12px 15px; border-radius:10px; display:flex; flex-direction:column; gap:6px; transition:all 0.2s; animation-delay: {$item_delay}s;'>
                         <div style='display:flex; align-items:center; gap:10px;'>
-                            <div style='background:{$border_left}; color:#fff; width:8px; height:8px; border-radius:50%;'></div>
-                            <div style='font-size:0.95rem; color:#334155; font-weight:600;'>{$item_name}</div>
+                            <div style='color:{$border_left}; font-size:1rem;'><i class='fas fa-check-circle'></i></div>
+                            <div style='font-size:0.95rem; color:#334155; font-weight:700;'>{$item_name}</div>
                         </div>";
                     if ($itm_rem) {
-                        $progress_msg .= "<div style='font-size:0.8rem; color:#64748b; padding-left:18px;'><i class='fas fa-comment-alt' style='font-size:0.7rem;'></i> {$itm_rem}</div>";
+                        $progress_msg .= "<div style='font-size:0.85rem; color:#475569; padding-left:26px;'><i class='fas fa-comment-dots' style='color:#cbd5e1; margin-right:4px;'></i> {$itm_rem}</div>";
                     }
                     $progress_msg .= "</div>";
 
-                    // Update DB
-                    if (!in_array($item_name, $accumulated_moved)) $accumulated_moved[] = $item_name;
+                    // Update DB Array
+                    if (!in_array($item_name, $accumulated_moved))
+                        $accumulated_moved[] = $item_name;
                     $items_status[$item_name] = ($main_type === 'external') ? 'at_external' : 'at_office_unconfirmed';
                     $shop_info_arr = ($main_type === 'external') ? ['name' => $s_name, 'owner' => $s_owner, 'phone' => $s_phone] : null;
-                    
-                    $items_moved_this_round[] = ['name' => $item_name, 'destination' => $main_type, 'remark' => $itm_rem, 'shop_info' => $shop_info_arr, 'file' => $item_data['attached_file']];
+
+                    $items_moved_this_round[] = [
+                        'name' => $item_name,
+                        'destination' => $main_type,
+                        'remark' => $itm_rem,
+                        'shop_info' => $shop_info_arr,
+                        'file' => $item_data['attached_file'],
+                        'at' => date('d/m/Y H:i'),
+                        'by' => $user_name
+                    ];
                 }
                 $progress_msg .= "</div></div>";
 
-                // 🔥 สร้างปุ่มไฟล์
+                // --- 4. ปุ่มเปิดรูป (ถ้ามี) ---
                 if (!empty($files_to_render)) {
-                    if (count($files_to_render) === 1) {
-                        $f = $files_to_render[0];
+                    // เช็คว่าส่งหลายชิ้นแต่แนบไฟล์เดียว (บิลรวม) หรือไม่
+                    $is_batch = count($batch_items) > 1;
+                    $is_single_file_for_batch = ($is_batch && count($files_to_render) === 1);
+
+                    foreach ($files_to_render as $idx => $f) {
+                        $delay = 0.3 + ($idx * 0.1);
+
+                        // 🌟 กำหนดชื่อปุ่มตาม Logic ที่คุยกัน
+                        if (!$is_batch) {
+                            $btn_label = 'ดูรูปหลักฐานแนบ';
+                        } else if ($is_single_file_for_batch) {
+                            // กรณีหลายชิ้นรูปเดียว: ถ้าส่งร้านนอกโชว์ชื่อร้าน ถ้ากลับบริษัทโชว์ว่ารูปรวม
+                            $btn_label = ($main_type === 'external') ? "ใบส่งซ่อม ({$s_name})" : "ดูรูปหลักฐานรวม";
+                        } else {
+                            // กรณีแยกรูปรายชิ้น: โชว์ชื่อสินค้า
+                            $btn_label = "ดูรูป ({$f['label']})";
+                        }
+
+                        // 🔥 ดีไซน์ปุ่มแบบเดิมที่ลูกพี่ชอบ (เด้งๆ มีมิติ กว้างเต็มการ์ด)
                         $progress_msg .= "
-                        <div class='log-anim' style='margin-top:10px; animation-delay: 0.3s;'>
+                        <div class='log-anim' style='margin-top:8px; animation-delay: {$delay}s;'>
                             <a href='uploads/proofs/{$f['file']}' target='_blank' class='btn-smart-action' style='background: {$btn_grad}; box-shadow: 0 4px 10px {$btn_shadow};'>
-                                <i class='fas fa-image fa-lg'></i> ดูรูปหลักฐานแนบ
+                                <i class='fas fa-image fa-lg'></i> {$btn_label}
                             </a>
                         </div>";
-                    } else {
-                        foreach ($files_to_render as $idx => $f) {
-                            $delay = 0.3 + ($idx * 0.1);
-                            $btn_label = ($f['label'] === 'หลักฐานรวม') ? 'ดูรูปหลักฐานรวม' : "ดูรูป ({$f['label']})";
-                            $progress_msg .= "
-                            <div class='log-anim' style='margin-top:8px; animation-delay: {$delay}s;'>
-                                <a href='uploads/proofs/{$f['file']}' target='_blank' class='btn-smart-action' style='background: {$btn_grad}; box-shadow: 0 4px 10px {$btn_shadow};'>
-                                    <i class='fas fa-image fa-lg'></i> {$btn_label}
-                                </a>
-                            </div>";
-                        }
                     }
                 }
-                
-                $progress_msg .= "</div>"; // End Wrapper
+
+                $progress_msg .= "</div>"; // End Card Wrapper
 
                 $logs[] = ['at' => date('d/m/Y H:i'), 'by' => $user_name, 'msg' => $progress_msg];
+                $all_new_logs_html .= $progress_msg;
             }
 
             // 5. บันทึก
-            $final_received_list = [
-                'details' => $old_data['details'] ?? [],
-                'items_moved' => array_merge($existing_moves, $items_moved_this_round),
-                'accumulated_moved' => $accumulated_moved,
-                'items_status' => $items_status,
-                'finished_items' => $existing_finished_items, 
-                'main_proof_file' => $global_file
-            ];
+            $old_data['details'] = $old_data['details'] ?? [];
+            $old_data['items_moved'] = array_merge($existing_moves, $items_moved_this_round);
+            $old_data['accumulated_moved'] = $accumulated_moved;
+            $old_data['items_status'] = $items_status;
+            $old_data['finished_items'] = $existing_finished_items;
 
-            $new_json_str = json_encode($final_received_list, JSON_UNESCAPED_UNICODE);
+            $new_json_str = json_encode($old_data, JSON_UNESCAPED_UNICODE);
             $new_logs_str = json_encode($logs, JSON_UNESCAPED_UNICODE);
 
             $stmt = $conn->prepare("UPDATE service_requests SET received_by = ?, received_at = NOW(), received_item_list = ?, progress_logs = ? WHERE id = ?");
             $stmt->bind_param("sssi", $user_name, $new_json_str, $new_logs_str, $req_id);
 
-            if ($stmt->execute()) echo json_encode(['status' => 'success']);
-            else echo json_encode(['status' => 'error', 'message' => $stmt->error]);
+            if ($stmt->execute())
+                echo json_encode(['status' => 'success']);
+            else
+                echo json_encode(['status' => 'error', 'message' => $stmt->error]);
 
-        } catch (Exception $e) { echo json_encode(['status' => 'error', 'message' => $e->getMessage()]); }
+        } catch (Exception $e) {
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        }
         exit;
     }
     // [แก้ไข: 1.4 อัปเดตความคืบหน้า] - ใช้ดีไซน์ Premium 3D (Theme Blue) แบบเดียวกับโค้ดเก่าเป๊ะ!
@@ -462,6 +481,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $user_name = $_SESSION['fullname'] ?? 'Unknown';
             $remark = trim($_POST['office_remark']);
             $office_items = isset($_POST['office_items']) ? $_POST['office_items'] : [];
+            $current_time = date('d/m/Y H:i'); // 🔥 เตรียมเวลาไว้ใช้
 
             // 1. ดึงข้อมูลเดิม
             $res = $conn->query("SELECT received_item_list, progress_logs FROM service_requests WHERE id = $req_id");
@@ -470,19 +490,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $data = json_decode($row_data['received_item_list'] ?? '{}', true) ?: [];
             $logs = json_decode($row_data['progress_logs'] ?? '[]', true) ?: [];
 
-            // 2. จัดการไฟล์แนบ
+            // 🔥 [จุดที่ 1 เพิ่มเติม] อัปเดตสถานะสินค้าในตัวแปร $data พร้อมเก็บเวลา/คนทำ รายชิ้น
+            if (!isset($data['items_status']))
+                $data['items_status'] = [];
+
+            foreach ($office_items as $itm) {
+                $item_name = trim($itm);
+                $data['items_status'][$item_name] = 'at_office_confirmed';
+
+                // บันทึกเวลาลงในประวัติการเคลื่อนย้ายรายชิ้น (ถ้ามี array items_moved)
+                if (isset($data['items_moved'])) {
+                    foreach ($data['items_moved'] as &$move) {
+                        if ($move['name'] === $item_name && $move['destination'] === 'office') {
+                            $move['received_at'] = $current_time;
+                            $move['received_by'] = $user_name;
+                        }
+                    }
+                }
+            }
+
+            // 2. จัดการไฟล์แนบ (เหมือนเดิม)
             $file_name = null;
             if (isset($_FILES['office_file']) && $_FILES['office_file']['error'] == 0) {
-                $upload_dir = 'uploads/proofs/'; // ปรับให้ไปที่เดียวกับตัวอื่น
-                if (!is_dir($upload_dir)) mkdir($upload_dir, 0777, true);
+                $upload_dir = 'uploads/proofs/';
+                if (!is_dir($upload_dir))
+                    mkdir($upload_dir, 0777, true);
                 $file_name = 'off_' . $req_id . '_' . time() . '.' . pathinfo($_FILES['office_file']['name'], PATHINFO_EXTENSION);
                 move_uploaded_file($_FILES['office_file']['tmp_name'], $upload_dir . $file_name);
             }
 
-            // =====================================================================================
-            // 🔥 สร้าง HTML Log Design (Theme: Blue Hero & Card List)
-            // =====================================================================================
-            
+            // 🎨 สร้าง HTML Log Design (เพิ่มเวลาในส่วน Header)
             $header_bg = 'linear-gradient(135deg, #3b82f6, #1d4ed8)';
             $border_left = '#3b82f6';
             $pulse_color = 'rgba(59, 130, 246, 0.5)';
@@ -494,31 +531,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 @keyframes fadeInUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
                 @keyframes pulseBlue { 0% { box-shadow: 0 0 0 0 {$pulse_color}; } 70% { box-shadow: 0 0 0 10px rgba(0,0,0,0); } 100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); } }
                 .log-anim { animation: fadeInUp 0.5s ease forwards; }
-                .btn-office-full {
-                    display: flex; align-items: center; justify-content: center; gap: 8px;
-                    width: 100%; padding: 12px; border-radius: 8px;
-                    color: #fff !important; font-weight: 700; text-decoration: none; font-size: 0.95rem;
-                    transition: all 0.2s; border: none; margin-top: 10px;
-                    box-shadow: 0 4px 10px {$btn_shadow};
-                    background: {$btn_grad};
-                }
-                .btn-office-full:hover { transform: translateY(-2px); filter: brightness(1.1); }
             </style>
             <div style='font-family:Prompt, sans-serif; position:relative;'>";
 
-            // --- 1. Header (Pulse Animation) ---
+            // --- 1. Header (เพิ่มการแสดงเวลา $current_time ตรงนี้ด้วย) ---
             $progress_msg .= "
             <div class='log-anim' style='display:flex; align-items:center; gap:12px; margin-bottom:15px;'>
                 <div style='width:48px; height:48px; background:{$header_bg}; color:#fff; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:1.3rem; animation: pulseBlue 2s infinite;'>
                     <i class='fas fa-building'></i>
                 </div>
                 <div>
-                    <div style='font-weight:800; color:#1e3a8a; font-size:1rem;'>นำของกลับบริษัท / รับช่วงต่อ</div>
-                    <div style='font-size:0.8rem; color:#64748b;'>ผู้ดำเนินการ: <b>{$user_name}</b></div>
+                    <div style='font-weight:800; color:#1e3a8a; font-size:1rem;'>นำของกลับบริษัท / ตรวจรับสินค้า</div>
+                    <div style='font-size:0.8rem; color:#64748b;'>โดย: <b>{$user_name}</b> | เวลา: <b>{$current_time}</b></div>
                 </div>
             </div>";
 
-            // --- 2. Note Box ---
+            // (ส่วนที่เหลือ: Note Box, Item List, File Button ใช้ของเดิมของลูกพี่ได้เลย)
             if (!empty($remark)) {
                 $progress_msg .= "
                 <div class='log-anim' style='background:#f8fafc; padding:10px 15px; border-radius:10px; font-size:0.9rem; color:#475569; margin-bottom:15px; border:1px dashed #cbd5e1; text-align:center; animation-delay: 0.1s;'>
@@ -526,64 +554,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 </div>";
             }
 
-            // --- 3. Item List (Card Style) ---
             if (!empty($office_items)) {
                 $progress_msg .= "<div class='log-anim' style='margin-bottom:15px; animation-delay: 0.2s;'>";
-                $progress_msg .= "<div style='font-size:0.75rem; font-weight:700; color:#64748b; margin-bottom:5px; text-transform:uppercase;'>รายการที่รับกลับ (" . count($office_items) . ")</div>";
+                $progress_msg .= "<div style='font-size:0.75rem; font-weight:700; color:#64748b; margin-bottom:5px; text-transform:uppercase;'>รายการที่ตรวจรับแล้ว</div>";
                 $progress_msg .= "<div style='display:flex; flex-direction:column; gap:8px;'>";
                 foreach ($office_items as $itm) {
                     $progress_msg .= "
-                    <div style='background:#fff; border:1px solid #e2e8f0; border-left:5px solid {$border_left}; padding:12px 15px; border-radius:8px; display:flex; align-items:center; gap:12px; box-shadow:0 2px 4px rgba(0,0,0,0.02);'>
-                        <div style='background:{$border_left}; color:#fff; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.7rem;'>
-                            <i class='fas fa-check'></i>
-                        </div>
+                    <div style='background:#fff; border:1px solid #e2e8f0; border-left:5px solid {$border_left}; padding:12px 15px; border-radius:8px; display:flex; align-items:center; gap:12px;'>
+                        <div style='background:{$border_left}; color:#fff; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.7rem;'><i class='fas fa-check'></i></div>
                         <div style='font-size:0.95rem; color:#334155; font-weight:600;'>" . htmlspecialchars($itm) . "</div>
                     </div>";
                 }
                 $progress_msg .= "</div></div>";
             }
 
-            // --- 4. File Button (ปุ่มใหญ่) ---
             if ($file_name) {
                 $progress_msg .= "
                 <div class='log-anim' style='margin-top:10px; animation-delay: 0.3s;'>
-                    <a href='uploads/proofs/{$file_name}' target='_blank' class='btn-office-full'>
+                    <a href='uploads/proofs/{$file_name}' target='_blank' class='btn-office-full' style='background: {$btn_grad}; box-shadow: 0 4px 10px {$btn_shadow};'>
                         <i class='fas fa-image fa-lg'></i> ดูรูปหลักฐานแนบ
                     </a>
                 </div>";
             }
+            $progress_msg .= "</div>";
 
-            $progress_msg .= "</div>"; // End Wrapper
-
-            // 3. อัปเดตข้อมูลประวัติรับช่วงต่อ (Internal JSON)
+            // 3. 🔥 [จุดที่ 2] อัปเดตข้อมูลใน office_log ให้มีคีย์ 'at' และ 'by' ที่ชัดเจน
             $data['details']['office_log'][] = [
+                'status' => 'at_office_confirmed',
                 'by' => $user_name,
-                'at' => date('d/m/Y H:i'),
+                'at' => $current_time, // <--- ตรงนี้สำคัญมาก
                 'msg' => $remark,
                 'items' => $office_items,
                 'file' => $file_name
             ];
 
             // 4. บันทึกเข้า Main Log
-            $logs[] = [
-                'at' => date('d/m/Y H:i'),
-                'by' => $user_name,
-                'msg' => $progress_msg // ✅ บันทึก HTML ที่ออกแบบใหม่ลงใน Log
-            ];
+            $logs[] = ['at' => $current_time, 'by' => $user_name, 'msg' => $progress_msg];
 
             // 5. บันทึกกลับลง Database
             $new_json = json_encode($data, JSON_UNESCAPED_UNICODE);
             $new_logs = json_encode($logs, JSON_UNESCAPED_UNICODE);
 
-            $sql = "UPDATE service_requests SET received_item_list = ?, progress_logs = ? WHERE id = ?";
-            $stmt = $conn->prepare($sql);
+            $stmt = $conn->prepare("UPDATE service_requests SET received_item_list = ?, progress_logs = ? WHERE id = ?");
             $stmt->bind_param("ssi", $new_json, $new_logs, $req_id);
 
-            if ($stmt->execute()) {
+            if ($stmt->execute())
                 echo json_encode(['status' => 'success']);
-            } else {
+            else
                 echo json_encode(['status' => 'error', 'message' => $stmt->error]);
-            }
+
         } catch (Exception $e) {
             echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
         }
@@ -718,8 +737,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         exit;
     }
-    // --- [แก้ไขตัวเต็ม] 1.6 ส่งคืนลูกค้า / ปิดงาน (Sync คะแนนลงตาราง service_ratings ด้วย) ---
-    // --- [ฉบับแก้ไขสมบูรณ์] 1.6 ส่งคืนลูกค้า / ปิดงาน (แก้ประวัติหาย + บันทึกดาว) ---
+    // --- [ฉบับแก้ไขสมบูรณ์] 1.6 ส่งคืนลูกค้า / ปิดงาน (เก็บประวัติเรตติ้งแยกตามรอบ ไม่ทับของเดิม!) ---
     if ($_POST['action'] == 'return_to_customer') {
         header('Content-Type: application/json');
 
@@ -729,38 +747,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
             // รับค่าจากฟอร์ม
             $rating = intval($_POST['rating'] ?? 0);
-            $remark = isset($_POST['return_remark']) ? trim($_POST['return_remark']) : ''; // รับค่าหมายเหตุ
+            $new_remark = isset($_POST['return_remark']) ? trim($_POST['return_remark']) : '';
             $return_items = $_POST['returned_items'] ?? [];
             $is_final = intval($_POST['is_final'] ?? 0);
             $summary_default = "ส่งมอบอุปกรณ์คืนลูกค้า";
 
-            // 1. จัดการไฟล์แนบ
+            // 1. จัดการโฟลเดอร์อัปโหลด
+            $upload_dir = 'uploads/returns/';
+            if (!is_dir($upload_dir))
+                mkdir($upload_dir, 0777, true);
+
+            // 2. จัดการไฟล์แนบ (รูปรวม/บิลรวมหลัก)
             $proof_file = null;
             if (isset($_FILES['return_proof']) && $_FILES['return_proof']['error'] == 0) {
-                $upload_dir = 'uploads/returns/';
-                if (!is_dir($upload_dir))
-                    mkdir($upload_dir, 0777, true);
                 $ext = pathinfo($_FILES['return_proof']['name'], PATHINFO_EXTENSION);
-                $proof_file = 'ret_' . $req_id . '_' . time() . '.' . $ext;
+                $proof_file = 'ret_main_' . $req_id . '_' . time() . '.' . $ext;
                 move_uploaded_file($_FILES['return_proof']['tmp_name'], $upload_dir . $proof_file);
             }
 
-            // 2. ดึงข้อมูลเดิม (หัวใจสำคัญ: ต้องดึง progress_logs เดิมมาด้วย!)
-            $res = $conn->query("SELECT progress_logs, received_item_list, status, return_file_path FROM service_requests WHERE id = $req_id");
-            $row_data = $res->fetch_assoc();
-
-            // 🔥 [จุดแก้ 1] อ่าน Log เก่าแบบปลอดภัยสูงสุด
-            $raw_logs = $row_data['progress_logs'];
-            // ตรวจสอบว่าเป็น JSON จริงหรือไม่ ถ้าไม่ใช่ให้เริ่มใหม่
-            $current_logs = json_decode($raw_logs, true);
-            if (json_last_error() !== JSON_ERROR_NONE || !is_array($current_logs)) {
-                $current_logs = [];
+            // 3. จัดการไฟล์แนบแบบ **รายชิ้น** (ถ้ามีส่งมา)
+            // คาดหวังว่าฝั่ง JS จะส่งไฟล์มาในชื่อ input array เช่น return_item_proofs[0], return_item_proofs[1]
+            $item_files_map = []; // เก็บว่าสินค้ารายการไหน มีรูปอะไรแนบมาบ้าง
+            if (!empty($_FILES['return_item_proofs'])) {
+                foreach ($_FILES['return_item_proofs']['name'] as $idx => $name) {
+                    if ($_FILES['return_item_proofs']['error'][$idx] == 0) {
+                        $ext = pathinfo($name, PATHINFO_EXTENSION);
+                        $item_file_name = 'ret_itm_' . $req_id . '_' . $idx . '_' . time() . '.' . $ext;
+                        if (move_uploaded_file($_FILES['return_item_proofs']['tmp_name'][$idx], $upload_dir . $item_file_name)) {
+                            // Map ไฟล์เข้ากับชื่อสินค้า
+                            if (isset($return_items[$idx])) {
+                                $item_name_clean = trim($return_items[$idx]);
+                                $item_files_map[$item_name_clean] = $item_file_name;
+                            }
+                        }
+                    }
+                }
             }
 
+            // 4. ดึงข้อมูลเดิมจาก DB
+            $res = $conn->query("SELECT progress_logs, received_item_list, status, return_file_path, return_remark FROM service_requests WHERE id = $req_id");
+            $row_data = $res->fetch_assoc();
+
+            $old_remark = $row_data['return_remark'] ?? '';
+            $final_remark = $old_remark;
+            if ($new_remark !== '') {
+                $timestamp = date('d/m/Y H:i');
+                $prefix = ($old_remark !== '') ? "\n----------------\n" : "";
+                $final_remark .= "{$prefix}[{$timestamp}] {$new_remark}";
+            }
+
+            $raw_logs = $row_data['progress_logs'];
+            $current_logs = json_decode($raw_logs, true) ?: [];
             $data_json = json_decode($row_data['received_item_list'] ?? '{}', true) ?: [];
             $current_file_path = $row_data['return_file_path'];
 
-            // Sync รายการ finished_items (สีเขียว)
+            // Sync รายการ finished_items (อัปเดตสถานะว่าจบแล้ว)
             if (!isset($data_json['finished_items']))
                 $data_json['finished_items'] = [];
             foreach ($return_items as $itm) {
@@ -770,61 +811,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 }
             }
 
-            // 3. สร้าง HTML สำหรับ Log ใหม่ (ก้อนใหม่ที่จะต่อท้าย)
-            $item_repair_summaries = $data_json['item_repair_summaries'] ?? [];
-
-            $stars_log = "";
-            for ($i = 1; $i <= 5; $i++)
-                $stars_log .= ($i <= $rating) ? "⭐" : "☆";
-            $theme_color = ($is_final == 1) ? "#10b981" : "#8b5cf6";
-            $status_title = ($is_final == 1) ? "งานซ่อมเสร็จสมบูรณ์ส่งคืนครบถ้วน" : "📦 ส่งคืนอุปกรณ์บางส่วน";
-
-            $new_msg_html = "
-            <style>@keyframes fadeInUp { from { opacity:0; transform:translateY(15px); } to { opacity:1; transform:translateY(0); } }</style>
-            <div style='font-family:Prompt, sans-serif;'>
-                <div style='display:flex; align-items:center; gap:12px; margin-bottom:15px; animation: fadeInUp 0.5s ease;'>
-                    <div style='flex-shrink:0; width:45px; height:45px; background:linear-gradient(135deg, {$theme_color}, #4c1d95); color:#fff; border-radius:12px; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.1);'>
-                        <i class='fas " . ($is_final == 1 ? "fa-check-double" : "fa-box-open") . " fa-lg'></i>
-                    </div>
-                    <div>
-                        <div style='font-weight:800; color:#1e293b; font-size:1rem;'>{$status_title}</div>
-                        <div style='font-size:0.8rem; color:#64748b;'>โดย: {$user_name} | ประเมิน: <span style='color:#f59e0b;'>{$stars_log}</span></div>
-                    </div>
-                </div>";
-
-            if (!empty($return_items)) {
-                $new_msg_html .= "<div style='margin-bottom:10px; padding-left:10px;'>";
-                foreach ($return_items as $item) {
-                    $item_name_clean = trim($item);
-                    $sum_text = $item_repair_summaries[$item_name_clean] ?? '-';
-                    $new_msg_html .= "<div style='background:#f8fafc; border:1px solid #e2e8f0; border-left:4px solid {$theme_color}; padding:8px 12px; border-radius:8px; margin-bottom:6px;'>
-                        <div style='font-weight:700; font-size:0.85rem; color:#334155;'>{$item_name_clean}</div>
-                        <div style='font-size:0.8rem; color:#059669;'>└ {$sum_text}</div>
-                    </div>";
-                }
-                $new_msg_html .= "</div>";
+            // 5. บันทึกประวัติการคืน "แยกเป็นรอบๆ" (ประวัติเก่าจะไม่หาย)
+            if (!isset($data_json['return_history'])) {
+                $data_json['return_history'] = [];
             }
 
-            if ($remark) {
-                $new_msg_html .= "<div style='background:#fffbeb; border:1px dashed #f59e0b; padding:8px; border-radius:8px; font-size:0.85rem; color:#92400e; margin-bottom:10px;'><b>ข้อเสนอแนะ:</b> {$remark}</div>";
+            // สร้าง Array รายละเอียดสินค้าสำหรับเก็บในประวัติ
+            $items_with_details = [];
+            foreach ($return_items as $itm) {
+                $itm_clean = trim($itm);
+                $items_with_details[] = [
+                    'name' => $itm_clean,
+                    'file' => $item_files_map[$itm_clean] ?? null // ใส่รูปรายชิ้นเข้าไป
+                ];
             }
-            if ($proof_file) {
-                $new_msg_html .= "<div style='text-align:right;'><a href='uploads/returns/{$proof_file}' target='_blank' style='font-size:0.75rem; color:{$theme_color}; font-weight:700;'><i class='fas fa-image'></i> หลักฐานการส่งคืน</a></div>";
-            }
-            $new_msg_html .= "</div>";
 
-            // 4. 🔥 [จุดแก้ 2] เอา Log ใหม่ "ต่อท้าย" (Append) ลงไปใน Log เก่า
-            $current_logs[] = [
+            $data_json['return_history'][] = [
                 'at' => date('d/m/Y H:i'),
                 'by' => $user_name,
-                'msg' => $new_msg_html
+                'rating' => $rating,
+                'remark' => $new_remark,
+                'items_detail' => $items_with_details, // บันทึกแบบ Array ที่มีทั้งชื่อและไฟล์
+                'items' => $return_items, // เก็บชื่อไว้เฉยๆ เพื่อความเข้ากันได้กับโค้ดเก่า
+                'file' => $proof_file // รูปรวม
             ];
 
-            // 5. เตรียมข้อมูลอื่นๆ
-            $new_status = ($is_final == 1) ? 'completed' : 'in_progress';
-            $final_file_path = $proof_file ? $proof_file : $current_file_path;
-
-            // บันทึกรายละเอียดการคืนใน JSON (customer_return)
+            // อัปเดตรายการสินค้าที่คืนแล้วรวมๆ ไว้
             if (!isset($data_json['details']['customer_return']['items_returned'])) {
                 $data_json['details']['customer_return']['items_returned'] = [];
             }
@@ -835,13 +847,100 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             $data_json['details']['customer_return']['at'] = date('d/m/Y H:i');
             $data_json['details']['customer_return']['by'] = $user_name;
-            $data_json['details']['customer_return']['rating'] = $rating;
-            $data_json['details']['customer_return']['remark'] = $remark;
-            if ($proof_file)
-                $data_json['details']['customer_return']['file'] = $proof_file;
 
+            // ====================================================================
+            // 6. สร้าง HTML Log สำหรับแสดงใน Timeline
+            // ====================================================================
+            $item_repair_summaries = $data_json['item_repair_summaries'] ?? [];
+            $theme_color = ($is_final == 1) ? "#10b981" : "#8b5cf6";
+            $status_title = ($is_final == 1) ? "งานซ่อมเสร็จสมบูรณ์ส่งคืนครบถ้วน" : "📦 ส่งคืนอุปกรณ์บางส่วน";
 
-            // 6. อัปเดต SQL (Update ทั้งก้อน Log ที่รวมร่างแล้ว)
+            $new_msg_html = "
+            <style>@keyframes popIn { 0% { transform: scale(0.8); opacity:0; } 100% { transform: scale(1); opacity:1; } }</style>
+            <div style='font-family:Prompt, sans-serif;'>
+                <div style='display:flex; align-items:center; gap:10px; margin-bottom:10px;'>
+                    <div style='width:36px; height:36px; background:linear-gradient(135deg, {$theme_color}, #4c1d95); color:#fff; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:0.9rem;'>
+                        <i class='fas " . ($is_final == 1 ? "fa-check-double" : "fa-box-open") . "'></i>
+                    </div>
+                    <div>
+                        <div style='font-weight:700; color:#1e293b; font-size:0.9rem;'>{$status_title}</div>
+                        <div style='font-size:0.75rem; color:#64748b;'>โดย: {$user_name}</div>
+                    </div>
+                </div>";
+
+            // --- ส่วนแสดงรายการสินค้า (พร้อมรูปรายชิ้นถ้ามี) ---
+            if (!empty($return_items)) {
+                $new_msg_html .= "<div style='margin-bottom:12px; padding-left:5px;'>";
+                foreach ($return_items as $item) {
+                    $item_name_clean = trim($item);
+                    $sum_text = $item_repair_summaries[$item_name_clean] ?? '-';
+                    $has_item_file = isset($item_files_map[$item_name_clean]);
+
+                    $new_msg_html .= "<div style='background:#f8fafc; border-left:3px solid {$theme_color}; padding:8px 10px; border-radius:6px; margin-bottom:6px;'>
+                        <div style='display:flex; justify-content:space-between; align-items:start;'>
+                            <div>
+                                <div style='font-weight:600; font-size:0.85rem; color:#334155;'>{$item_name_clean}</div>
+                                <div style='font-size:0.75rem; color:#059669; margin-top:2px;'>└ ซ่อม: {$sum_text}</div>
+                            </div>";
+
+                    // ปุ่มเปิดรูปรายชิ้น
+                    if ($has_item_file) {
+                        $item_file_url = 'uploads/returns/' . $item_files_map[$item_name_clean];
+                        $new_msg_html .= "
+                            <div>
+                                <a href='{$item_file_url}' target='_blank' style='display:inline-block; background:#e0e7ff; color:#4338ca; font-size:0.7rem; padding:3px 8px; border-radius:12px; text-decoration:none; font-weight:600;'>
+                                    <i class='fas fa-image'></i> ดูรูป
+                                </a>
+                            </div>";
+                    }
+
+                    $new_msg_html .= "</div></div>"; // ปิด flex / ปิดการ์ดสินค้า
+                }
+                $new_msg_html .= "</div>";
+            }
+
+            // --- ข้อเสนอแนะ ---
+            if ($new_remark) {
+                $new_msg_html .= "<div style='background:#fffbeb; border:1px dashed #f59e0b; padding:8px 12px; border-radius:6px; font-size:0.8rem; color:#92400e; margin-bottom:10px;'><b>💬 ข้อเสนอแนะ:</b> {$new_remark}</div>";
+            }
+
+            // --- ส่วนแสดงไฟล์รวม (บิลรวม/ใบเซ็นรับ) ---
+            if ($proof_file) {
+                $new_msg_html .= "
+                <div style='margin-bottom:10px;'>
+                    <a href='uploads/returns/{$proof_file}' target='_blank' style='display:flex; align-items:center; justify-content:center; gap:8px; background:linear-gradient(to right, #f1f5f9, #e2e8f0); color:#475569; padding:8px 10px; border-radius:8px; font-size:0.8rem; text-decoration:none; font-weight:600; border:1px solid #cbd5e1; transition:0.2s;'>
+                        <i class='fas fa-file-invoice fa-lg' style='color:#64748b;'></i> ดูรูปหลักฐานใบส่งมอบ (รวม)
+                    </a>
+                </div>";
+            }
+
+            // --- การให้คะแนนดาว ---
+            if ($rating > 0) {
+                $stars_display = "";
+                for ($i = 1; $i <= 5; $i++) {
+                    $stars_display .= ($i <= $rating) ? "<i class='fas fa-star' style='color:#fff; font-size:1rem; margin-right:2px;'></i>" : "<i class='far fa-star' style='color:rgba(255,255,255,0.6); font-size:1rem; margin-right:2px;'></i>";
+                }
+                $new_msg_html .= "
+                <div style='animation: popIn 0.5s ease forwards;'>
+                    <div style='background:linear-gradient(135deg, #f59e0b, #d97706); border-radius:8px; padding:10px 15px; display:flex; align-items:center; justify-content:space-between; color:#fff; box-shadow:0 4px 10px -3px rgba(245, 158, 11, 0.4);'>
+                        <div style='display:flex; align-items:center; gap:8px;'>
+                            <div style='font-size:0.8rem; font-weight:700; text-transform:uppercase;'>คะแนนความพึงพอใจ</div>
+                            <div style='background:rgba(255,255,255,0.25); padding:2px 8px; border-radius:12px; font-size:0.75rem; font-weight:700;'>{$rating}/5</div>
+                        </div>
+                        <div>{$stars_display}</div>
+                    </div>
+                </div>";
+            }
+            $new_msg_html .= "</div>"; // ปิด Main wrapper
+
+            $current_logs[] = ['at' => date('d/m/Y H:i'), 'by' => $user_name, 'msg' => $new_msg_html];
+
+            // 7. เตรียมข้อมูลอัปเดต SQL
+            $new_status = ($is_final == 1) ? 'completed' : 'in_progress';
+
+            // ถ้ามีไฟล์รวมให้ยึดไฟล์ใหม่, ถ้าไม่มีใช้ไฟล์เดิม (ของรอบเก่า)
+            $final_file_path = $proof_file ? $proof_file : $current_file_path;
+
             $logs_json_final = json_encode($current_logs, JSON_UNESCAPED_UNICODE);
             $final_json = json_encode($data_json, JSON_UNESCAPED_UNICODE);
 
@@ -858,14 +957,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 WHERE id = ?";
 
             $stmt = $conn->prepare($sql);
-            $stmt->bind_param("sisssssi", $new_status, $rating, $remark, $summary_default, $final_file_path, $logs_json_final, $final_json, $req_id);
+            $stmt->bind_param("sisssssi", $new_status, $rating, $final_remark, $summary_default, $final_file_path, $logs_json_final, $final_json, $req_id);
 
             if ($stmt->execute()) {
-                // Sync ลงตาราง service_ratings
+                // บันทึกเรตติ้งเพื่อไปโชว์สรุปบนการ์ด Dashboard
                 if ($rating > 0) {
-                    $conn->query("DELETE FROM service_ratings WHERE req_id = $req_id");
                     $stmt_r = $conn->prepare("INSERT INTO service_ratings (req_id, rating, comment, created_at) VALUES (?, ?, ?, NOW())");
-                    $stmt_r->bind_param("iis", $req_id, $rating, $remark);
+                    $stmt_r->bind_param("iis", $req_id, $rating, $new_remark);
                     $stmt_r->execute();
                 }
                 echo json_encode(['status' => 'success']);
@@ -902,7 +1000,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $file_name = null;
             if (isset($_FILES['shop_file']) && $_FILES['shop_file']['error'] == 0) {
                 $upload_dir = 'uploads/repairs/';
-                if (!is_dir($upload_dir)) mkdir($upload_dir, 0777, true);
+                if (!is_dir($upload_dir))
+                    mkdir($upload_dir, 0777, true);
                 $ext = pathinfo($_FILES['shop_file']['name'], PATHINFO_EXTENSION);
                 $file_name = 'rep_' . $req_id . '_' . time() . '.' . $ext;
                 move_uploaded_file($_FILES['shop_file']['tmp_name'], $upload_dir . $file_name);
@@ -915,7 +1014,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $data_json = json_decode($row_data['received_item_list'] ?? '{}', true);
             $raw_logs = $row_data['progress_logs'];
             $logs = json_decode($raw_logs, true);
-            if (json_last_error() !== JSON_ERROR_NONE || !is_array($logs)) { $logs = []; }
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($logs)) {
+                $logs = [];
+            }
             $items_status = $data_json['items_status'] ?? [];
 
             // =================================================================================
@@ -931,8 +1032,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 // หาข้อมูลร้าน
                 if (isset($move['shop_info']['name']) && $move['shop_info']['name'] === $shop_name) {
                     // เจอร้านแล้ว เอาเบอร์ล่าสุดที่หาได้
-                    if (!empty($move['shop_info']['phone'])) $shop_phone = $move['shop_info']['phone'];
-                    if (!empty($move['shop_info']['owner'])) $shop_contact = $move['shop_info']['owner'];
+                    if (!empty($move['shop_info']['phone']))
+                        $shop_phone = $move['shop_info']['phone'];
+                    if (!empty($move['shop_info']['owner']))
+                        $shop_contact = $move['shop_info']['owner'];
                 }
                 // เก็บหมายเหตุของสินค้าแต่ละชิ้น
                 $m_name = trim($move['name'] ?? '');
@@ -955,7 +1058,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             // 🔥 สร้าง HTML Log
             // =================================================================================
             $items_arr = json_decode($items_json, true);
-            
+
             $css_style = "
             <style>
                 @keyframes fadeInUp { from { opacity:0; transform:translateY(15px); } to { opacity:1; transform:translateY(0); } }
@@ -963,7 +1066,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 .log-anim { animation: fadeInUp 0.5s ease forwards; }
                 .btn-pink-full {
                     display: flex; align-items: center; justify-content: center; gap: 8px;
-                    width: 100%; padding: 12px; border-radius: 8px;
+                    width: 100%; padding: 12px 1px; border-radius: 8px;
                     background: linear-gradient(to right, #db2777, #be185d); 
                     color: #fff !important; font-weight: 700; text-decoration: none; font-size: 0.95rem;
                     box-shadow: 0 4px 6px -1px rgba(219, 39, 119, 0.3);
@@ -1005,7 +1108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $progress_msg .= "<div class='log-anim' style='margin-bottom:15px; animation-delay: 0.2s;'>";
                 $progress_msg .= "<div style='font-size:0.75rem; font-weight:700; color:#db2777; margin-bottom:5px; text-transform:uppercase;'>📦 สินค้าที่รับกลับ</div>";
                 $progress_msg .= "<div style='display:flex; flex-direction:column; gap:8px;'>";
-                
+
                 foreach ($items_returned_from_shop as $itm_name) {
                     // ดึงหมายเหตุตอนส่งออก (ถ้ามี)
                     $prev_note = $item_remarks_map[$itm_name] ?? '';
@@ -1018,10 +1121,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             </div>
                             <div style='font-size:0.95rem; color:#831843; font-weight:600;'>{$itm_name}</div>
                         </div>";
-                    
+
                     // ถ้ามีหมายเหตุตอนส่ง ให้โชว์ด้วย
                     if ($prev_note) {
-                        $progress_msg .= "<div style='font-size:0.8rem; color:#64748b; padding-left:32px;'><i class='fas fa-history' style='font-size:0.7rem;'></i> <b>ตอนส่ง:</b> {$prev_note}</div>";
+                        $progress_msg .= "<div style='font-size:0.8rem; color:#64748b; padding-left:32px;'><i class='fas fa-history' style='font-size:0.7rem;'></i> <b>หมายเหตุนำของออก:</b> {$prev_note}</div>";
                     }
                     $progress_msg .= "</div>";
                 }
@@ -1043,7 +1146,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     </tr>
                 </thead>
                 <tbody>";
-            
+
             $summary_text = "";
             foreach ($items_arr as $idx => $it) {
                 $line_total = number_format($it['total'], 2);
@@ -1079,7 +1182,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     </a>
                 </div>";
             }
-            
+
             $progress_msg .= "</div>"; // End Wrapper
 
             // 6. บันทึกข้อมูล
@@ -1111,10 +1214,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt = $conn->prepare($sql);
             $stmt->bind_param("dsssi", $total_cost, $new_cost_details, $new_json_str, $new_logs_str, $req_id);
 
-            if ($stmt->execute()) echo json_encode(['status' => 'success']);
-            else echo json_encode(['status' => 'error', 'message' => $stmt->error]);
+            if ($stmt->execute())
+                echo json_encode(['status' => 'success']);
+            else
+                echo json_encode(['status' => 'error', 'message' => $stmt->error]);
 
-        } catch (Exception $e) { echo json_encode(['status' => 'error', 'message' => $e->getMessage()]); }
+        } catch (Exception $e) {
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        }
         exit;
     }
     // [แก้ไข] อนุมัติค่าใช้จ่าย + บันทึกผู้กด
@@ -1193,33 +1300,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] == 'get_rating_history') {
         header('Content-Type: application/json');
 
-        // ดึงข้อมูลโดยตรงจาก service_requests เชื่อมกับ project_contracts
+        // 🔥 แก้ SQL: ใช้ COALESCE เพื่อเลือกค่า ถ้า pc ไม่มี ให้ไปเอา manual จาก req
         $sql = "SELECT 
-                pc.site_id as site_code, 
-                pc.project_name, 
-                sr.return_rating as rating, 
-                sr.return_remark as comment, 
-                sr.completed_at 
-            FROM service_requests sr
-            JOIN project_contracts pc ON sr.site_id = pc.site_id 
-            WHERE sr.status = 'completed' AND sr.return_rating > 0
-            ORDER BY sr.completed_at DESC";
+                -- 1. รหัสหน้างาน: เอาจาก PC ก่อน -> ถ้าไม่มีเอา manual_site_code -> ถ้าไม่มีขีด -
+                COALESCE(pc.site_id, req.manual_site_code, '-') as site_code, 
+                
+                -- 2. ชื่อโครงการ: เอาจาก PC ก่อน -> ถ้าไม่มีเอา manual_project_name
+                COALESCE(pc.project_name, req.manual_project_name, 'General Request') as project_name,
+                
+                -- 3. ดึงชื่อลูกค้า (manual) มาสำรองไว้ เผื่อต้องใช้ต่อท้าย
+                req.manual_customer_name,
+                
+                sr.rating, 
+                sr.comment, 
+                sr.created_at
+            FROM service_ratings sr
+            JOIN service_requests req ON sr.req_id = req.id
+            LEFT JOIN project_contracts pc ON req.site_id = pc.site_id 
+            WHERE sr.rating > 0
+            ORDER BY sr.created_at DESC";
 
         $res = $conn->query($sql);
         $history = [];
 
         if ($res) {
             while ($row = $res->fetch_assoc()) {
+
+                // จัดการชื่อที่จะแสดง (Display Name)
+                $displayName = $row['project_name'];
+
+                // 🔥 ถ้าเป็นการกรอกเอง (เช็คว่า manual_customer_name มีค่าไหม และชื่อไม่ซ้ำกับโปรเจกต์)
+                // เพื่อโชว์รูปแบบ: "ชื่อโครงการ (ชื่อลูกค้า)"
+                if (!empty($row['manual_customer_name']) && strpos($displayName, $row['manual_customer_name']) === false) {
+                    // ถ้าในชื่อโครงการยังไม่มีชื่อลูกค้า ให้ต่อท้ายเข้าไป
+                    $displayName .= " (" . $row['manual_customer_name'] . ")";
+                }
+
                 $history[] = [
                     'site_id' => $row['site_code'],
-                    'project_name' => $row['project_name'],
+                    'project_name' => $displayName, // ✅ โชว์ครบทั้งชื่อโครงการและลูกค้า (ถ้ามี)
                     'rating' => intval($row['rating']),
                     'comment' => $row['comment'] ?: '-',
-                    'at' => date('d/m/Y H:i', strtotime($row['completed_at']))
+                    'at' => date('d/m/Y H:i', strtotime($row['created_at']))
                 ];
             }
         }
         echo json_encode($history);
+        exit;
+    }
+    // --- [ส่วนที่ขาด: คำนวณตัวเลขให้การ์ดสรุป (Satisfaction Card)] ---
+    if ($_POST['action'] == 'get_satisfaction_stats') {
+        header('Content-Type: application/json');
+        try {
+            // 🔥 คำนวณจากตาราง service_ratings (รวมทุกรอบการส่งคืน)
+            $sql = "SELECT 
+                        COUNT(*) as total_count, 
+                        AVG(rating) as avg_score 
+                    FROM service_ratings 
+                    WHERE rating > 0";
+
+            $result = $conn->query($sql);
+            $row = $result->fetch_assoc();
+
+            $total = intval($row['total_count']);
+            $avg = $row['avg_score'] ? number_format((float) $row['avg_score'], 1) : "0.0";
+
+            echo json_encode(['status' => 'success', 'total' => $total, 'average' => $avg]);
+        } catch (Exception $e) {
+            echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+        }
         exit;
     }
     // 🔥 [แก้ไข: ไม่ให้ข้อมูลเก่าหาย] 1.9 บันทึกสรุปงานซ่อมรายชิ้น
@@ -1227,26 +1376,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         header('Content-Type: application/json');
         try {
             $req_id = intval($_POST['req_id']);
-            // รายการใหม่ที่ส่งมา (เฉพาะตัวที่ติ๊ก)
             $new_summaries = json_decode($_POST['summaries'], true) ?? [];
 
             $res = $conn->query("SELECT received_item_list FROM service_requests WHERE id = $req_id");
             $row_data = $res->fetch_assoc();
             $data_json = json_decode($row_data['received_item_list'] ?? '{}', true) ?: [];
 
-            // 1. ดึงข้อมูลสรุปเดิมออกมาก่อน (ถ้าไม่มีให้สร้าง array ว่าง)
             $existing_summaries = $data_json['item_repair_summaries'] ?? [];
 
-            // 2. 🔥 [จุดสำคัญ] วนลูปเอาของใหม่ไป "อัปเดต" ของเดิม (Merge)
-            // ตัวไหนที่ไม่ได้ส่งมา จะยังคงค่าเดิมไว้ ไม่หายไปไหน
+            // 🔥 วนลูปอัปเดตเฉพาะอันที่ส่งมา อันที่ไม่ได้ส่งมาจะคงเดิม
             foreach ($new_summaries as $item_name => $text) {
                 $existing_summaries[$item_name] = $text;
             }
 
-            // 3. ยัดข้อมูลที่รวมร่างแล้วกลับลงไป
             $data_json['item_repair_summaries'] = $existing_summaries;
-
             $new_json = json_encode($data_json, JSON_UNESCAPED_UNICODE);
+
             $stmt = $conn->prepare("UPDATE service_requests SET received_item_list = ? WHERE id = ?");
             $stmt->bind_param("si", $new_json, $req_id);
 
@@ -1605,12 +1750,13 @@ while ($row = $res_stat->fetch_assoc()) {
 $display_pending = ($stats['pending'] ?? 0) + ($stats['in_progress'] ?? 0);
 
 // 3.2 Fetch Main List (ตรวจสอบส่วนนี้)
-$sql_list = "SELECT sr.*, pc.project_name, c.customer_name, rt.rating as satisfaction_score
+$sql_list = "SELECT sr.*, pc.project_name, c.customer_name, MAX(rt.rating) as satisfaction_score
              FROM service_requests sr
              LEFT JOIN project_contracts pc ON sr.site_id = pc.site_id
              LEFT JOIN customers c ON pc.customer_id = c.customer_id
              LEFT JOIN service_ratings rt ON sr.id = rt.req_id
-             $where_sql  -- ต้องมีบรรทัดนี้
+             $where_sql 
+             GROUP BY sr.id  -- 🔥 [เพิ่มบรรทัดนี้!] รวบข้อมูลตารางหลักไม่ให้เบิ้ล
              ORDER BY sr.request_date DESC";
 
 $stmt = $conn->prepare($sql_list);
@@ -1619,8 +1765,6 @@ if (!empty($types)) {
 }
 
 $stmt->execute();
-
-// ✅ เปลี่ยนจาก $result = ... เป็น $res_list = ...
 $res_list = $stmt->get_result();
 
 // 3.3 Helper Maps
@@ -1966,12 +2110,42 @@ $total_votes = $rate_data['total_votes'] ?? 0;
 
             <div class="cost-summary-container mb-4">
                 <?php
-                // คำนวณยอดสรุป
-                $sql_sum = "SELECT 
-        SUM(CASE WHEN cost_status = 'approved' THEN additional_cost ELSE 0 END) as total_paid,
-        SUM(CASE WHEN cost_status = 'pending' THEN additional_cost ELSE 0 END) as total_pending
-        FROM service_requests";
-                $sums = $conn->query($sql_sum)->fetch_assoc();
+                // --- เริ่มต้นการคำนวณยอดสรุปแบบใหม่ (แงะไส้บิลรายใบจาก JSON) ---
+                $total_paid = 0;
+                $total_pending = 0;
+
+                // 1. ดึงข้อมูลใบงานทั้งหมดที่มีค่าใช้จ่าย (มากกว่า 0) มาตรวจสอบ
+                $sql_all_costs = "SELECT received_item_list FROM service_requests WHERE additional_cost > 0";
+                $res_costs = $conn->query($sql_all_costs);
+
+                if ($res_costs) {
+                    while ($cost_row = $res_costs->fetch_assoc()) {
+                        // 2. แงะ JSON ออกมาดูประวัติบิลรายชิ้น
+                        $rec_data = json_decode($cost_row['received_item_list'] ?? '{}', true);
+                        $office_logs = $rec_data['details']['office_log'] ?? [];
+
+                        foreach ($office_logs as $log) {
+                            // 3. ตรวจสอบว่าเป็นบิลที่ส่งมาจากร้านซ่อม (status: back_from_shop)
+                            if (($log['status'] ?? '') === 'back_from_shop') {
+                                $bill_amount = floatval($log['total_cost'] ?? 0);
+
+                                // 4. แยกยอดเงินตามสถานะอนุมัติของบิลนั้นๆ
+                                if (($log['approved'] ?? null) === true) {
+                                    $total_paid += $bill_amount;
+                                } else if (($log['approved'] ?? null) !== 'rejected') {
+                                    // บิลที่ยังไม่กดอนุมัติ (false/null) และไม่ได้ถูกปฏิเสธ ให้ถือว่า "รออนุมัติ"
+                                    $total_pending += $bill_amount;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 5. เตรียมตัวแปร $sums ให้ HTML ด้านล่างเอาไปแสดงผลเหมือนเดิม
+                $sums = [
+                    'total_paid' => $total_paid,
+                    'total_pending' => $total_pending
+                ];
 
                 // รับค่าตัวกรองปัจจุบันมาเช็ค active
                 $current_cost_filter = $_GET['cost_filter'] ?? '';
@@ -2121,32 +2295,12 @@ $total_votes = $rate_data['total_votes'] ?? 0;
         </div>
 
         <div id="data-table" class="recent-table-card">
-            <div style="
-    display: flex; 
-    flex-wrap: wrap; 
-    align-items: center; 
-    justify-content: space-between; 
-    margin: 15px 0; 
-    padding: 15px 20px; 
-    background: #ffffff; 
-    border: 1px solid #e2e8f0; 
-    border-left: 5px solid #8b5cf6; 
-    border-radius: 10px; 
-    box-shadow: 0 2px 5px rgba(0,0,0,0.03);">
+            <div
+                style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; margin: 15px 0; padding: 15px 20px; background: #ffffff; border: 1px solid #e2e8f0; border-left: 5px solid #8b5cf6; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.03);">
 
                 <div style="display: flex; align-items: center;">
-
-                    <div style="
-            width: 45px; 
-            height: 45px; 
-            background: #f3e8ff; 
-            color: #7c3aed; 
-            border-radius: 50%; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            font-size: 1.2rem; 
-            margin-right: 15px;">
+                    <div
+                        style="width: 45px; height: 45px; background: #f3e8ff; color: #7c3aed; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; margin-right: 15px;">
                         <i class="fas fa-star"></i>
                     </div>
 
@@ -2156,53 +2310,37 @@ $total_votes = $rate_data['total_votes'] ?? 0;
                             ความพึงพอใจ (SATISFACTION)
                         </div>
                         <div style="display: flex; align-items: center; margin-top: 5px;">
-                            <span style="
-                    background: #7c3aed; 
-                    color: #fff; 
-                    font-size: 0.9rem; 
-                    font-weight: 700; 
-                    padding: 2px 10px; 
-                    border-radius: 20px; 
-                    margin-right: 10px;">
-                                <?php echo $avg_score; ?>
+
+                            <span id="avg_rating_text"
+                                style="background: #7c3aed; color: #fff; font-size: 0.9rem; font-weight: 700; padding: 2px 10px; border-radius: 20px; margin-right: 10px;">
+                                0.0
                             </span>
 
-                            <div style="color: #cbd5e1; font-size: 0.95rem;">
-                                <?php
-                                $star_round = round((float) $avg_score);
-                                for ($i = 1; $i <= 5; $i++) {
-                                    $color = ($i <= $star_round && $total_votes > 0) ? '#f59e0b' : '#e2e8f0';
-                                    echo '<i class="fas fa-star" style="color:' . $color . '; margin-right: 2px;"></i>';
-                                }
-                                ?>
+                            <div id="star_container" style="color: #cbd5e1; font-size: 0.95rem;">
+                                <i class="fas fa-star" style="color:#e2e8f0; margin-right: 2px;"></i>
+                                <i class="fas fa-star" style="color:#e2e8f0; margin-right: 2px;"></i>
+                                <i class="fas fa-star" style="color:#e2e8f0; margin-right: 2px;"></i>
+                                <i class="fas fa-star" style="color:#e2e8f0; margin-right: 2px;"></i>
+                                <i class="fas fa-star" style="color:#e2e8f0; margin-right: 2px;"></i>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div style="display: flex; align-items: center; margin-top: 5px;">
-
                     <div class="hidden-xs"
                         style="text-align: right; margin-right: 15px; border-right: 1px solid #e5e7eb; padding-right: 15px;">
                         <div style="font-size: 0.75rem; color: #9ca3af;">จากทั้งหมด</div>
                         <div style="font-weight: 700; color: #374151; font-size: 1rem; line-height: 1;">
-                            <?php echo number_format($total_votes); ?> <span
-                                style="font-weight: 400; font-size: 0.8rem;">รายการ</span>
+
+                            <span id="total_rating_text">0</span>
+                            <span style="font-weight: 400; font-size: 0.8rem;">รายการ</span>
+
                         </div>
                     </div>
 
-                    <button onclick="showRatingHistory()" style="
-            background: #fff; 
-            border: 1px solid #ddd6fe; 
-            color: #7c3aed; 
-            border-radius: 50px; 
-            padding: 6px 16px; 
-            font-weight: 600; 
-            cursor: pointer; 
-            display: flex; 
-            align-items: center; 
-            gap: 5px; 
-            transition: 0.2s;">
+                    <button onclick="showRatingHistory()"
+                        style="background: #fff; border: 1px solid #ddd6fe; color: #7c3aed; border-radius: 50px; padding: 6px 16px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: 0.2s;">
                         <i class="fas fa-history"></i> <span style="margin-left:5px;">ดูประวัติ</span>
                     </button>
                 </div>
@@ -2501,19 +2639,24 @@ $total_votes = $rate_data['total_votes'] ?? 0;
 
                                     <td class="text-center" style="vertical-align:middle; padding: 8px;">
                                         <?php
-                                        // 1. แปลงข้อมูล JSON
+                                        // 1. Convert JSON data
                                         $rec_json_raw = $row['received_item_list'] ?? '{}';
                                         $rec_data = json_decode($rec_json_raw, true) ?: [];
 
-                                        // ดึงข้อมูลต่างๆ
+                                        // Extract various data points
                                         $items_status = $rec_data['items_status'] ?? [];
                                         $accumulated_moved = $rec_data['accumulated_moved'] ?? [];
                                         $returned_items_list = $rec_data['details']['customer_return']['items_returned'] ?? [];
                                         $office_logs = $rec_data['details']['office_log'] ?? [];
 
-                                        // 2. คำนวณรายการสินค้า (เอาไว้นับตัวเลขเฉยๆ)
+                                        // 🔥 [เพิ่มใหม่] ดึงรายการที่กดเสร็จสิ้นหน้างานมาด้วย
+                                        $finished_items_list = $rec_data['finished_items'] ?? [];
+
+                                        // 2. Calculate ALL items (from the project request)
                                         $all_items = [];
                                         $raw_items = json_decode($row['project_item_name'] ?? '[]', true);
+
+                                        // Logic to parse item names (Legacy String vs New JSON Array)
                                         if (!is_array($raw_items) && !empty($row['project_item_name'])) {
                                             $parts = preg_split('/[\r\n,]+/', $row['project_item_name']);
                                             foreach ($parts as $pt) {
@@ -2524,14 +2667,16 @@ $total_votes = $rate_data['total_votes'] ?? 0;
                                         } else {
                                             foreach ($raw_items as $ri) {
                                                 $p_val = is_array($ri['product'] ?? []) ? $ri['product'] : [$ri['product'] ?? ''];
-                                                foreach ($p_val as $pv)
+                                                foreach ($p_val as $pv) {
                                                     if (!empty(trim($pv)))
                                                         $all_items[] = trim($pv);
+                                                }
                                             }
                                         }
+                                        // Merge with accumulated_moved to ensure we don't miss anything that was added later
                                         $all_items = array_values(array_unique(array_merge($all_items, $accumulated_moved)));
 
-                                        // 3. ตัวแปรสำหรับปุ่มต่างๆ
+                                        // 3. Count statuses for button logic
                                         $count_at_external = 0;
                                         $count_at_office = 0;
                                         foreach ($items_status as $status) {
@@ -2540,11 +2685,16 @@ $total_votes = $rate_data['total_votes'] ?? 0;
                                             elseif (strpos($status, 'at_office') !== false || $status === 'back_from_shop')
                                                 $count_at_office++;
                                         }
+
                                         $remaining_at_site = array_values(array_diff($all_items, $accumulated_moved));
                                         $total_items_count = count($all_items);
-                                        $returned_count = count($returned_items_list);
+                                        $returned_count = count($returned_items_list); // ของเดิมเก็บไว้ไม่ลบ
+                                
+                                        // 🔥 [เพิ่มใหม่] คำนวณจำนวนที่เสร็จทั้งหมด (คืนลูกค้าแล้ว + เสร็จหน้างาน) เพื่อไปแสดงบนปุ่ม
+                                        $total_done_items = array_unique(array_merge($returned_items_list, $finished_items_list));
+                                        $total_done_count = count($total_done_items);
 
-                                        // เช็ครายการรออนุมัติ
+                                        // Check for pending approvals
                                         $pending_approval_count = 0;
                                         foreach ($office_logs as $log) {
                                             if (($log['status'] ?? '') === 'back_from_shop' && !isset($log['approved'])) {
@@ -2552,12 +2702,17 @@ $total_votes = $rate_data['total_votes'] ?? 0;
                                             }
                                         }
 
-                                        // =================================================================================
-                                        // 🔥 [แก้ไขจุดนี้] ยึดสถานะจาก Database เป็นหลัก ถ้า completed คือจบเลย ไม่ต้องนับของ
-                                        // =================================================================================
-                                        $is_truly_finished = ($row['status'] === 'completed');
+                                        // Completion Logic
+                                        $db_status_completed = ($row['status'] === 'completed');
+                                        // 🔥 ปรับให้เช็คจาก $total_done_count แทน $returned_count เพื่อให้จบงานได้จริง
+                                        $all_items_returned = ($total_items_count > 0 && $total_done_count >= $total_items_count);
+                                        $is_truly_finished = ($db_status_completed && $all_items_returned);
 
-                                        $jsonStr = htmlspecialchars($rec_json_raw, ENT_QUOTES, 'UTF-8');
+                                        // 🔥 VITAL FIX: Add all_items to the data sent to JS
+                                        $rec_data['all_project_items'] = $all_items;
+
+                                        // Encode to JSON for the button
+                                        $jsonStr = htmlspecialchars(json_encode($rec_data, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
                                         ?>
 
                                         <?php if ($is_truly_finished): ?>
@@ -2565,11 +2720,9 @@ $total_votes = $rate_data['total_votes'] ?? 0;
                                                 style="cursor:pointer; background:#f0fdf4; border:1px solid #10b981; border-radius:10px; padding:10px; text-align:center; transition: all 0.2s;"
                                                 onmouseover="this.style.background='#dcfce7'; this.style.borderColor='#059669';"
                                                 onmouseout="this.style.background='#f0fdf4'; this.style.borderColor='#10b981';">
-
                                                 <div style="color:#15803d; font-weight:800; font-size:0.9rem; margin-bottom:4px;">
                                                     <i class="fas fa-check-circle"></i> เสร็จสิ้นกระบวนการ
                                                 </div>
-
                                                 <div
                                                     style="font-size:0.75rem; color:#166534; font-weight:600; display:flex; align-items:center; justify-content:center; gap:5px;">
                                                     <i class="fas fa-history"></i> ดู Timeline ทั้งหมด
@@ -2603,7 +2756,8 @@ $total_votes = $rate_data['total_votes'] ?? 0;
                                                     </button>
                                                 <?php endif; ?>
 
-                                                <?php if ($count_at_office > 0 || ($returned_count < $total_items_count && $total_items_count > 0)): ?>
+                                                <?php if ($count_at_office > 0 || ($total_done_count < $total_items_count && $total_items_count > 0)): ?>
+
                                                     <?php if ($count_at_office > 0): ?>
                                                         <button type="button" class="btn-receive btn-sm blue"
                                                             onclick='confirmOfficeReceipt(<?= $row['id']; ?>, <?= $jsonStr; ?>)'>
@@ -2614,6 +2768,10 @@ $total_votes = $rate_data['total_votes'] ?? 0;
                                                     <button type="button" class="btn-receive btn-sm purple"
                                                         onclick='returnToCustomer(<?= $row['id']; ?>, <?= $jsonStr; ?>)'>
                                                         <i class="fas fa-shipping-fast"></i> คืนลูกค้า
+                                                        <span
+                                                            style="font-size:0.7rem; background:rgba(255,255,255,0.2); padding:0 5px; border-radius:10px; margin-left:5px;">
+                                                            (<?= $total_done_count ?>/<?= $total_items_count ?>)
+                                                        </span>
                                                     </button>
                                                 <?php endif; ?>
 
@@ -2896,7 +3054,6 @@ $total_votes = $rate_data['total_votes'] ?? 0;
                 </table>
             </div>
         </div>
-    </div>
     </div>
 
     <script>
