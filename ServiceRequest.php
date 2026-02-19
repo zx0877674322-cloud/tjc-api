@@ -535,7 +535,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                             </div>
                         </div>
 
-                        <input type="hidden" name="contact_json" id="contact_json">
+                        <input type="hidden" name="contact_json" id="contact_json" value="<?php echo htmlspecialchars($val_contact_json, ENT_QUOTES, 'UTF-8'); ?>">
                         <div class="section-title"><i class="fas fa-tasks"></i> รายละเอียดงาน (Job Details)</div>
 
                         <div class="form-group" style="max-width: 50%;">
@@ -591,15 +591,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                         <?php foreach ($products_list as $p_index => $p_name): ?>
                                             <div class="product-row"
                                                 style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
-                                                <select name="items[<?php echo $index; ?>][product][]"
-                                                    class="form-control select2-search" style="width: 100%;" required>
-                                                    <option value="">-- เลือกรายการ --</option>
-                                                    <?php foreach ($fake_items as $fake): ?>
-                                                        <option value="<?php echo htmlspecialchars($fake); ?>" <?php echo ($fake == $p_name) ? 'selected' : ''; ?>>
-                                                            <?php echo htmlspecialchars($fake); ?>
-                                                        </option>
-                                                    <?php endforeach; ?>
-                                                </select>
+                                                
+                                                <div style="flex: 1; position: relative;">
+                                                    <select name="items[<?php echo $index; ?>][product][]"
+                                                        class="form-control select2-search product-dropdown" style="width: 100%;" 
+                                                        <?php echo ($get_site_id == 0) ? 'disabled style="display:none;"' : 'required'; ?>>
+                                                        <option value="">-- เลือกรายการ --</option>
+                                                        <?php foreach ($fake_items as $fake): ?>
+                                                            <option value="<?php echo htmlspecialchars($fake); ?>" <?php echo ($fake == $p_name) ? 'selected' : ''; ?>>
+                                                                <?php echo htmlspecialchars($fake); ?>
+                                                            </option>
+                                                        <?php endforeach; ?>
+                                                    </select>
+
+                                                    <input type="text" name="items[<?php echo $index; ?>][product][]" 
+                                                        class="form-control product-text-input" 
+                                                        placeholder="พิมพ์ชื่อสินค้า / อุปกรณ์..." 
+                                                        value="<?php echo htmlspecialchars($p_name); ?>"
+                                                        <?php echo ($get_site_id > 0) ? 'disabled style="display:none;"' : 'required'; ?>>
+                                                </div>
 
                                                 <?php if ($p_index > 0): ?>
                                                     <button type="button" onclick="removeRowAndCheck(this)"
@@ -621,8 +631,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                     <div class="grid-2">
                                         <div class="form-group" style="margin-bottom: 15px;">
                                             <label class="form-label" style="font-size:0.85rem;">ประเภทงาน</label>
-                                            <select name="items[<?php echo $index; ?>][job_type]"
-                                                class="form-control job-type-select" onchange="toggleJobOtherDynamic(this)">
+                                            <select name="items[<?php echo $index; ?>][job_type]" class="form-control job-type-select" onchange="toggleJobOtherDynamic(this)" required>
                                                 <option value="">-- เลือกประเภทงาน --</option>
                                                 <?php foreach ($job_types_list as $jt): ?>
                                                     <option value="<?php echo htmlspecialchars($jt['job_type_name']); ?>" <?php echo ($current_job_type == $jt['job_type_name']) ? 'selected' : ''; ?>>
@@ -697,8 +706,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     </div>
 
     <script>
-        <?php if (isset($alert_script))
-            echo $alert_script; ?>
+        <?php if (isset($alert_script)) echo $alert_script; ?>
         <?php if ($is_expired): ?>
             Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: '⚠️ หมดสัญญาประกันแล้ว', showConfirmButton: false, timer: 5000 });
         <?php endif; ?>
@@ -720,7 +728,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         fakeItemsList.forEach(item => {
             optionsStr += `<option value="${item}">${item}</option>`;
         });
+        
         const channelConfigs = <?php echo json_encode($contact_channels_list); ?>;
+
+        // 🔥 [ตัวแก้บั๊กขั้นเด็ดขาด] ส่งข้อมูล Contact โดยป้องกันอักขระพิเศษพัง
+        const existingContactsData = <?php echo json_encode(json_decode($val_contact_json ?? '[]', true) ?: []); ?>;
 
     </script>
     <script src="js/ServiceRequest.js"></script>

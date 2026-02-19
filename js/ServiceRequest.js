@@ -1,91 +1,156 @@
 flatpickr(".date-picker", { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true, locale: "th" });
     
     $(document).ready(function () {
-        // เริ่มต้น Select2
-        $('.select2-search').select2({ width: '100%' });
+    $('.select2-search').select2({ width: '100%' });
+    if (typeof calcDeadline === 'function') calcDeadline();
+    $('.job-type-select').each(function () { toggleJobOtherDynamic(this); });
+    if (typeof updateGlobalOptions === 'function') updateGlobalOptions();
 
-        if (typeof calcDeadline === 'function') calcDeadline();
-        $('.job-type-select').each(function () { toggleJobOtherDynamic(this); });
+    // ==========================================
+    // 🔥 5. คืนชีพช่องทางติดต่อ (พร้อมระบบจับ Error)
+    // ==========================================
+    $('#contact_list_container').empty();
+    let isContactLoaded = false;
 
-        // 🔥 1. เริ่มเช็คตัวเลือกซ้ำทันทีที่โหลดหน้า
-        updateGlobalOptions();
-    });
+    // --- เริ่มดักจับ Error ---
+    try {
+        console.log("🔍 ตรวจสอบข้อมูลดิบที่ได้รับจาก PHP:", existingContactsData);
+
+        if (typeof existingContactsData !== 'undefined' && Array.isArray(existingContactsData)) {
+            
+            if (existingContactsData.length > 0) {
+                console.log("✅ พบข้อมูลการติดต่อจำนวน", existingContactsData.length, "รายการ กำลังวาดกล่อง...");
+                
+                existingContactsData.forEach((contact, idx) => {
+                    console.log(`➡️ กำลังวาดรายการที่ ${idx + 1}:`, contact);
+                    // สั่งวาดกล่อง
+                    addContactRow(contact.detail || '', contact.ext || '', contact.channel || '');
+                });
+
+                isContactLoaded = true;
+                
+                // อัปเดตกลับเข้า input hidden ทันที
+                $('#contact_json').val(JSON.stringify(existingContactsData)); 
+                console.log("✅ คืนค่าช่องทางติดต่อสำเร็จทั้งหมด!");
+            } else {
+                console.log("⚠️ ข้อมูลที่ส่งมาเป็น Array ว่างเปล่า (ไม่มีประวัติการติดต่อ)");
+            }
+
+        } else {
+            console.error("❌ existingContactsData ไม่ได้เป็น Array หรือไม่มีตัวแปรนี้อยู่");
+        }
+    } catch (e) {
+        // 🔴 ถ้าพัง จะเด้งแจ้งเตือนหน้าจอทันที
+        console.error("💥 พบข้อผิดพลาดร้ายแรงในการสร้างกล่องติดต่อ:", e);
+        
+        Swal.fire({
+            icon: 'error',
+            title: 'พบข้อผิดพลาด (Contact Load Error)',
+            html: `<b>ระบบไม่สามารถดึงข้อมูลติดต่อเดิมได้</b><br><br><b>Error:</b> <span style="color:red;">${e.message}</span>`,
+            confirmButtonText: 'ตกลง'
+        });
+    }
+
+    // ถ้าไม่มีข้อมูลเก่ามาเลย ให้สร้างกล่องว่างๆ รอ 1 กล่อง
+    if (!isContactLoaded) {
+        console.log("ℹ️ สร้างกล่องติดต่อเปล่าๆ 1 กล่อง (เพราะไม่มีข้อมูลเก่า)");
+        addContactRow();
+    }
+});
 
     // 1. ฟังก์ชันเพิ่มกล่องรายการใหม่ (Main Box)
     function addServiceItemBox() {
-    let currentCount = $('#service-items-container .service-item-box').length + 1;
+        let currentCount = $('#service-items-container .service-item-box').length + 1;
 
-    // 🟢 เพิ่มส่วน Analysis (คำแนะนำ/การประเมิน) ลงไปท้ายสุดของ HTML String
-    const html = `
-        <div class="service-item-box" id="box_${itemIndex}" data-index="${itemIndex}">
-            <span class="item-counter">รายการที่ ${currentCount}</span>
-            <button type="button" class="btn-remove-item" onclick="removeServiceItem(this)" title="ลบรายการนี้"><i class="fas fa-trash-alt"></i></button>
+        // 🔥 เช็คว่าตอนนี้อยู่โหมดไหน (Manual หรือ Search)
+        const isManual = $('input[name="project_mode"]:checked').val() === 'manual';
+        const dropProps = isManual ? 'disabled style="display:none;"' : 'required';
+        const textProps = isManual ? 'required' : 'disabled style="display:none;"';
 
-            <div class="product-list-container">
-                <label class="form-label" style="font-size:0.9rem; color:var(--primary);">สินค้า / อุปกรณ์ <span style="color:var(--danger-text)">*</span></label>
-                <div class="product-row" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
-                    <select name="items[${itemIndex}][product][]" class="form-control select2-search" style="width: 100%;" required>
-                        ${optionsStr}
-                    </select>
-                    <button type="button" onclick="removeRowAndCheck(this)" style="border:none; background:#fee2e2; color:#ef4444; width:38px; height:38px; border-radius:6px; cursor:pointer; flex-shrink: 0;">
-                        <i class="fas fa-trash"></i>
+        // 🟢 สร้าง HTML String
+        const html = `
+            <div class="service-item-box" id="box_${itemIndex}" data-index="${itemIndex}">
+                <span class="item-counter">รายการที่ ${currentCount}</span>
+                <button type="button" class="btn-remove-item" onclick="removeServiceItem(this)" title="ลบรายการนี้"><i class="fas fa-trash-alt"></i></button>
+
+                <div class="product-list-container">
+                    <label class="form-label" style="font-size:0.9rem; color:var(--primary);">สินค้า / อุปกรณ์ <span style="color:var(--danger-text)">*</span></label>
+                    <div class="product-row" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
+                        <div style="flex: 1; position: relative;">
+                            <select name="items[${itemIndex}][product][]" class="form-control select2-search product-dropdown" style="width: 100%;" ${dropProps}>
+                                ${optionsStr}
+                            </select>
+                            <input type="text" name="items[${itemIndex}][product][]" class="form-control product-text-input" placeholder="พิมพ์ชื่อสินค้า / อุปกรณ์..." ${textProps}>
+                        </div>
+                        <button type="button" onclick="removeRowAndCheck(this)" style="border:none; background:#fee2e2; color:#ef4444; width:38px; height:38px; border-radius:6px; cursor:pointer; flex-shrink: 0;">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div style="text-align: right; margin-bottom: 20px;">
+                    <button type="button" onclick="addProductToBox(this, ${itemIndex})" style="background:none; border:none; color:var(--accent-start); font-size:0.85rem; cursor:pointer; font-weight:600;">
+                        <i class="fas fa-plus-circle"></i> เพิ่มสินค้าในรายการนี้
                     </button>
                 </div>
-            </div>
 
-            <div style="text-align: right; margin-bottom: 20px;">
-                <button type="button" onclick="addProductToBox(this, ${itemIndex})" style="background:none; border:none; color:var(--accent-start); font-size:0.85rem; cursor:pointer; font-weight:600;">
-                    <i class="fas fa-plus-circle"></i> เพิ่มสินค้าในรายการนี้
-                </button>
-            </div>
+                <div class="grid-2">
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label class="form-label" style="font-size:0.85rem;">ประเภทงาน</label>
+                        <select name="items[${itemIndex}][job_type]" class="form-control job-type-select" onchange="toggleJobOtherDynamic(this)" required>
+                            ${jobOptionsHtml}
+                        </select>
+                        <input type="text" name="items[${itemIndex}][job_other]" class="form-control mt-2 job-other-input" style="display:none;" placeholder="ระบุประเภทอื่นๆ...">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label" style="font-size:0.85rem;">อาการ / ปัญหาที่พบ <span style="color:var(--danger-text)">*</span></label>
+                        <textarea name="items[${itemIndex}][issue]" class="form-control" rows="2" required placeholder="ระบุอาการเสีย..." style="min-height: 80px;"></textarea>
+                    </div>
+                </div>
 
-            <div class="grid-2">
-                <div class="form-group" style="margin-bottom: 15px;">
-                    <label class="form-label" style="font-size:0.85rem;">ประเภทงาน</label>
-                    <select name="items[${itemIndex}][job_type]" class="form-control job-type-select" onchange="toggleJobOtherDynamic(this)">
-                        ${jobOptionsHtml}
-                    </select>
-                    <input type="text" name="items[${itemIndex}][job_other]" class="form-control mt-2 job-other-input" style="display:none;" placeholder="ระบุประเภทอื่นๆ...">
-                </div>
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label" style="font-size:0.85rem;">อาการ / ปัญหาที่พบ <span style="color:var(--danger-text)">*</span></label>
-                    <textarea name="items[${itemIndex}][issue]" class="form-control" rows="2" required placeholder="ระบุอาการเสีย..." style="min-height: 80px;"></textarea>
-                </div>
-            </div>
-
-            <div class="grid-2" style="margin-top: 15px; border-top: 1px dashed #e2e8f0; padding-top: 15px;">
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label" style="font-size:0.85rem; color:#059669;"><i class="fas fa-microscope"></i> คำแนะนำเบื้องต้น</label>
-                    <textarea name="items[${itemIndex}][initial_advice]" class="form-control" rows="1" placeholder="คำแนะนำ..." style="min-height: 40px; font-size:0.9rem;"></textarea>
-                </div>
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label" style="font-size:0.85rem; color:#d97706;"><i class="fas fa-clipboard-check"></i> การประเมิน</label>
-                    <textarea name="items[${itemIndex}][assessment]" class="form-control" rows="1" placeholder="การประเมิน..." style="min-height: 40px; font-size:0.9rem;"></textarea>
+                <div class="grid-2" style="margin-top: 15px; border-top: 1px dashed #e2e8f0; padding-top: 15px;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label" style="font-size:0.85rem; color:#059669;"><i class="fas fa-microscope"></i> คำแนะนำเบื้องต้น</label>
+                        <textarea name="items[${itemIndex}][initial_advice]" class="form-control" rows="1" placeholder="คำแนะนำ..." style="min-height: 40px; font-size:0.9rem;"></textarea>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label" style="font-size:0.85rem; color:#d97706;"><i class="fas fa-clipboard-check"></i> การประเมิน</label>
+                        <textarea name="items[${itemIndex}][assessment]" class="form-control" rows="1" placeholder="การประเมิน..." style="min-height: 40px; font-size:0.9rem;"></textarea>
+                    </div>
                 </div>
             </div>
-            </div>
-    `;
+        `;
 
-    const newBox = $(html).appendTo('#service-items-container');
-    
-    // Init Select2 ให้ Box ใหม่
-    newBox.find('.select2-search').select2({ width: '100%' });
-    
-    // สั่งเช็คซ้ำทันทีเพื่อให้ Box ใหม่รู้สถานะ
-    updateGlobalOptions();
+        const newBox = $(html).appendTo('#service-items-container');
+        
+        // Init Select2 ให้ Box ใหม่ แล้วตรวจสอบว่าต้องซ่อนไหม
+        let selectEl = newBox.find('.select2-search');
+        selectEl.select2({ width: '100%' });
+        if (isManual) { selectEl.next('.select2-container').hide(); }
+        
+        // สั่งเช็คซ้ำทันทีเพื่อให้ Box ใหม่รู้สถานะ
+        updateGlobalOptions();
 
-    itemIndex++;
-}
+        itemIndex++;
+    }
 
     // 2. ฟังก์ชันเพิ่มช่องสินค้าในกล่องเดิม
     function addProductToBox(btn, boxIdx) {
         const container = $(btn).closest('.service-item-box').find('.product-list-container');
+        
+        // 🔥 เช็คโหมดปัจจุบัน
+        const isManual = $('input[name="project_mode"]:checked').val() === 'manual';
+        const dropProps = isManual ? 'disabled style="display:none;"' : 'required';
+        const textProps = isManual ? 'required' : 'disabled style="display:none;"';
 
         const productHtml = `
             <div class="product-row" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center; opacity: 0; transform: translateY(-5px); transition: all 0.3s;">
-                <select name="items[${boxIdx}][product][]" class="form-control select2-search" style="width: 100%;" required>
-                    ${optionsStr}
-                </select>
+                <div style="flex: 1; position: relative;">
+                    <select name="items[${boxIdx}][product][]" class="form-control select2-search product-dropdown" style="width: 100%;" ${dropProps}>
+                        ${optionsStr}
+                    </select>
+                    <input type="text" name="items[${boxIdx}][product][]" class="form-control product-text-input" placeholder="พิมพ์ชื่อสินค้า / อุปกรณ์..." ${textProps}>
+                </div>
                 <button type="button" onclick="removeRowAndCheck(this)" style="border:none; background:#fee2e2; color:#ef4444; width:38px; height:38px; border-radius:6px; cursor:pointer; flex-shrink: 0;">
                     <i class="fas fa-trash"></i>
                 </button>
@@ -95,7 +160,9 @@ flatpickr(".date-picker", { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr
         const newRow = $(productHtml).appendTo(container);
         
         // Init Select2
-        newRow.find('.select2-search').select2({ width: '100%' });
+        let selectEl = newRow.find('.select2-search');
+        selectEl.select2({ width: '100%' });
+        if (isManual) { selectEl.next('.select2-container').hide(); }
 
         // Animation
         setTimeout(() => { newRow.css({ opacity: 1, transform: 'translateY(0)' }); }, 10);
@@ -272,7 +339,6 @@ flatpickr(".date-picker", { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr
         $('#contact_json').val(JSON.stringify(contacts));
     });
     function toggleProjectMode(mode) {
-        // เพิ่ม ID ใหม่ลงในลิสต์
         const inputIds = [
             'inp_site_code', 'inp_contract_no', 'inp_budget', 
             'inp_project_name', 'inp_customer_name', 'inp_province', 
@@ -302,6 +368,11 @@ flatpickr(".date-picker", { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr
                     }
                 }
             });
+
+            // 🔥 โหมด Manual: ซ่อน Dropdown (ปิดการใช้งาน) แล้วโชว์ช่องพิมพ์ (เปิดการใช้งาน)
+            $('.product-dropdown').prop('disabled', true).next('.select2-container').hide();
+            $('.product-text-input').prop('disabled', false).show();
+
         } else {
             searchSection.style.display = 'block';
             reqMarkProj.style.display = 'none';
@@ -314,6 +385,10 @@ flatpickr(".date-picker", { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr
                     el.classList.add('readonly-field'); 
                 }
             });
+
+            // 🔥 โหมด Search: เปิด Dropdown แล้วซ่อนช่องพิมพ์
+            $('.product-dropdown').prop('disabled', false).next('.select2-container').show();
+            $('.product-text-input').prop('disabled', true).hide();
         }
     }
     

@@ -31,7 +31,7 @@ if (isset($_POST['action']) && $_POST['action'] == 'get_latest_item_data') {
     $req_id = intval($_POST['req_id']);
 
     // 🔥 แก้ SQL: ดึง project_item_name (ซึ่งพี่ใช้เก็บรายชื่อสินค้า)
-    $stmt = $conn->prepare("SELECT received_item_list, project_item_name FROM service_requests WHERE id = ?");
+    $stmt = $conn->prepare("SELECT received_item_list, project_item_name, contact_detail FROM service_requests WHERE id = ?");
     $stmt->bind_param("i", $req_id);
     $stmt->execute();
     $res = $stmt->get_result();
@@ -46,6 +46,7 @@ if (isset($_POST['action']) && $_POST['action'] == 'get_latest_item_data') {
 
         // 🔥 ส่งข้อมูลสินค้าตั้งต้นจากฟิลด์ project_item_name ไปให้ JS ด้วย
         $response['project_item_name_raw'] = $row['project_item_name'];
+        $response['contact_detail'] = json_decode($row['contact_detail'] ?? '[]', true);
     }
 
     echo json_encode($response);
@@ -282,29 +283,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
                 // --- 4. ปุ่มเปิดรูป (ถ้ามี) ---
                 if (!empty($files_to_render)) {
-                    // เช็คว่าส่งหลายชิ้นแต่แนบไฟล์เดียว (บิลรวม) หรือไม่
                     $is_batch = count($batch_items) > 1;
                     $is_single_file_for_batch = ($is_batch && count($files_to_render) === 1);
 
                     foreach ($files_to_render as $idx => $f) {
                         $delay = 0.3 + ($idx * 0.1);
-
-                        // 🌟 กำหนดชื่อปุ่มตาม Logic ที่คุยกัน
                         if (!$is_batch) {
                             $btn_label = 'ดูรูปหลักฐานแนบ';
                         } else if ($is_single_file_for_batch) {
-                            // กรณีหลายชิ้นรูปเดียว: ถ้าส่งร้านนอกโชว์ชื่อร้าน ถ้ากลับบริษัทโชว์ว่ารูปรวม
                             $btn_label = ($main_type === 'external') ? "ใบส่งซ่อม ({$s_name})" : "ดูรูปหลักฐานรวม";
                         } else {
-                            // กรณีแยกรูปรายชิ้น: โชว์ชื่อสินค้า
                             $btn_label = "ดูรูป ({$f['label']})";
                         }
 
-                        // 🔥 ดีไซน์ปุ่มแบบเดิมที่ลูกพี่ชอบ (เด้งๆ มีมิติ กว้างเต็มการ์ด)
+                        // 🔥 เทคนิคเอากล่องทับลิงก์
                         $progress_msg .= "
-                        <div class='log-anim' style='margin-top:8px; animation-delay: {$delay}s;'>
-                            <a href='uploads/proofs/{$f['file']}' target='_blank' class='btn-smart-action' style='background: {$btn_grad}; box-shadow: 0 4px 10px {$btn_shadow};'>
-                                <i class='fas fa-image fa-lg'></i> {$btn_label}
+                        <div style='margin-top:10px; animation-delay: {$delay}s;'>
+                            <a href='uploads/proofs/{$f['file']}' target='_blank' style='text-decoration:none !important; display:block;'>
+                                <div style='background: {$btn_grad}; padding: 12px 10px; border-radius: 8px; text-align: center; box-shadow: 0 4px 6px {$btn_shadow}; cursor: pointer;'>
+                                    <span style='color: #ffffff !important; font-weight: 700; font-size: 0.95rem; font-family: Prompt, sans-serif;'>
+                                        <i class='fas fa-image fa-lg' style='color: #ffffff !important; margin-right:5px;'></i> {$btn_label}
+                                    </span>
+                                </div>
                             </a>
                         </div>";
                     }
@@ -523,14 +523,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $header_bg = 'linear-gradient(135deg, #3b82f6, #1d4ed8)';
             $border_left = '#3b82f6';
             $pulse_color = 'rgba(59, 130, 246, 0.5)';
-            $btn_grad = 'linear-gradient(to right, #3b82f6, #1e40af)';
-            $btn_shadow = 'rgba(59, 130, 246, 0.4)';
+            $btn_grad = 'linear-gradient(135deg, #3b82f6, #2563eb)'; // ปรับ gradient ปุ่มให้สวยขึ้น
+            $btn_shadow = 'rgba(37, 99, 235, 0.3)';
 
             $progress_msg = "
             <style>
                 @keyframes fadeInUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
                 @keyframes pulseBlue { 0% { box-shadow: 0 0 0 0 {$pulse_color}; } 70% { box-shadow: 0 0 0 10px rgba(0,0,0,0); } 100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); } }
                 .log-anim { animation: fadeInUp 0.5s ease forwards; }
+                
+                /* 🔥 CSS บังคับปุ่ม (กันสีม่วง) */
+                .btn-office-full-new {
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    gap: 8px !important;
+                    width: 100% !important;
+                    padding: 12px 0 !important;
+                    border-radius: 10px !important;
+                    color: #ffffff !important;
+                    text-decoration: none !important;
+                    font-weight: 700 !important;
+                    font-size: 0.95rem !important;
+                    border: none !important;
+                    box-sizing: border-box !important;
+                    transition: all 0.2s !important;
+                }
+                .btn-office-full-new:hover {
+                    transform: translateY(-2px);
+                    filter: brightness(1.1);
+                }
             </style>
             <div style='font-family:Prompt, sans-serif; position:relative;'>";
 
@@ -568,11 +590,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $progress_msg .= "</div></div>";
             }
 
+            // 🔥 [จุดที่ลูกพี่ต้องการแก้] เปลี่ยนคลาสปุ่มและบังคับ Inline Style
             if ($file_name) {
                 $progress_msg .= "
-                <div class='log-anim' style='margin-top:10px; animation-delay: 0.3s;'>
-                    <a href='uploads/proofs/{$file_name}' target='_blank' class='btn-office-full' style='background: {$btn_grad}; box-shadow: 0 4px 10px {$btn_shadow};'>
-                        <i class='fas fa-image fa-lg'></i> ดูรูปหลักฐานแนบ
+                <div style='margin-top:15px; animation-delay: 0.3s;'>
+                    <a href='uploads/proofs/{$file_name}' target='_blank' style='text-decoration:none !important; display:block;'>
+                        <div style='background: {$btn_grad}; padding: 12px 10px; border-radius: 8px; text-align: center; box-shadow: 0 4px 6px {$btn_shadow}; cursor: pointer;'>
+                            <span style='color: #ffffff !important; font-weight: 700; font-size: 0.95rem; font-family: Prompt, sans-serif;'>
+                                <i class='fas fa-image fa-lg' style='color: #ffffff !important; margin-right:5px;'></i> ดูรูปหลักฐานแนบ
+                            </span>
+                        </div>
                     </a>
                 </div>";
             }
