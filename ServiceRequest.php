@@ -6,7 +6,7 @@ require_once 'auth.php';
 require_once 'db_connect.php';
 
 // ==========================================================================
-//  PART 1: DATA PREPARATION (LOGIC)
+//  PART 1: DATA PREPARATION (LOGIC) - UPDATED FOR MANUAL MODE
 // ==========================================================================
 
 $edit_id = isset($_GET['edit_id']) ? intval($_GET['edit_id']) : 0;
@@ -22,26 +22,33 @@ if ($edit_id > 0) {
     $stmt_edit->bind_param("i", $edit_id);
     $stmt_edit->execute();
     $res_edit = $stmt_edit->get_result();
+    
     if ($res_edit->num_rows > 0) {
         $row_edit = $res_edit->fetch_assoc();
-        if (empty($get_site_id))
+        
+        // ถ้า URL ไม่มี ID ให้ใช้ ID จากฐานข้อมูล
+        if (empty($get_site_id)) {
             $get_site_id = $row_edit['site_id'];
+        }
 
         // พยายาม decode JSON จาก field project_item_name
         $json_try = json_decode($row_edit['project_item_name'] ?? '[]', true);
 
         if (is_array($json_try) && !empty($json_try)) {
-            // เช็คว่าเป็นโครงสร้างใหม่ (มี key 'product') หรือเก่า
             if (isset($json_try[0]['product'])) {
+                // โครงสร้างใหม่ (JSON มี key ครบ) -> ใช้ได้เลย
                 $val_items_data = $json_try;
             } else {
-                // แปลงข้อมูลเก่าให้เข้ากับโครงสร้างใหม่
+                // แปลงข้อมูลเก่า (Legacy) ให้เข้าโครงสร้างใหม่
                 foreach ($json_try as $index => $item_name) {
                     $val_items_data[] = [
                         'product' => $item_name,
                         'job_type' => ($index == 0) ? ($row_edit['job_type'] ?? '') : '',
                         'job_other' => ($index == 0) ? ($row_edit['job_type_other'] ?? '') : '',
-                        'issue' => ($index == 0) ? ($row_edit['issue_description'] ?? '') : ''
+                        'issue' => ($index == 0) ? ($row_edit['issue_description'] ?? '') : '',
+                        // ดึงค่าเก่ามาใส่ในตัวแรก (ถ้ามี)
+                        'initial_advice' => ($index == 0) ? ($row_edit['initial_advice'] ?? '') : '',
+                        'assessment' => ($index == 0) ? ($row_edit['assessment'] ?? '') : ''
                     ];
                 }
             }
@@ -51,27 +58,33 @@ if ($edit_id > 0) {
 
 // ถ้าไม่มีข้อมูลเลย ให้สร้าง array ว่างๆ ไว้ 1 อัน (เพื่อให้แสดงกล่องแรกเสมอ)
 if (empty($val_items_data)) {
-    $val_items_data[] = ['product' => '', 'job_type' => '', 'job_other' => '', 'issue' => ''];
+    $val_items_data[] = [
+        'product' => '',
+        'job_type' => '',
+        'job_other' => '',
+        'issue' => '',
+        'initial_advice' => '',
+        'assessment' => ''
+    ];
 }
 
-// 2. เตรียมตัวแปรอื่นๆ
+// 2. เตรียมตัวแปรอื่นๆ (General Info)
 $val_remark = $row_edit['remark'] ?? '';
 $val_request_date = isset($row_edit['request_date']) ? date('Y-m-d H:i', strtotime($row_edit['request_date'])) : date('Y-m-d H:i');
 $val_receiver = $row_edit['receiver_by'] ?? ($_SESSION['fullname'] ?? '');
 $val_reporter = $row_edit['reporter_name'] ?? '';
-$val_contact_type = $row_edit['contact_channel'] ?? '';
-$val_contact_detail = $row_edit['contact_detail'] ?? '';
+$val_contact_json = $row_edit['contact_detail'] ?? '[]'; // JSON string
 $val_urgency = $row_edit['urgency'] ?? 'normal';
-$val_initial_advice = $row_edit['initial_advice'] ?? '';
-$val_assessment = $row_edit['assessment'] ?? '';
 
-// 3. เตรียมข้อมูลโครงการ
+// 3. เตรียมข้อมูลโครงการ (Project Info) - รองรับทั้ง Search และ Manual
 $site_code_show = "-";
 $project_name_show = "-";
-$customer_info_show = "-";
+$customer_name_show = "-"; 
+$province_show = "-";      
 $contract_info = ['start' => '-', 'end' => '-', 'budget' => '-', 'no' => '-'];
 $is_expired = false;
 
+// กรณี A: ดึงจากฐานข้อมูลโครงการ (Site ID > 0)
 if ($get_site_id > 0) {
     $sql_proj = "SELECT a.project_name, a.contract_number, a.project_budget, a.contract_start_date, a.contract_end_date, 
                         c.customer_name, c.province 
@@ -86,7 +99,10 @@ if ($get_site_id > 0) {
     if ($row_proj = $res_proj->fetch_assoc()) {
         $site_code_show = $get_site_id;
         $project_name_show = $row_proj['project_name'];
-        $customer_info_show = ($row_proj['customer_name'] ?? '-') . " (" . ($row_proj['province'] ?? '-') . ")";
+        // ดึงแบบแยก
+        $customer_name_show = $row_proj['customer_name'] ?? '-';
+        $province_show      = $row_proj['province'] ?? '-';
+
         $contract_info['no'] = $row_proj['contract_number'] ?? '-';
         $contract_info['budget'] = !empty($row_proj['project_budget']) ? number_format($row_proj['project_budget'], 2) : '-';
 
@@ -95,20 +111,42 @@ if ($get_site_id > 0) {
 
         if (!empty($row_proj['contract_end_date'])) {
             $contract_info['end'] = date('d/m/Y', strtotime($row_proj['contract_end_date']));
-            if ($row_proj['contract_end_date'] < date('Y-m-d'))
-                $is_expired = true;
+            if ($row_proj['contract_end_date'] < date('Y-m-d')) $is_expired = true;
         }
     }
-} else {
-    // โหลด List โครงการทั้งหมดสำหรับ Dropdown ค้นหา
-    $all_projects = [];
-    $sql_all = "SELECT site_id, project_name FROM project_contracts ORDER BY site_id ASC";
-    $res_all = $conn->query($sql_all);
-    while ($row = $res_all->fetch_assoc())
-        $all_projects[] = $row;
+} 
+// กรณี B: ดึงจากข้อมูลที่กรอกเอง (Manual) เมื่อแก้ไข (Edit Mode)
+else if ($edit_id > 0 && !empty($row_edit)) {
+    // ดึงค่าจากคอลัมน์ manual_... ที่บันทึกไว้ใน service_requests
+    $site_code_show    = $row_edit['manual_site_code'] ?? '-';
+    $project_name_show = $row_edit['manual_project_name'] ?? '-';
+    
+    // ดึงจาก column ใหม่
+    $customer_name_show = $row_edit['manual_customer_name'] ?? '-';
+    $province_show      = $row_edit['manual_province'] ?? '-';
+    
+    $contract_info['no']     = $row_edit['manual_contract_no'] ?? '-';
+    $contract_info['budget'] = $row_edit['manual_budget'] ?? '-';
+
+    // แปลงวันที่จาก DB (Y-m-d) เป็น d/m/Y
+    if (!empty($row_edit['manual_start_date']))
+        $contract_info['start'] = date('d/m/Y', strtotime($row_edit['manual_start_date']));
+
+    if (!empty($row_edit['manual_end_date'])) {
+        $contract_info['end'] = date('d/m/Y', strtotime($row_edit['manual_end_date']));
+        if ($row_edit['manual_end_date'] < date('Y-m-d')) $is_expired = true;
+    }
 }
 
-// 4. ข้อมูล Fake Items (สำหรับ Dropdown)
+// โหลด List โครงการทั้งหมดสำหรับ Dropdown ค้นหา
+$all_projects = [];
+$sql_all = "SELECT site_id, project_name FROM project_contracts ORDER BY site_id ASC";
+$res_all = $conn->query($sql_all);
+while ($row = $res_all->fetch_assoc()) {
+    $all_projects[] = $row;
+}
+
+// 4. ข้อมูล Fake Items (สำหรับ Dropdown สินค้า)
 $fake_items = [
     "Desktop PC (คอมพิวเตอร์ตั้งโต๊ะ)",
     "Notebook (โน้ตบุ๊ก)",
@@ -122,17 +160,17 @@ $fake_items = [
     "Software / Program",
     "Other"
 ];
-// --- [แก้ไข] 5. ดึงข้อมูลประเภทงานจากฐานข้อมูลเท่านั้น (ไม่มีการ Fix ค่า) ---
+
+// 5. ดึงข้อมูลประเภทงานจากฐานข้อมูล (Dynamic Job Types)
 $job_types_list = [];
 $res_jt = $conn->query("SELECT * FROM job_types ORDER BY id ASC");
-
-// ดึงข้อมูลมาใส่ Array ตามจริง ถ้าไม่มีข้อมูล $job_types_list จะเป็น [] (ว่างเปล่า)
 if ($res_jt && $res_jt->num_rows > 0) {
     while ($jt = $res_jt->fetch_assoc()) {
         $job_types_list[] = $jt;
     }
 }
 
+// 6. ดึงช่องทางติดต่อ (Contact Channels)
 $contact_channels_list = [];
 $res_cc = $conn->query("SELECT * FROM contact_channels ORDER BY id ASC");
 if ($res_cc) {
@@ -150,73 +188,80 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $request_date = $_POST['request_date'] ?? date('Y-m-d H:i');
     $expected_finish = date('Y-m-d H:i:s', strtotime($request_date . ' +48 hours'));
 
-    // --- [Logic ใหม่] จัดการข้อมูล Items ที่ส่งมาเป็น Array ---
+    // --- 1. รับค่า Manual Inputs (แยกลูกค้า/จังหวัด) ---
+    $man_code     = trim($_POST['manual_site_code'] ?? '');
+    $man_contract = trim($_POST['manual_contract_no'] ?? '');
+    $man_budget   = trim($_POST['manual_budget'] ?? '');
+    $man_name     = trim($_POST['manual_project_name'] ?? '');
+    $man_cust_name = trim($_POST['manual_customer_name'] ?? ''); 
+    $man_province  = trim($_POST['manual_province'] ?? '');
+    
+    // แปลงวันที่
+    function convertDateToDB($dateStr) {
+        if (empty($dateStr) || $dateStr == '-') return null;
+        $d = DateTime::createFromFormat('d/m/Y', $dateStr);
+        return $d ? $d->format('Y-m-d') : null;
+    }
+    $man_start = convertDateToDB($_POST['manual_start_date'] ?? '');
+    $man_end   = convertDateToDB($_POST['manual_end_date'] ?? '');
+
+    // --- 2. จัดการ Items (เหมือนเดิม) ---
     $items_data_to_save = [];
-    $issue_summary = []; 
-    $collected_job_types = []; // [แก้ไข 1] สร้าง Array ไว้เก็บประเภทงานทั้งหมด
+    $issue_summary = []; $advice_summary = []; $assess_summary = []; $collected_job_types = [];
 
     if (isset($_POST['items']) && is_array($_POST['items'])) {
         foreach ($_POST['items'] as $index => $itm) {
-            // 1. ตรวจสอบข้อมูลสินค้า (product อาจเป็น String หรือ Array)
             $product_input = $itm['product'] ?? [];
             $final_products = [];
-
             if (is_array($product_input)) {
                 $final_products = array_values(array_filter($product_input, function($v) { return !empty($v); }));
             } else if (!empty($product_input)) {
                 $final_products = [$product_input];
             }
 
-            // 2. ถ้ามีสินค้า และ มีอาการเสีย -> บันทึก
             if (!empty($final_products) && !empty($itm['issue'])) {
-                
+                $this_advice = trim($itm['initial_advice'] ?? '');
+                $this_assess = trim($itm['assessment'] ?? '');
+
                 $items_data_to_save[] = [
-                    'product'   => $final_products,
-                    'job_type'  => $itm['job_type'] ?? '',
+                    'product' => $final_products,
+                    'job_type' => $itm['job_type'] ?? '',
                     'job_other' => trim($itm['job_other'] ?? ''),
-                    'issue'     => trim($itm['issue'])
+                    'issue' => trim($itm['issue']),
+                    'initial_advice' => $this_advice,
+                    'assessment' => $this_assess
                 ];
 
-                // สร้างสรุปอาการ (Legacy field)
                 $prod_names = implode(", ", $final_products);
                 $issue_summary[] = ($index + 1) . ". [" . $prod_names . "] : " . trim($itm['issue']);
-
-                // [แก้ไข 2] เก็บประเภทงานทั้งหมดลง Array (ไม่เอาค่าว่าง)
-                if (!empty($itm['job_type'])) {
-                    $collected_job_types[] = $itm['job_type'];
-                }
+                if (!empty($this_advice)) $advice_summary[] = "(" . $prod_names . "): " . $this_advice;
+                if (!empty($this_assess)) $assess_summary[] = "(" . $prod_names . "): " . $this_assess;
+                if (!empty($itm['job_type'])) $collected_job_types[] = $itm['job_type'];
             }
         }
     }
 
-    // เตรียมข้อมูล JSON และ String สำหรับบันทึก
     $item_name_json = !empty($items_data_to_save) ? json_encode($items_data_to_save, JSON_UNESCAPED_UNICODE) : "[]";
     $issue_final = !empty($issue_summary) ? implode("\n", $issue_summary) : "-";
+    $initial_advice_final = !empty($advice_summary) ? implode("\n", $advice_summary) : ""; 
+    $assessment_final = !empty($assess_summary) ? implode("\n", $assess_summary) : "";
     
-    // [แก้ไข 3] รวมประเภทงานทั้งหมดคั่นด้วยคอมม่า (ตัดตัวซ้ำออก)
     $unique_types = array_unique($collected_job_types);
     $job_type_final = !empty($unique_types) ? implode(', ', $unique_types) : 'other';
-    
-    // หมายเหตุ: เช็คใน Database ด้วยว่าคอลัมน์ job_type เป็น VARCHAR(255) หรือไม่ เพื่อให้เก็บข้อความยาวๆ ได้พอ
     $job_other_final = ($job_type_final == 'other' && isset($items_data_to_save[0]['job_other'])) ? $items_data_to_save[0]['job_other'] : '';
-
-    // รับค่าอื่นๆ
-    $assess = trim($_POST['assessment']);
-    $remark = trim($_POST['remark']);
+    
+    $remark = trim($_POST['remark'] ?? '');
     $user_updated = $_SESSION['fullname'] ?? 'System';
     $receiver_by = $_POST['receiver_by'];
     $reporter_name = trim($_POST['reporter_name']);
-    
-    // รับค่า JSON ตัวเดียวจบ (ข้อมูลเบอร์/ไลน์/ต่อ รวมอยู่ในนี้หมดแล้ว)
     $contact_json = $_POST['contact_json'] ?? '[]';
-    
     $urgency = $_POST['urgency'];
-    $initial_advice = trim($_POST['initial_advice']);
     $status_to_save = 'pending';
 
-    // ❌ [ลบส่วนเช็ค $contact_ext ทิ้งไปเลยครับ มันไม่ได้ใช้แล้ว] ❌
+    // เงื่อนไข: ถ้า Manual (ID=0) ต้องมีชื่อโครงการและลูกค้า
+    $is_valid = ($site_id > 0) || ($site_id == 0 && !empty($man_name) && !empty($man_cust_name));
 
-    if (!empty($site_id)) {
+    if ($is_valid) {
         $req_id_update = isset($_POST['req_id_for_update']) ? intval($_POST['req_id_for_update']) : 0;
 
         if ($req_id_update > 0) {
@@ -225,16 +270,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     site_id=?, request_date=?, project_item_name=?, issue_description=?, assessment=?, remark=?, 
                     updated_by=?, expected_finish_date=?, 
                     receiver_by=?, reporter_name=?, contact_detail=?, 
-                    job_type=?, job_type_other=?, urgency=?, initial_advice=?
+                    job_type=?, job_type_other=?, urgency=?, initial_advice=?,
+                    manual_site_code=?, manual_contract_no=?, manual_budget=?, manual_project_name=?, manual_customer_name=?, manual_province=?, manual_start_date=?, manual_end_date=?
                     WHERE id=?";
             $stmt = $conn->prepare($sql);
             
-            // แก้ไข: ใช้ $contact_json และจำนวนตัวแปรครบ 16 ตัว
-            $stmt->bind_param("issssssssssssssi",
-                $site_id, $request_date, $item_name_json, $issue_final, $assess, $remark,
+            // 🔴 แก้ไขตรงนี้: สตริงต้องมี 24 ตัว (i=1, s=22, i=1)
+            // issssssssssssssssssssssi
+            $stmt->bind_param("issssssssssssssssssssssi",
+                $site_id, $request_date, $item_name_json, $issue_final, $assessment_final, $remark,
                 $user_updated, $expected_finish,
-                $receiver_by, $reporter_name, $contact_json, // <--- ส่ง JSON เข้าไป
-                $job_type_final, $job_other_final, $urgency, $initial_advice, $req_id_update
+                $receiver_by, $reporter_name, $contact_json,
+                $job_type_final, $job_other_final, $urgency, $initial_advice_final,
+                $man_code, $man_contract, $man_budget, $man_name, $man_cust_name, $man_province, $man_start, $man_end,
+                $req_id_update
             );
             $msg_title = "อัปเดตข้อมูลเรียบร้อย";
         } else {
@@ -243,16 +292,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         site_id, request_date, project_item_name, issue_description, assessment, remark, 
                         updated_by, expected_finish_date, status,
                         receiver_by, reporter_name, contact_detail, 
-                        job_type, job_type_other, urgency, initial_advice
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                        job_type, job_type_other, urgency, initial_advice,
+                        manual_site_code, manual_contract_no, manual_budget, manual_project_name, manual_customer_name, manual_province, manual_start_date, manual_end_date
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             $stmt = $conn->prepare($sql);
             
-            // แก้ไข: ลด s ลง 1 ตัว และส่งแค่ $contact_json
-            $stmt->bind_param("isssssssssssssss",
-                $site_id, $request_date, $item_name_json, $issue_final, $assess, $remark,
-                $user_updated, $expected_finish, $status_to_save,
-                $receiver_by, $reporter_name, $contact_json, // <--- ส่ง JSON เข้าไป
-                $job_type_final, $job_other_final, $urgency, $initial_advice
+            // 🔴 แก้ไขตรงนี้: สตริงต้องมี 23 ตัว (i=1, s=22) ไม่มี WHERE ID
+            // issssssssssssssssssssss
+            $stmt->bind_param("isssssssssssssssssssssss", 
+                $site_id,               // 1 (i)
+                $request_date,          // 2 (s)
+                $item_name_json,        // 3 (s)
+                $issue_final,           // 4 (s)
+                $assessment_final,      // 5 (s)
+                $remark,                // 6 (s)
+                $user_updated,          // 7 (s)
+                $expected_finish,       // 8 (s)
+                $status_to_save,        // 9 (s) - คือ 'pending'
+                $receiver_by,           // 10 (s)
+                $reporter_name,         // 11 (s)
+                $contact_json,          // 12 (s)
+                $job_type_final,        // 13 (s)
+                $job_other_final,       // 14 (s)
+                $urgency,               // 15 (s)
+                $initial_advice_final,  // 16 (s)
+                $man_code,              // 17 (s)
+                $man_contract,          // 18 (s)
+                $man_budget,            // 19 (s)
+                $man_name,              // 20 (s)
+                $man_cust_name,         // 21 (s)
+                $man_province,          // 22 (s)
+                $man_start,             // 23 (s)
+                $man_end                // 24 (s)
             );
             $msg_title = "เปิดใบงานเรียบร้อย";
         }
@@ -263,7 +334,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $alert_script = "Swal.fire({icon:'error', title:'เกิดข้อผิดพลาด', text:'" . $conn->error . "'});";
         }
     } else {
-        $alert_script = "Swal.fire({icon:'warning', title:'แจ้งเตือน', text:'กรุณาเลือกโครงการ'});";
+        $alert_script = "Swal.fire({icon:'warning', title:'ข้อมูลไม่ครบ', text:'กรุณาระบุชื่อโครงการและลูกค้าให้ครบถ้วน'});";
     }
 }
 ?>
@@ -317,58 +388,117 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
                     <div class="card-body-modern">
 
-                        <?php if ($get_site_id > 0): ?>
-                            <div class="project-info-card">
-                                <input type="hidden" name="site_id" value="<?php echo $get_site_id; ?>">
-                                <div class="grid-3">
-                                    <div class="form-group"><label class="form-label">เลขหน้างาน</label><input type="text"
-                                            class="form-control readonly-field" value="<?php echo $site_code_show; ?>"
-                                            readonly></div>
-                                    <div class="form-group"><label class="form-label">เลขที่สัญญา</label><input type="text"
-                                            class="form-control readonly-field" value="<?php echo $contract_info['no']; ?>"
-                                            readonly></div>
-                                    <div class="form-group"><label class="form-label">งบประมาณ</label><input type="text"
-                                            class="form-control readonly-field"
-                                            value="<?php echo $contract_info['budget']; ?>" readonly></div>
-                                </div>
-                                <div class="grid-2">
-                                    <div class="form-group"><label class="form-label">ชื่อโครงการ</label><input type="text"
-                                            class="form-control readonly-field" value="<?php echo $project_name_show; ?>"
-                                            readonly></div>
-                                    <div class="form-group"><label class="form-label">ลูกค้า / จังหวัด</label><input
-                                            type="text" class="form-control readonly-field"
-                                            value="<?php echo $customer_info_show; ?>" readonly></div>
-                                </div>
-                                <div class="grid-2" style="margin-bottom:0;">
-                                    <div class="form-group" style="margin-bottom:0;"><label
-                                            class="form-label">วันเริ่มสัญญา</label><input type="text"
-                                            class="form-control readonly-field"
-                                            value="<?php echo $contract_info['start']; ?>" readonly></div>
-                                    <div class="form-group" style="margin-bottom:0;"><label
-                                            class="form-label">วันหมดสัญญา</label><input type="text"
-                                            class="form-control readonly-field" value="<?php echo $contract_info['end']; ?>"
-                                            style="color:<?php echo $is_expired ? '#dc2626' : 'inherit'; ?>; font-weight:<?php echo $is_expired ? 'bold' : 'normal'; ?>;"
-                                            readonly></div>
-                                </div>
-                                <a href="ServiceRequest.php"
-                                    style="position: absolute; top: 20px; right: 25px; color: #ef4444; text-decoration: none; font-weight:600; font-size: 0.9rem;"><i
-                                        class="fas fa-sync-alt"></i> เปลี่ยนโครงการ</a>
+                        <div class="form-group" style="margin-bottom: 20px; background: #f8fafc; padding: 15px; border-radius: 10px; border: 1px dashed #cbd5e1;">
+                            <label class="form-label" style="font-size:1rem; color:var(--primary); margin-bottom:10px;">ระบุข้อมูลโครงการ</label>
+                            <div style="display:flex; gap:30px;">
+                                <label style="cursor:pointer; display:flex; align-items:center; gap:8px;">
+                                    <input type="radio" name="project_mode" value="search" 
+                                        <?php echo ($get_site_id > 0) ? 'checked' : ''; ?> 
+                                        onclick="toggleProjectMode('search')"> 
+                                    <span style="font-weight:600; color:#334155;">🔍 ค้นหาจากฐานข้อมูล</span>
+                                </label>
+                                
+                                <label style="cursor:pointer; display:flex; align-items:center; gap:8px;">
+                                    <input type="radio" name="project_mode" value="manual" 
+                                        <?php echo ($get_site_id == 0) ? 'checked' : ''; ?> 
+                                        onclick="toggleProjectMode('manual')"> 
+                                    <span style="font-weight:600; color:#334155;">✍️ กรอกข้อมูลเอง (Manual)</span>
+                                </label>
                             </div>
-                        <?php else: ?>
-                            <div class="form-group" style="margin-bottom: 40px;">
-                                <label class="form-label" style="font-size:1.1rem; color:var(--primary);">🔍
-                                    ค้นหาโครงการ</label>
-                                <select name="site_id" class="form-control select2-search"
-                                    onchange="window.location.href='ServiceRequest.php?id='+this.value">
-                                    <option value="">-- พิมพ์ชื่อโครงการ หรือ Site ID --</option>
-                                    <?php foreach ($all_projects as $p): ?>
-                                        <option value="<?php echo $p['site_id']; ?>">
-                                            <?php echo $p['site_id'] . " : " . htmlspecialchars($p['project_name']); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
+                        </div>
+
+                        <div id="search-section" style="margin-bottom: 25px; display: <?php echo ($get_site_id > 0) ? 'block' : 'none'; ?>;">
+                            <label class="form-label" style="font-size:0.9rem;">ค้นหาโครงการ</label>
+                            <select name="site_id_search" id="site_id_search" class="form-control select2-search" style="width: 100%;"
+                                    onchange="if(this.value) window.location.href='ServiceRequest.php?id='+this.value">
+                                <option value="">-- พิมพ์ชื่อโครงการ หรือ Site ID เพื่อดึงข้อมูล --</option>
+                                <?php foreach ($all_projects as $p): ?>
+                                    <option value="<?php echo $p['site_id']; ?>" <?php echo ($get_site_id == $p['site_id']) ? 'selected' : ''; ?>>
+                                        <?php echo $p['site_id'] . " : " . htmlspecialchars($p['project_name']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <?php if ($get_site_id > 0): ?>
+                                <div style="margin-top:5px; text-align:right;">
+                                    <a href="ServiceRequest.php" style="font-size:0.85rem; color:#ef4444; text-decoration:none;">
+                                        <i class="fas fa-times-circle"></i> ล้างค่า / เลือกใหม่
+                                    </a>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="project-info-card" id="project-form-card" 
+                            style="position:relative; transition: all 0.3s; border: 1px solid #e2e8f0; padding: 20px; border-radius: 12px; background: #fff;">
+                            
+                            <input type="hidden" name="site_id" id="real_site_id" value="<?php echo $get_site_id; ?>">
+
+                            <div class="grid-3">
+                                <div class="form-group">
+                                    <label class="form-label">เลขหน้างาน</label>
+                                    <input type="text" name="manual_site_code" id="inp_site_code" 
+                                        class="form-control <?php echo ($get_site_id > 0) ? 'readonly-field' : ''; ?>" 
+                                        value="<?php echo $site_code_show; ?>" 
+                                        <?php echo ($get_site_id > 0) ? 'readonly' : ''; ?>>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">เลขที่สัญญา</label>
+                                    <input type="text" name="manual_contract_no" id="inp_contract_no"
+                                        class="form-control <?php echo ($get_site_id > 0) ? 'readonly-field' : ''; ?>" 
+                                        value="<?php echo $contract_info['no']; ?>"
+                                        <?php echo ($get_site_id > 0) ? 'readonly' : ''; ?>>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">งบประมาณ</label>
+                                    <input type="text" name="manual_budget" id="inp_budget"
+                                        class="form-control <?php echo ($get_site_id > 0) ? 'readonly-field' : ''; ?>" 
+                                        value="<?php echo $contract_info['budget']; ?>"
+                                        <?php echo ($get_site_id > 0) ? 'readonly' : ''; ?>>
+                                </div>
                             </div>
-                        <?php endif; ?>
+
+                            <div class="form-group">
+                                <label class="form-label">ชื่อโครงการ <span style="color:red; display:<?php echo ($get_site_id == 0) ? 'inline' : 'none'; ?>;" id="req_proj_name">*</span></label>
+                                <input type="text" name="manual_project_name" id="inp_project_name" required
+                                    class="form-control <?php echo ($get_site_id > 0) ? 'readonly-field' : ''; ?>" 
+                                    value="<?php echo $project_name_show; ?>"
+                                    <?php echo ($get_site_id > 0) ? 'readonly' : ''; ?>>
+                            </div>
+
+                            <div class="grid-2">
+                                <div class="form-group">
+                                    <label class="form-label">ชื่อลูกค้า / โรงเรียน <span style="color:red; display:<?php echo ($get_site_id == 0) ? 'inline' : 'none'; ?>;" id="req_cust_name">*</span></label>
+                                    <input type="text" name="manual_customer_name" id="inp_customer_name" required
+                                        class="form-control <?php echo ($get_site_id > 0) ? 'readonly-field' : ''; ?>" 
+                                        value="<?php echo $customer_name_show; ?>"
+                                        <?php echo ($get_site_id > 0) ? 'readonly' : ''; ?>>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">จังหวัด</label>
+                                    <input type="text" name="manual_province" id="inp_province"
+                                        class="form-control <?php echo ($get_site_id > 0) ? 'readonly-field' : ''; ?>" 
+                                        value="<?php echo $province_show; ?>"
+                                        <?php echo ($get_site_id > 0) ? 'readonly' : ''; ?>>
+                                </div>
+                            </div>
+
+                            <div class="grid-2" style="margin-bottom:0;">
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label class="form-label">วันเริ่มสัญญา</label>
+                                    <input type="text" name="manual_start_date" id="inp_start_date"
+                                        class="form-control <?php echo ($get_site_id > 0) ? 'readonly-field' : 'date-picker'; ?>" 
+                                        value="<?php echo ($contract_info['start'] == '-') ? '' : $contract_info['start']; ?>"
+                                        <?php echo ($get_site_id > 0) ? 'readonly' : ''; ?>>
+                                </div>
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label class="form-label">วันหมดสัญญา</label>
+                                    <input type="text" name="manual_end_date" id="inp_end_date"
+                                        class="form-control <?php echo ($get_site_id > 0) ? 'readonly-field' : 'date-picker'; ?>" 
+                                        value="<?php echo ($contract_info['end'] == '-') ? '' : $contract_info['end']; ?>"
+                                        style="color:<?php echo $is_expired ? '#dc2626' : 'inherit'; ?>;"
+                                        <?php echo ($get_site_id > 0) ? 'readonly' : ''; ?>>
+                                </div>
+                            </div>
+                        </div>
 
                         <div class="section-title"><i class="fas fa-info-circle"></i> ข้อมูลการแจ้ง (Request Info)</div>
                         <div class="grid-2">
@@ -383,21 +513,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         </div>
 
                         <div class="section-title"><i class="fas fa-user-tag"></i> ผู้ติดต่อ (Contact Person)</div>
-                        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 20px; align-items: start; background: #fff; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
-                            
+                        <div
+                            style="display: grid; grid-template-columns: 1fr 2fr; gap: 20px; align-items: start; background: #fff; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+
                             <div class="form-group" style="margin-bottom: 0;">
-                                <label class="form-label">ชื่อผู้แจ้ง <span style="color:var(--danger-text)">*</span></label>
-                                <input type="text" name="reporter_name" class="form-control" 
-                                    value="<?php echo htmlspecialchars($val_reporter); ?>" required 
+                                <label class="form-label">ชื่อผู้แจ้ง <span
+                                        style="color:var(--danger-text)">*</span></label>
+                                <input type="text" name="reporter_name" class="form-control"
+                                    value="<?php echo htmlspecialchars($val_reporter); ?>" required
                                     placeholder="ระบุชื่อผู้แจ้ง..." style="height: 45px;">
                             </div>
 
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label class="form-label">ช่องทางติดต่อ (ระบุได้มากกว่า 1)</label>
                                 <div id="contact_list_container">
-                                    </div>
-                                <button type="button" onclick="addContactRow()" class="btn-add-row" 
-                                        style="background: #f0f9ff; border: 1px dashed #0ea5e9; color: #0ea5e9; width: 100%; padding: 10px; border-radius: 10px; margin-top: 10px; cursor: pointer; font-weight: 600;">
+                                </div>
+                                <button type="button" onclick="addContactRow()" class="btn-add-row"
+                                    style="background: #f0f9ff; border: 1px dashed #0ea5e9; color: #0ea5e9; width: 100%; padding: 10px; border-radius: 10px; margin-top: 10px; cursor: pointer; font-weight: 600;">
                                     <i class="fas fa-plus-circle"></i> เพิ่มช่องทางติดต่ออื่น
                                 </button>
                             </div>
@@ -436,6 +568,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                 $current_job_type = $item_data['job_type'] ?? '';
                                 $current_job_other = $item_data['job_other'] ?? '';
                                 $current_issue = $item_data['issue'] ?? '';
+
+                                // 🟢 ดึงค่าคำแนะนำและการประเมิน (ถ้ามี)
+                                $current_advice = $item_data['initial_advice'] ?? '';
+                                $current_assess = $item_data['assessment'] ?? '';
+
                                 $count = $index + 1;
                                 ?>
                                 <div class="service-item-box" id="box_<?php echo $index; ?>"
@@ -465,7 +602,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                                 </select>
 
                                                 <?php if ($p_index > 0): ?>
-                                                    <button type="button" onclick="removeRowAndCheck(this)" 
+                                                    <button type="button" onclick="removeRowAndCheck(this)"
                                                         style="border:none; background:#fee2e2; color:#ef4444; width:38px; height:38px; border-radius:6px; cursor:pointer;">
                                                         <i class="fas fa-trash"></i>
                                                     </button>
@@ -484,11 +621,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                     <div class="grid-2">
                                         <div class="form-group" style="margin-bottom: 15px;">
                                             <label class="form-label" style="font-size:0.85rem;">ประเภทงาน</label>
-                                            <select name="items[<?php echo $index; ?>][job_type]" class="form-control job-type-select" onchange="toggleJobOtherDynamic(this)">
+                                            <select name="items[<?php echo $index; ?>][job_type]"
+                                                class="form-control job-type-select" onchange="toggleJobOtherDynamic(this)">
                                                 <option value="">-- เลือกประเภทงาน --</option>
                                                 <?php foreach ($job_types_list as $jt): ?>
-                                                    <option value="<?php echo htmlspecialchars($jt['job_type_name']); ?>" 
-                                                        <?php echo ($current_job_type == $jt['job_type_name']) ? 'selected' : ''; ?>>
+                                                    <option value="<?php echo htmlspecialchars($jt['job_type_name']); ?>" <?php echo ($current_job_type == $jt['job_type_name']) ? 'selected' : ''; ?>>
                                                         <?php echo htmlspecialchars($jt['job_type_name']); ?>
                                                     </option>
                                                 <?php endforeach; ?>
@@ -508,6 +645,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                                 style="min-height: 80px;"><?php echo htmlspecialchars($current_issue); ?></textarea>
                                         </div>
                                     </div>
+
+                                    <div class="grid-2"
+                                        style="margin-top: 15px; border-top: 1px dashed #e2e8f0; padding-top: 15px;">
+                                        <div class="form-group" style="margin-bottom: 0;">
+                                            <label class="form-label" style="font-size:0.85rem; color:#059669;"><i
+                                                    class="fas fa-microscope"></i> คำแนะนำเบื้องต้น</label>
+                                            <textarea name="items[<?php echo $index; ?>][initial_advice]"
+                                                class="form-control" rows="1" placeholder="คำแนะนำ..."
+                                                style="min-height: 40px; font-size:0.9rem;"><?php echo htmlspecialchars($current_advice); ?></textarea>
+                                        </div>
+                                        <div class="form-group" style="margin-bottom: 0;">
+                                            <label class="form-label" style="font-size:0.85rem; color:#d97706;"><i
+                                                    class="fas fa-clipboard-check"></i> การประเมิน</label>
+                                            <textarea name="items[<?php echo $index; ?>][assessment]" class="form-control"
+                                                rows="1" placeholder="การประเมิน..."
+                                                style="min-height: 40px; font-size:0.9rem;"><?php echo htmlspecialchars($current_assess); ?></textarea>
+                                        </div>
+                                    </div>
                                 </div>
                             <?php endforeach; ?>
                         </div>
@@ -524,34 +679,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                 กำลังคำนวณ...</div>
                         </div>
 
-                        <div class="section-title"><i class="fas fa-microscope"></i> การวิเคราะห์เบื้องต้น</div>
-                        <div class="form-group">
-                            <label class="form-label">คำแนะนำเบื้องต้น</label>
-                            <textarea name="initial_advice" class="form-control" rows="2"
-                                placeholder="คำแนะนำ..."><?php echo htmlspecialchars($val_initial_advice); ?></textarea>
-                        </div>
-                        <div class="grid-2">
-                            <div class="form-group"><label class="form-label">การประเมิน</label><textarea
-                                    name="assessment" class="form-control"
-                                    rows="2"><?php echo htmlspecialchars($val_assessment); ?></textarea></div>
-                            <div class="form-group"><label class="form-label">หมายเหตุ</label><textarea name="remark"
-                                    class="form-control"
-                                    rows="2"><?php echo htmlspecialchars($val_remark); ?></textarea></div>
-                        </div>
-
-                        <div
-                            style="text-align: center; margin-top: 50px; display:flex; justify-content:center; gap:20px;">
+                        <div style="text-align: center; margin-top: 50px; display:flex; justify-content:center; gap:20px;">
                             <a href="service_dashboard.php" class="btn-reset-icon"
-                                style="width:auto; padding:0 35px; border-radius:50px; background:#fff; border:1px solid #cbd5e1;">
+                            style="width:auto; padding:0 35px; border-radius:50px; background:#fff; border:1px solid #cbd5e1;">
                                 <i class="fas fa-times" style="margin-right:5px;"></i> ยกเลิก
                             </a>
-                            <?php if ($get_site_id > 0): ?>
-                                <button type="submit" class="btn-create" style="padding:0 40px;"><i class="fas fa-save"></i>
-                                    บันทึกข้อมูล</button>
-                            <?php else: ?>
-                                <button type="button" class="btn-create"
-                                    style="background: #cbd5e1; cursor: not-allowed; padding:0 40px;">กรุณาเลือกโครงการด้านบนก่อน</button>
-                            <?php endif; ?>
+
+                            <button type="submit" class="btn-create" style="padding:0 40px;">
+                                <i class="fas fa-save"></i> บันทึกข้อมูล
+                            </button>
                         </div>
 
                     </div>
@@ -561,295 +697,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     </div>
 
     <script>
-    // Init Plugins
-    flatpickr(".date-picker", { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true, locale: "th" });
-    
-    $(document).ready(function () {
-        // เริ่มต้น Select2
-        $('.select2-search').select2({ width: '100%' });
+        <?php if (isset($alert_script))
+            echo $alert_script; ?>
+        <?php if ($is_expired): ?>
+            Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: '⚠️ หมดสัญญาประกันแล้ว', showConfirmButton: false, timer: 5000 });
+        <?php endif; ?>
 
-        if (typeof calcDeadline === 'function') calcDeadline();
-        $('.job-type-select').each(function () { toggleJobOtherDynamic(this); });
+        // ---- Global Variables ----
+        let itemIndex = <?php echo count($val_items_data); ?>;
+        const fakeItemsList = <?php echo json_encode($fake_items); ?>;
 
-        // 🔥 1. เริ่มเช็คตัวเลือกซ้ำทันทีที่โหลดหน้า
-        updateGlobalOptions();
-    });
+        // สร้าง Option List สำหรับประเภทงาน
+        let jobOptionsHtml = '<option value="">-- เลือกประเภทงาน --</option>';
+        <?php if (!empty($job_types_list)): ?>
+            <?php foreach ($job_types_list as $jt): ?>
+                jobOptionsHtml += `<option value="<?php echo htmlspecialchars($jt['job_type_name']); ?>"><?php echo htmlspecialchars($jt['job_type_name']); ?></option>`;
+            <?php endforeach; ?>
+        <?php endif; ?>
 
-    // Alerts
-    <?php if (isset($alert_script)) echo $alert_script; ?>
-    <?php if ($is_expired): ?>
-        Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: '⚠️ หมดสัญญาประกันแล้ว', showConfirmButton: false, timer: 5000 });
-    <?php endif; ?>
-
-    // ---- Global Variables ----
-    let itemIndex = <?php echo count($val_items_data); ?>;
-    const fakeItemsList = <?php echo json_encode($fake_items); ?>;
-    
-    // สร้าง Option List สำหรับประเภทงาน
-    let jobOptionsHtml = '<option value="">-- เลือกประเภทงาน --</option>';
-    <?php if (!empty($job_types_list)): ?>
-        <?php foreach($job_types_list as $jt): ?>
-            jobOptionsHtml += `<option value="<?php echo htmlspecialchars($jt['job_type_name']); ?>"><?php echo htmlspecialchars($jt['job_type_name']); ?></option>`;
-        <?php endforeach; ?>
-    <?php endif; ?>
-
-    // สร้าง Option List สำหรับสินค้า
-    let optionsStr = '<option value="">-- เลือกรายการ --</option>';
-    fakeItemsList.forEach(item => {
-        optionsStr += `<option value="${item}">${item}</option>`;
-    });
-
-    // ---- Main Functions ----
-
-    // 1. ฟังก์ชันเพิ่มกล่องรายการใหม่ (Main Box)
-    function addServiceItemBox() {
-        let currentCount = $('#service-items-container .service-item-box').length + 1;
-
-        const html = `
-            <div class="service-item-box" id="box_${itemIndex}" data-index="${itemIndex}">
-                <span class="item-counter">รายการที่ ${currentCount}</span>
-                <button type="button" class="btn-remove-item" onclick="removeServiceItem(this)" title="ลบรายการนี้"><i class="fas fa-trash-alt"></i></button>
-
-                <div class="product-list-container">
-                    <label class="form-label" style="font-size:0.9rem; color:var(--primary);">สินค้า / อุปกรณ์ <span style="color:var(--danger-text)">*</span></label>
-                    <div class="product-row" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
-                        <select name="items[${itemIndex}][product][]" class="form-control select2-search" style="width: 100%;" required>
-                            ${optionsStr}
-                        </select>
-                        <button type="button" onclick="removeRowAndCheck(this)" style="border:none; background:#fee2e2; color:#ef4444; width:38px; height:38px; border-radius:6px; cursor:pointer; flex-shrink: 0;">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <div style="text-align: right; margin-bottom: 20px;">
-                    <button type="button" onclick="addProductToBox(this, ${itemIndex})" style="background:none; border:none; color:var(--accent-start); font-size:0.85rem; cursor:pointer; font-weight:600;">
-                        <i class="fas fa-plus-circle"></i> เพิ่มสินค้าในรายการนี้
-                    </button>
-                </div>
-
-                <div class="grid-2">
-                    <div class="form-group" style="margin-bottom: 15px;">
-                        <label class="form-label" style="font-size:0.85rem;">ประเภทงาน</label>
-                        <select name="items[${itemIndex}][job_type]" class="form-control job-type-select" onchange="toggleJobOtherDynamic(this)">
-                            ${jobOptionsHtml}
-                        </select>
-                        <input type="text" name="items[${itemIndex}][job_other]" class="form-control mt-2 job-other-input" style="display:none;" placeholder="ระบุประเภทอื่นๆ...">
-                    </div>
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label class="form-label" style="font-size:0.85rem;">อาการ / ปัญหาที่พบ <span style="color:var(--danger-text)">*</span></label>
-                        <textarea name="items[${itemIndex}][issue]" class="form-control" rows="2" required placeholder="ระบุอาการเสีย..." style="min-height: 80px;"></textarea>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        const newBox = $(html).appendTo('#service-items-container');
-        
-        // Init Select2 ให้ Box ใหม่
-        newBox.find('.select2-search').select2({ width: '100%' });
-        
-        // 🔥 สั่งเช็คซ้ำทันทีเพื่อให้ Box ใหม่รู้สถานะ
-        updateGlobalOptions();
-
-        itemIndex++;
-    }
-
-    // 2. ฟังก์ชันเพิ่มช่องสินค้าในกล่องเดิม
-    function addProductToBox(btn, boxIdx) {
-        const container = $(btn).closest('.service-item-box').find('.product-list-container');
-
-        const productHtml = `
-            <div class="product-row" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center; opacity: 0; transform: translateY(-5px); transition: all 0.3s;">
-                <select name="items[${boxIdx}][product][]" class="form-control select2-search" style="width: 100%;" required>
-                    ${optionsStr}
-                </select>
-                <button type="button" onclick="removeRowAndCheck(this)" style="border:none; background:#fee2e2; color:#ef4444; width:38px; height:38px; border-radius:6px; cursor:pointer; flex-shrink: 0;">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </div>
-        `;
-
-        const newRow = $(productHtml).appendTo(container);
-        
-        // Init Select2
-        newRow.find('.select2-search').select2({ width: '100%' });
-
-        // Animation
-        setTimeout(() => { newRow.css({ opacity: 1, transform: 'translateY(0)' }); }, 10);
-
-        // 🔥 สั่งเช็คซ้ำทันที
-        updateGlobalOptions();
-    }
-
-    // ฟังก์ชันลบ Box ใหญ่
-    function removeServiceItem(btn) {
-        $(btn).closest('.service-item-box').fadeOut(200, function () {
-            $(this).remove();
-            updateItemCounters();
-            updateGlobalOptions(); // คืนค่าสินค้ากลับสู่ระบบ
+        // สร้าง Option List สำหรับสินค้า
+        let optionsStr = '<option value="">-- เลือกรายการ --</option>';
+        fakeItemsList.forEach(item => {
+            optionsStr += `<option value="${item}">${item}</option>`;
         });
-    }
+        const channelConfigs = <?php echo json_encode($contact_channels_list); ?>;
 
-    // ฟังก์ชันลบแถวสินค้า (Row)
-    function removeRowAndCheck(btn) {
-        $(btn).closest('.product-row').remove();
-        updateGlobalOptions(); // คืนค่าสินค้ากลับสู่ระบบทันที
-    }
-
-    // ฟังก์ชันอัปเดตตัวนับ
-    function updateItemCounters() {
-        $('#service-items-container .service-item-box').each(function (index) {
-            $(this).find('.item-counter').text('รายการที่ ' + (index + 1));
-        });
-    }
-
-    // Toggle ช่องกรอกประเภทงานอื่นๆ
-    function toggleJobOtherDynamic(selectObj) {
-        const box = $(selectObj).closest('.form-group');
-        const input = box.find('.job-other-input');
-        if (selectObj.value === 'other') { input.slideDown(200).attr('required', true); }
-        else { input.slideUp(200).attr('required', false).val(''); }
-    }
-
-    function calcDeadline() {
-        let d = document.getElementById('request_date');
-        if (d && d.value) {
-            let reqDate = new Date(d.value);
-            reqDate.setHours(reqDate.getHours() + 48);
-            let day = String(reqDate.getDate()).padStart(2, '0');
-            let month = String(reqDate.getMonth() + 1).padStart(2, '0');
-            let year = reqDate.getFullYear();
-            let time = String(reqDate.getHours()).padStart(2, '0') + ':' + String(reqDate.getMinutes()).padStart(2, '0');
-            let display = document.getElementById('deadline_display');
-            if (display) { display.innerHTML = `<i class="fas fa-history"></i> ต้องปิดงานภายใน: <strong>${day}/${month}/${year} เวลา ${time} น.</strong>`; }
-        }
-    }
-
-    // ==========================================
-    // 🔥 CORE LOGIC: เช็คสินค้าซ้ำ (Global Check)
-    // ==========================================
-
-    // Event Listener: ทำงานเมื่อมีการเปลี่ยนแปลง หรือ กดเปิด Dropdown
-    $(document).on('change select2:open', '.select2-search', function() {
-        updateGlobalOptions();
-    });
-
-    function updateGlobalOptions() {
-        var allSelectedValues = [];
-
-        // 1. วิ่งเก็บค่าที่ถูกเลือกจาก "ทุก Box" ทั่วหน้าเว็บ
-        $('.select2-search').each(function() {
-            var val = $(this).val();
-            if (val && val !== "") {
-                allSelectedValues.push(val);
-            }
-        });
-
-        // 2. วิ่งไปปิด (Disable) ตัวเลือกที่ซ้ำใน "ทุก Box"
-        $('.select2-search').each(function() {
-            var currentDropdown = $(this);
-            var myCurrentValue = currentDropdown.val(); // ค่าที่ตัวเองเลือกอยู่ (ห้ามปิด)
-
-            currentDropdown.find('option').each(function() {
-                var optVal = $(this).val();
-
-                // ถ้าค่านี้นี้ถูกเลือกไปแล้ว (ใน Box ไหนก็ได้) AND ไม่ใช่ค่าของตัวเอง
-                if (optVal && allSelectedValues.includes(optVal) && optVal !== myCurrentValue) {
-                    $(this).prop('disabled', true); // ❌ ปิดการใช้งาน
-                } else {
-                    $(this).prop('disabled', false); // ✅ เปิดให้เลือกได้
-                }
-            });
-            
-            // Re-render Select2 (เผื่อบางเวอร์ชันไม่อัปเดต UI เอง)
-            // if (currentDropdown.hasClass('select2-hidden-accessible')) { /* currentDropdown.select2(); */ }
-        });
-    }
-
-    // ---- Contact Row Logic (ส่วนเดิมของคุณ) ----
-    const channelConfigs = <?php echo json_encode($contact_channels_list); ?>;
-
-    function addContactRow(initialVal = '', initialExt = '', initialChannel = '') {
-        const rowId = 'row_' + Math.floor(Math.random() * 1000000); 
-        
-        let optionsHtml = channelConfigs.map(c => `
-            <option value="${c.channel_name}" 
-                data-type="${c.channel_type}" 
-                data-placeholder="${c.placeholder_text}"
-                data-has-ext="${c.has_ext}" 
-                data-is-tel="${c.is_tel}"
-                ${initialChannel === c.channel_name ? 'selected' : ''}>
-            ${c.channel_name}
-            </option>
-        `).join('');
-
-        const rowHtml = `
-            <div class="contact-row" id="${rowId}" style="display: flex; gap: 8px; margin-bottom: 10px; align-items: center; background: #f8fafc; padding: 10px; border-radius: 10px; border: 1px solid #e2e8f0;">
-                <div style="flex: 1;">
-                    <select class="form-control sel-channel" onchange="updateRowLogic('${rowId}')" required>
-                        <option value="">-- ช่องทาง --</option>
-                        ${optionsHtml}
-                    </select>
-                </div>
-                <div style="flex: 2; display: flex; gap: 5px; align-items: center;">
-                    <input type="text" class="form-control inp-detail" placeholder="ระบุข้อมูล..." value="${initialVal}" required style="flex: 1;">
-                    <div class="ext-box" style="display: none; width: 100px; position: relative;">
-                        <span style="position: absolute; left: -5px; top: 10px; font-size: 0.7rem; font-weight: bold; color: #64748b;"></span>
-                        <input type="text" class="form-control inp-ext" placeholder="เลขต่อ" value="${initialExt}" style="text-align: center; padding-left: 20px;">
-                    </div>
-                </div>
-                <button type="button" onclick="removeContactRow(this)" style="background: #fee2e2; color: #ef4444; border: none; width: 35px; height: 35px; border-radius: 8px; cursor: pointer;">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-        `;
-
-        $('#contact_list_container').append(rowHtml);
-        updateRowLogic(rowId);
-    }
-
-    function removeContactRow(btn) {
-        $(btn).closest('.contact-row').remove();
-    }
-
-    function updateRowLogic(rowId) {
-        const row = $('#' + rowId); 
-        const sel = row.find('.sel-channel')[0];
-        if (!sel || sel.selectedIndex === -1) return;
-
-        const opt = sel.options[sel.selectedIndex];
-        const inp = row.find('.inp-detail');
-        const extBox = row.find('.ext-box');
-
-        if (sel.value !== "") {
-            inp.attr('placeholder', opt.getAttribute('data-placeholder'));
-            
-            if (opt.getAttribute('data-is-tel') === '1') {
-                inp.attr('type', 'tel').attr('maxlength', '10').attr('oninput', "this.value = this.value.replace(/[^0-9]/g, '').slice(0, 10)");
-            } else {
-                inp.attr('type', 'text').removeAttr('maxlength').removeAttr('oninput');
-            }
-            
-            opt.getAttribute('data-has-ext') === '1' ? extBox.show() : extBox.hide();
-        }
-    }
-
-    // Submit Logic
-    $('#serviceForm').on('submit', function() {
-        let contacts = [];
-        $('.contact-row').each(function() {
-            if($(this).find('.sel-channel').val()) {
-                contacts.push({
-                    channel: $(this).find('.sel-channel').val(),
-                    detail: $(this).find('.inp-detail').val(),
-                    ext: $(this).find('.inp-ext').val()
-                });
-            }
-        });
-        $('#contact_json').val(JSON.stringify(contacts));
-    });
-</script>
+    </script>
+    <script src="js/ServiceRequest.js"></script>
 </body>
 
 </html>
