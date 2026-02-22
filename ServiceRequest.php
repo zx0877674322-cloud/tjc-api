@@ -179,6 +179,14 @@ if ($res_cc) {
     }
 }
 
+// 7. ดึงรายชื่อจังหวัด (Provinces)
+$provinces_list = [];
+$res_prov = $conn->query("SELECT province_name FROM provinces ORDER BY province_name ASC");
+if ($res_prov && $res_prov->num_rows > 0) {
+    while ($prov = $res_prov->fetch_assoc()) {
+        $provinces_list[] = $prov['province_name'];
+    }
+}
 // ==========================================================================
 //  PART 2: FORM SUBMISSION HANDLING
 // ==========================================================================
@@ -395,7 +403,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                     <input type="radio" name="project_mode" value="search" 
                                         <?php echo ($get_site_id > 0) ? 'checked' : ''; ?> 
                                         onclick="toggleProjectMode('search')"> 
-                                    <span style="font-weight:600; color:#334155;">🔍 ค้นหาจากฐานข้อมูล</span>
+                                    <span style="font-weight:600; color:#334155; display:none;">🔍 ค้นหาจากฐานข้อมูล</span>
                                 </label>
                                 
                                 <label style="cursor:pointer; display:flex; align-items:center; gap:8px;">
@@ -474,10 +482,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">จังหวัด</label>
-                                    <input type="text" name="manual_province" id="inp_province"
-                                        class="form-control <?php echo ($get_site_id > 0) ? 'readonly-field' : ''; ?>" 
-                                        value="<?php echo $province_show; ?>"
-                                        <?php echo ($get_site_id > 0) ? 'readonly' : ''; ?>>
+                                    <?php if ($get_site_id > 0): ?>
+                                        <input type="text" name="manual_province" id="inp_province"
+                                            class="form-control readonly-field" 
+                                            value="<?php echo htmlspecialchars($province_show); ?>" readonly>
+                                    <?php else: ?>
+                                        <select name="manual_province" id="inp_province" class="form-control select2-search" style="width: 100%; cursor: pointer;">
+                                            <option value="">-- พิมพ์ค้นหา หรือ เลือกจังหวัด --</option>
+                                            <?php foreach ($provinces_list as $prov): ?>
+                                                <option value="<?php echo htmlspecialchars($prov); ?>" <?php echo ($province_show == $prov) ? 'selected' : ''; ?>>
+                                                    <?php echo htmlspecialchars($prov); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    <?php endif; ?>
                                 </div>
                             </div>
 

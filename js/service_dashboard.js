@@ -48,9 +48,7 @@ function confirmFinish(reqId) {
         },
         function (res) {
           if (res.status === "success")
-            Swal.fire("สำเร็จ!", "ปิดงานเรียบร้อยแล้ว", "success").then(() =>
-              location.reload(),
-            );
+            Swal.fire("สำเร็จ!", "ปิดงานเรียบร้อยแล้ว", "success").then(() => updateData());
           else Swal.fire("Error!", res.message, "error");
         },
         "json",
@@ -77,7 +75,7 @@ function deleteItem(reqId) {
           req_id: reqId,
         },
         function (res) {
-          if (res.status === "success") location.reload();
+          if (res.status === "success") updateData();
         },
         "json",
       );
@@ -126,6 +124,7 @@ function viewItems(dataInput) {
 }
 
 // 7. ดูรายละเอียดปัญหา (แบบแยกกล่องตามรายการ)
+// 7. ดูรายละเอียดปัญหา (Vibrant & Bouncy Animation Edition)
 function viewDetails(itemsData) {
   let items = [];
 
@@ -134,14 +133,12 @@ function viewDetails(itemsData) {
     if (Array.isArray(itemsData)) {
       items = itemsData;
     } else if (typeof itemsData === "string") {
-      // เช็คว่าเป็น JSON String หรือไม่
       if (
         itemsData.trim().startsWith("[") ||
         itemsData.trim().startsWith("{")
       ) {
         items = JSON.parse(itemsData);
       } else if (itemsData.trim() !== "") {
-        // กรณีเป็น Text ธรรมดา (ข้อมูลเก่า) ให้แปลงเป็น Item จำลอง
         items = [
           {
             product: ["รายการทั่วไป"],
@@ -157,16 +154,105 @@ function viewDetails(itemsData) {
     items = [];
   }
 
-  // 2. สร้าง HTML
-  let htmlContent =
-    '<div style="text-align: left; font-family: Prompt, sans-serif; max-height:70vh; overflow-y:auto; padding-right:5px;">';
+  // 2. สร้าง HTML พร้อม CSS Animation สุดล้ำ
+  let htmlContent = `
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&display=swap');
+        
+        /* 🌟 Animations */
+        @keyframes bounceInUpCard {
+            0% { opacity: 0; transform: translateY(40px) scale(0.9); }
+            60% { opacity: 1; transform: translateY(-5px) scale(1.02); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes slideInRightBox {
+            0% { opacity: 0; transform: translateX(20px); }
+            100% { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes pulseIconGlow {
+            0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.5); }
+            70% { box-shadow: 0 0 0 12px rgba(139, 92, 246, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+        }
+        @keyframes floatUpDown {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-3px); }
+        }
+
+        /* 🌟 Scrollbar */
+        .detail-scroll-area { text-align: left; font-family: 'Prompt', sans-serif; max-height: 72vh; overflow-y: auto; padding: 10px; overflow-x: hidden; }
+        .detail-scroll-area::-webkit-scrollbar { width: 6px; }
+        .detail-scroll-area::-webkit-scrollbar-track { background: transparent; }
+        .detail-scroll-area::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .detail-scroll-area::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* 🌟 Main Card */
+        .vib-card {
+            background: #ffffff; border-radius: 20px; padding: 20px; margin-bottom: 20px;
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.01);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            opacity: 0; animation: bounceInUpCard 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            transition: all 0.3s ease; position: relative; overflow: hidden;
+        }
+        .vib-card:hover { transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgba(99, 102, 241, 0.15); border-color: #c7d2fe; }
+        
+        /* 🌟 Card Header */
+        .vib-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; border-bottom: 2px dashed #f1f5f9; padding-bottom: 12px; }
+        .vib-idx { 
+            width: 36px; height: 36px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; font-weight: 800; font-size: 1rem;
+            box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3); flex-shrink: 0;
+        }
+        .vib-name { font-weight: 800; color: #1e293b; font-size: 1.1rem; flex-grow: 1; line-height: 1.3; }
+        .vib-job-badge { 
+            font-size: 0.7rem; color: #fff; background: linear-gradient(135deg, #3b82f6, #0ea5e9); 
+            padding: 4px 12px; border-radius: 50px; font-weight: 700; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3); white-space: nowrap;
+        }
+
+        /* 🌟 Inner Info Boxes (Modern Flex Layout) */
+        .info-box { 
+            display: flex; gap: 12px; padding: 12px 15px; border-radius: 14px; margin-bottom: 10px;
+            opacity: 0; animation: slideInRightBox 0.5s ease forwards;
+        }
+        .info-icon-wrap { 
+            width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; 
+            font-size: 0.9rem; color: #fff; flex-shrink: 0; box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+        }
+        .info-content { flex-grow: 1; }
+        .info-title { font-size: 0.75rem; font-weight: 800; text-transform: uppercase; margin-bottom: 2px; letter-spacing: 0.5px; }
+        .info-desc { font-size: 0.9rem; font-weight: 500; line-height: 1.5; }
+
+        /* Box Variants (Vibrant Colors) */
+        .box-issue { background: linear-gradient(to right, #fff1f2, #ffffff); border: 1px solid #ffe4e6; }
+        .box-issue .info-icon-wrap { background: linear-gradient(135deg, #f43f5e, #e11d48); }
+        .box-issue .info-title { color: #e11d48; }
+        .box-issue .info-desc { color: #881337; }
+
+        .box-advice { background: linear-gradient(to right, #ecfdf5, #ffffff); border: 1px solid #d1fae5; }
+        .box-advice .info-icon-wrap { background: linear-gradient(135deg, #10b981, #059669); }
+        .box-advice .info-title { color: #059669; }
+        .box-advice .info-desc { color: #064e3b; }
+
+        .box-assess { background: linear-gradient(to right, #fffbeb, #ffffff); border: 1px solid #fef3c7; }
+        .box-assess .info-icon-wrap { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .box-assess .info-title { color: #d97706; }
+        .box-assess .info-desc { color: #78350f; }
+        
+    </style>
+    <div class="detail-scroll-area">
+  `;
 
   if (!items || items.length === 0) {
-    htmlContent +=
-      '<div style="text-align:center; color:#94a3b8; padding:30px; background:#f8fafc; border-radius:10px; border:1px dashed #cbd5e1;"><i class="fas fa-box-open" style="font-size:2rem; display:block; margin-bottom:10px; opacity:0.5;"></i>- ไม่มีข้อมูลรายการ -</div>';
+    htmlContent += `
+        <div style="text-align:center; padding:50px 20px; background:#ffffff; border-radius:24px; border:2px dashed #cbd5e1; margin-top:20px; box-shadow: 0 10px 20px rgba(0,0,0,0.02);">
+            <div style="width:80px; height:80px; background:#f1f5f9; border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 15px; color:#94a3b8; animation: floatUpDown 3s ease-in-out infinite;">
+                <i class="fas fa-box-open fa-2x"></i>
+            </div>
+            <div style="font-weight:800; color:#475569; font-size:1.1rem;">ไม่มีข้อมูลรายละเอียด</div>
+            <div style="font-size:0.85rem; color:#94a3b8; margin-top:5px;">ไม่พบการระบุอาการหรือการประเมินสำหรับรายการนี้</div>
+        </div>`;
   } else {
     items.forEach((item, index) => {
-      // ดึงค่า (รองรับทั้ง format เก่าและใหม่)
       let products = "-";
       if (Array.isArray(item.product)) {
         products = item.product.join(", ");
@@ -174,70 +260,85 @@ function viewDetails(itemsData) {
         products = item.product;
       }
 
-      let issue = item.issue || item.issue_description || "-"; // รองรับ key เก่า
+      let issue = item.issue || item.issue_description || "-";
       let advice = item.initial_advice || "";
       let assessment = item.assessment || "";
 
-      // Job Type
       let jobType = item.job_type || "";
       let jobTypeBadge = "";
       if (jobType && jobType !== "other") {
-        jobTypeBadge = `<span style="font-size:0.75rem; color:#3b82f6; background:#eff6ff; padding:2px 8px; border-radius:20px; border:1px solid #dbeafe; margin-left:auto;">${jobType}</span>`;
+        jobTypeBadge = `<div class="vib-job-badge"><i class="fas fa-tag"></i> ${jobType}</div>`;
       }
 
+      let delayCard = index * 0.15; // เด้งการ์ดไล่ระดับ
+      let delayBox1 = delayCard + 0.2;
+      let delayBox2 = delayBox1 + 0.1;
+      let delayBox3 = delayBox2 + 0.1;
+
       htmlContent += `
-            <div style="background: #fff; border: 1px solid #e2e8f0; border-left: 4px solid #6366f1; border-radius: 10px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-                
-                <div style="display:flex; align-items:center; margin-bottom:10px; border-bottom:1px dashed #e2e8f0; padding-bottom:8px;">
-                    <span style="background:#f1f5f9; color:#64748b; padding:2px 8px; border-radius:6px; font-size:0.8rem; margin-right:8px; font-weight:700;">#${index + 1}</span>
-                    <span style="font-weight:700; color:#334155; font-size:0.95rem;">${products}</span>
-                    ${jobTypeBadge}
+        <div class="vib-card" style="animation-delay: ${delayCard}s;">
+            <div class="vib-header">
+                <div class="vib-idx">#${index + 1}</div>
+                <div class="vib-name">${products}</div>
+                ${jobTypeBadge}
+            </div>
+
+            <div class="info-box box-issue" style="animation-delay: ${delayBox1}s;">
+                <div class="info-icon-wrap"><i class="fas fa-exclamation-triangle"></i></div>
+                <div class="info-content">
+                    <div class="info-title">อาการที่พบ / ปัญหา</div>
+                    <div class="info-desc">${issue}</div>
                 </div>
+            </div>
 
-                <div style="margin-bottom: 10px;">
-                    <div style="font-size:0.8rem; color:#ef4444; font-weight:600; margin-bottom:2px;"><i class="fas fa-tools"></i> อาการที่พบ:</div>
-                    <div style="font-size:0.9rem; color:#1e293b; background:#fef2f2; padding:8px 12px; border-radius:6px; border:1px solid #fee2e2;">${issue}</div>
+            ${
+              advice
+                ? `
+            <div class="info-box box-advice" style="animation-delay: ${delayBox2}s;">
+                <div class="info-icon-wrap"><i class="fas fa-lightbulb"></i></div>
+                <div class="info-content">
+                    <div class="info-title">คำแนะนำเบื้องต้น</div>
+                    <div class="info-desc">${advice}</div>
                 </div>
+            </div>`
+                : ""
+            }
 
-                ${
-                  advice
-                    ? `
-                <div style="margin-top: 8px; display:flex; gap:10px;">
-                    <div style="flex:1; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:10px;">
-                        <div style="font-size:0.8rem; color:#166534; font-weight:700; margin-bottom:2px;"><i class="fas fa-microscope"></i> คำแนะนำเบื้องต้น</div>
-                        <div style="font-size:0.85rem; color:#14532d;">${advice}</div>
-                    </div>
-                </div>`
-                    : ""
-                }
-
-                ${
-                  assessment
-                    ? `
-                <div style="margin-top: 8px;">
-                    <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:10px;">
-                        <div style="font-size:0.8rem; color:#92400e; font-weight:700; margin-bottom:2px;"><i class="fas fa-clipboard-check"></i> การประเมินงาน</div>
-                        <div style="font-size:0.85rem; color:#78350f;">${assessment}</div>
-                    </div>
-                </div>`
-                    : ""
-                }
-
-            </div>`;
+            ${
+              assessment
+                ? `
+            <div class="info-box box-assess" style="animation-delay: ${delayBox3}s;">
+                <div class="info-icon-wrap"><i class="fas fa-clipboard-check"></i></div>
+                <div class="info-content">
+                    <div class="info-title">การประเมินงาน</div>
+                    <div class="info-desc">${assessment}</div>
+                </div>
+            </div>`
+                : ""
+            }
+        </div>`;
     });
   }
 
   htmlContent += "</div>";
 
   Swal.fire({
-    title:
-      '<div style="display:flex; align-items:center; gap:10px; font-family:Prompt;"><div style="width:40px; height:40px; background:#e0e7ff; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#4338ca;"><i class="fas fa-file-alt"></i></div> รายละเอียดงาน</div>',
+    title: `
+        <div style="display:flex; align-items:center; justify-content:center; gap:15px; font-family:Prompt; margin-bottom: 5px; padding-top: 10px;">
+            <div style="width:55px; height:55px; background:linear-gradient(135deg, #8b5cf6, #d946ef); border-radius:18px; display:flex; align-items:center; justify-content:center; color:#fff; font-size: 1.5rem; animation: pulseIconGlow 2s infinite;">
+                <i class="fas fa-file-signature"></i>
+            </div> 
+            <div style="text-align: left;">
+                <div style="font-weight:900; color:#1e293b; font-size:1.4rem; letter-spacing:-0.5px;">รายละเอียดงาน</div>
+                <div style="font-size:0.85rem; color:#8b5cf6; font-weight:600;">Issue & Assessment Details</div>
+            </div>
+        </div>`,
     html: htmlContent,
-    width: "650px",
+    width: "650px", // ขยายกว้างขึ้นนิดนึงเพื่อให้รับกับ UI ใหม่
     showCloseButton: true,
     showConfirmButton: false,
-    background: "#f8fafc",
-    customClass: { popup: "rounded-xl shadow-xl" },
+    background: "#f8fafc", // สีพื้นหลังเทาอมฟ้าอ่อนๆ เพื่อขับให้การ์ดสีขาวเด้งออกมา
+    customClass: { popup: "rounded-24 shadow-2xl" }, // เพิ่มคลาสเงาสวยๆ ของ SweetAlert
   });
 }
 // 8. นับถอยหลัง SLA
@@ -301,88 +402,96 @@ $(document).ready(function () {
 
 // 9. ฟังก์ชันรับของกลับ / นำของออก (Premium Design + Animation)
 function receiveItem(reqId) {
-    Swal.fire({ 
-        title: 'กำลังโหลดข้อมูล...', 
-        allowOutsideClick: false, 
-        didOpen: () => Swal.showLoading() 
-    });
+  Swal.fire({
+    title: "กำลังโหลดข้อมูล...",
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading(),
+  });
 
-    $.ajax({
-        url: "service_dashboard.php",
-        type: "POST",
-        data: { action: "get_latest_item_data", req_id: reqId },
-        dataType: "json",
-        success: function (rawData) {
-            Swal.close();
-            if (!rawData) rawData = {};
+  $.ajax({
+    url: "service_dashboard.php",
+    type: "POST",
+    data: { action: "get_latest_item_data", req_id: reqId },
+    dataType: "json",
+    success: function (rawData) {
+      Swal.close();
+      if (!rawData) rawData = {};
 
-            const superClean = (str) => {
-                if (!str) return "";
-                let s = str.toString().toLowerCase();
-                if (s.includes(":")) s = s.split(":")[0];
-                return s.replace(/[^a-z0-9ก-๙]/g, "");
-            };
+      const superClean = (str) => {
+        if (!str) return "";
+        let s = str.toString().toLowerCase();
+        if (s.includes(":")) s = s.split(":")[0];
+        return s.replace(/[^a-z0-9ก-๙]/g, "");
+      };
 
-            const extractFromProjectField = (source) => {
-                let extracted = new Set();
-                if (!source) return [];
-                try {
-                    let parsed = typeof source === "string" ? JSON.parse(source) : source;
-                    if (Array.isArray(parsed)) {
-                        parsed.forEach((obj) => {
-                            let pName = obj.product || obj.name || "";
-                            if (Array.isArray(pName)) {
-                                pName.forEach((v) => {
-                                    if (v) extracted.add(v.trim());
-                                });
-                            } else if (pName) {
-                                extracted.add(pName.trim());
-                            }
-                        });
-                    }
-                } catch (e) {
-                    source.toString().split(/[\r\n,]+/).forEach((v) => {
-                        let cleanV = v.replace(/^\d+\.\s*/, "").replace(/^\[+|\]+$/g, "").trim();
-                        if (cleanV && !cleanV.includes("{")) extracted.add(cleanV);
-                    });
-                }
-                return Array.from(extracted);
-            };
-
-            let finishedListClean = (rawData.finished_items || []).map(superClean);
-            let itemsStatus = rawData.items_status || {};
-            let itemsFromDB = extractFromProjectField(rawData.project_item_name_raw);
-            let itemsMoved = rawData.accumulated_moved || [];
-            let allSource = Array.from(new Set([...itemsFromDB, ...itemsMoved]));
-            let moveHistory = rawData.items_moved || [];
-
-            let displayItems = allSource.map((originalName) => {
-                let cleanName = superClean(originalName);
-                let isFinished = finishedListClean.includes(cleanName);
-
-                let currentStat = "";
-                for (let key in itemsStatus) {
-                    if (superClean(key) === cleanName) {
-                        currentStat = itemsStatus[key];
-                        break;
-                    }
-                }
-
-                let isReceived = currentStat.includes("at_office") || currentStat === "back_from_shop";
-                let isAtExternal = currentStat === "at_external"; 
-
-                let history = moveHistory.find((h) => superClean(h.name) === cleanName) || null;
-
-                return {
-                    name: originalName,
-                    isFinished,
-                    isReceived,
-                    isAtExternal,
-                    history,
-                };
+      const extractFromProjectField = (source) => {
+        let extracted = new Set();
+        if (!source) return [];
+        try {
+          let parsed = typeof source === "string" ? JSON.parse(source) : source;
+          if (Array.isArray(parsed)) {
+            parsed.forEach((obj) => {
+              let pName = obj.product || obj.name || "";
+              if (Array.isArray(pName)) {
+                pName.forEach((v) => {
+                  if (v) extracted.add(v.trim());
+                });
+              } else if (pName) {
+                extracted.add(pName.trim());
+              }
             });
+          }
+        } catch (e) {
+          source
+            .toString()
+            .split(/[\r\n,]+/)
+            .forEach((v) => {
+              let cleanV = v
+                .replace(/^\d+\.\s*/, "")
+                .replace(/^\[+|\]+$/g, "")
+                .trim();
+              if (cleanV && !cleanV.includes("{")) extracted.add(cleanV);
+            });
+        }
+        return Array.from(extracted);
+      };
 
-            let htmlForm = `
+      let finishedListClean = (rawData.finished_items || []).map(superClean);
+      let itemsStatus = rawData.items_status || {};
+      let itemsFromDB = extractFromProjectField(rawData.project_item_name_raw);
+      let itemsMoved = rawData.accumulated_moved || [];
+      let allSource = Array.from(new Set([...itemsFromDB, ...itemsMoved]));
+      let moveHistory = rawData.items_moved || [];
+
+      let displayItems = allSource.map((originalName) => {
+        let cleanName = superClean(originalName);
+        let isFinished = finishedListClean.includes(cleanName);
+
+        let currentStat = "";
+        for (let key in itemsStatus) {
+          if (superClean(key) === cleanName) {
+            currentStat = itemsStatus[key];
+            break;
+          }
+        }
+
+        let isReceived =
+          currentStat.includes("at_office") || currentStat === "back_from_shop";
+        let isAtExternal = currentStat === "at_external";
+
+        let history =
+          moveHistory.find((h) => superClean(h.name) === cleanName) || null;
+
+        return {
+          name: originalName,
+          isFinished,
+          isReceived,
+          isAtExternal,
+          history,
+        };
+      });
+
+      let htmlForm = `
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
                 
@@ -450,34 +559,44 @@ function receiveItem(reqId) {
             </style>
             <div id="modal_scroll_container" class="item-scroll-area">`;
 
-            if (displayItems.length === 0) {
-                htmlForm += `<div style="text-align:center; padding:40px; color:#94a3b8; font-family:'Prompt';"><i class="fas fa-box-open fa-3x" style="display:block; margin-bottom:15px; opacity:0.3;"></i>ไม่พบข้อมูลรายการสินค้า</div>`;
-            } else {
-                displayItems.forEach((it, idx) => {
-                    let isLocked = it.isFinished || it.isReceived || it.isAtExternal;
-                    let cardClass = "item-card-3d";
-                    let badge = "";
-                    
-                    if (it.isFinished) {
-                        cardClass += " finished";
-                        badge = '<span style="font-size:0.65rem; background:#10b981; color:#fff; padding:3px 8px; border-radius:20px; margin-left:8px; font-weight:700; box-shadow:0 2px 4px rgba(16,185,129,0.3); white-space:nowrap;"><i class="fas fa-check"></i> เสร็จสิ้น</span>';
-                    } else if (it.isReceived) {
-                        cardClass += " received";
-                        badge = '<span style="font-size:0.65rem; background:#3b82f6; color:#fff; padding:3px 8px; border-radius:20px; margin-left:8px; font-weight:700; box-shadow:0 2px 4px rgba(59,130,246,0.3); white-space:nowrap;"><i class="fas fa-building"></i> รับกลับแล้ว</span>';
-                    } else if (it.isAtExternal) {
-                        cardClass += " at-external";
-                        badge = '<span style="font-size:0.65rem; background:#f97316; color:#fff; padding:3px 8px; border-radius:20px; margin-left:8px; font-weight:700; box-shadow:0 2px 4px rgba(249,115,22,0.3); white-space:nowrap;"><i class="fas fa-store"></i> อยู่ร้านนอก</span>';
-                    }
+      if (displayItems.length === 0) {
+        htmlForm += `<div style="text-align:center; padding:40px; color:#94a3b8; font-family:'Prompt';"><i class="fas fa-box-open fa-3x" style="display:block; margin-bottom:15px; opacity:0.3;"></i>ไม่พบข้อมูลรายการสินค้า</div>`;
+      } else {
+        displayItems.forEach((it, idx) => {
+          let isLocked = it.isFinished || it.isReceived || it.isAtExternal;
+          let cardClass = "item-card-3d";
+          let badge = "";
 
-                    let hDest = it.history ? it.history.destination : "office";
-                    let hRemark = it.history ? it.history.remark : "";
-                    let hShopName = it.history && it.history.shop_info ? it.history.shop_info.name : "";
-                    let hShopOwner = it.history && it.history.shop_info ? it.history.shop_info.owner : "";
-                    let hShopPhone = it.history && it.history.shop_info ? it.history.shop_info.phone : "";
-                    
-                    let delay = idx * 0.08;
+          if (it.isFinished) {
+            cardClass += " finished";
+            badge =
+              '<span style="font-size:0.65rem; background:#10b981; color:#fff; padding:3px 8px; border-radius:20px; margin-left:8px; font-weight:700; box-shadow:0 2px 4px rgba(16,185,129,0.3); white-space:nowrap;"><i class="fas fa-check"></i> เสร็จสิ้น</span>';
+          } else if (it.isReceived) {
+            cardClass += " received";
+            badge =
+              '<span style="font-size:0.65rem; background:#3b82f6; color:#fff; padding:3px 8px; border-radius:20px; margin-left:8px; font-weight:700; box-shadow:0 2px 4px rgba(59,130,246,0.3); white-space:nowrap;"><i class="fas fa-building"></i> รับกลับแล้ว</span>';
+          } else if (it.isAtExternal) {
+            cardClass += " at-external";
+            badge =
+              '<span style="font-size:0.65rem; background:#f97316; color:#fff; padding:3px 8px; border-radius:20px; margin-left:8px; font-weight:700; box-shadow:0 2px 4px rgba(249,115,22,0.3); white-space:nowrap;"><i class="fas fa-store"></i> อยู่ร้านนอก</span>';
+          }
 
-                    htmlForm += `
+          let hDest = it.history ? it.history.destination : "office";
+          let hRemark = it.history ? it.history.remark : "";
+          let hShopName =
+            it.history && it.history.shop_info ? it.history.shop_info.name : "";
+          let hShopOwner =
+            it.history && it.history.shop_info
+              ? it.history.shop_info.owner
+              : "";
+          let hShopPhone =
+            it.history && it.history.shop_info
+              ? it.history.shop_info.phone
+              : "";
+
+          let delay = idx * 0.08;
+
+          htmlForm += `
                     <div class="${cardClass}" id="card_${idx}" style="animation-delay: ${delay}s">
                         <div class="card-header-clickable" onclick="toggleItemCardViewOnly(${idx}, ${isLocked})">
                             <input type="checkbox" id="chk_${idx}" style="display:none;" ${isLocked ? "checked disabled" : `onchange="toggleItemCard(${idx})"`} onclick="event.stopPropagation()">
@@ -518,150 +637,191 @@ function receiveItem(reqId) {
                             <div class="label-title"><i class="fas fa-pen-alt" style="color:#8b5cf6;"></i> หมายเหตุ / อาการเสีย <span style="color:#ef4444; margin-left:4px;">*</span></div>
                             <textarea id="remark_${idx}" class="form-input-3d" rows="2" placeholder="ระบุเหตุผลในการนำออก หรืออาการเสีย..." ${isLocked ? "readonly" : ""}>${hRemark}</textarea>
 
-                            ${!isLocked ? `
+                            ${
+                              !isLocked
+                                ? `
                             <div class="label-title" style="margin-top:15px;"><i class="fas fa-paperclip" style="color:#10b981;"></i> รูปภาพ / หลักฐาน</div>
                             <div class="upload-area-3d" id="file_zone_${idx}" onclick="document.getElementById('file_${idx}').click()">
                                 <i class="fas fa-cloud-upload-alt"></i>
-                                <div style="font-size:0.8rem; font-weight:600; color:#64748b; margin-top:2px;" id="file_label_${idx}">คลิกเพื่อแนบรูปภาพ</div>
-                                <div style="font-size:0.7rem; color:#94a3b8;">รองรับไฟล์ JPG, PNG</div>
-                                <input type="file" id="file_${idx}" style="display:none;" accept="image/*" onchange="if(this.files.length>0){document.getElementById('file_label_'+${idx}).innerText='✅ แนบไฟล์สำเร็จ: '+this.files[0].name; document.getElementById('file_label_'+${idx}).style.color='#ea580c'; document.getElementById('file_zone_'+${idx}).style.borderColor='#ea580c'; document.getElementById('file_zone_'+${idx}).style.background='#fff7ed';}">
-                            </div>` : ""}
+                                <div style="font-size:0.8rem; font-weight:600; color:#64748b; margin-top:2px;" id="file_label_${idx}">คลิกเพื่อแนบไฟล์</div>
+                                <div style="font-size:0.7rem; color:#94a3b8;">(รูปภาพ หรือ PDF)</div>
+                                <input type="file" id="file_${idx}" style="display:none;" accept="image/*,.pdf,.avif,.heic" onchange="if(this.files.length>0){document.getElementById('file_label_'+${idx}).innerText='✅ แนบไฟล์สำเร็จ: '+this.files[0].name; document.getElementById('file_label_'+${idx}).style.color='#ea580c'; document.getElementById('file_zone_'+${idx}).style.borderColor='#ea580c'; document.getElementById('file_zone_'+${idx}).style.background='#fff7ed';}">
+                            </div>`
+                                : ""
+                            }
                         </div>
                     </div>`;
-                });
-            }
-            htmlForm += `</div>`;
+        });
+      }
+      htmlForm += `</div>`;
 
-            Swal.fire({
-                title: '<div style="font-family:Prompt; font-weight:800; font-size:1.5rem; color:#1e293b; margin-bottom:-5px;"><i class="fas fa-truck-loading" style="color:#ea580c;"></i> นำของออกจากหน้างาน</div>',
-                html: htmlForm,
-                width: "600px", 
-                showCancelButton: true,
-                confirmButtonText: '<i class="fas fa-save"></i> บันทึกข้อมูล',
-                confirmButtonColor: "#ea580c",
-                cancelButtonText: "ยกเลิก",
-                customClass: {
-                    popup: "rounded-2xl shadow-2xl",
-                    confirmButton: "font-bold rounded-xl px-5 py-2",
-                    cancelButton: "font-bold rounded-xl px-5 py-2",
-                },
-                preConfirm: () => {
-                    const formData = new FormData();
-                    formData.append("action", "receive_item");
-                    formData.append("req_id", reqId);
-                    let count = 0;
-                    displayItems.forEach((it, idx) => {
-                        if (it.isFinished || it.isReceived || it.isAtExternal) return; // ข้ามตัวที่ล็อค
-                        const chk = document.getElementById(`chk_${idx}`);
-                        if (chk && chk.checked) {
-                            count++;
-                            const destInp = document.querySelector(`input[name="dest_${idx}"]:checked`);
-                            if (!destInp) return;
-                            const dest = destInp.value;
-                            const remark = document.getElementById(`remark_${idx}`).value.trim();
-                            
-                            if (!remark) {
-                                Swal.showValidationMessage(`กรุณาใส่หมายเหตุรายการที่ ${idx + 1}`);
-                                return false;
-                            }
-
-                            formData.append(`items[${idx}][name]`, it.name);
-                            formData.append(`items[${idx}][destination]`, dest);
-                            formData.append(`items[${idx}][remark]`, remark);
-
-                            if (dest === "external") {
-                                const sName = document.getElementById(`s_name_${idx}`).value.trim();
-                                if (!sName) {
-                                    Swal.showValidationMessage(`กรุณาใส่ชื่อร้านค้ารายการที่ ${idx + 1}`);
-                                    return false;
-                                }
-                                formData.append(`items[${idx}][shop_name]`, sName);
-                                formData.append(`items[${idx}][shop_owner]`, document.getElementById(`s_owner_${idx}`).value);
-                                formData.append(`items[${idx}][shop_phone]`, document.getElementById(`s_phone_${idx}`).value);
-                            }
-                            const fInp = document.getElementById(`file_${idx}`);
-                            if (fInp && fInp.files.length > 0) formData.append(`item_files_${idx}`, fInp.files[0]);
-                        }
-                    });
-                    if (count === 0) {
-                        Swal.showValidationMessage("กรุณาเลือกรายการสินค้าที่ยังค้างอยู่อย่างน้อย 1 รายการ");
-                        return false;
-                    }
-                    return formData;
-                },
-            }).then((res) => {
-                if (res.isConfirmed) {
-                    Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-                    $.ajax({
-                        url: "service_dashboard.php",
-                        type: "POST",
-                        data: res.value,
-                        processData: false,
-                        contentType: false,
-                        dataType: "json",
-                        success: (r) => r.status === "success" ? location.reload() : Swal.fire("Error", r.message, "error"),
-                        error: () => Swal.fire("Error", "เกิดข้อผิดพลาดในการเชื่อมต่อ", "error")
-                    });
-                }
-            });
+      Swal.fire({
+        title:
+          '<div style="font-family:Prompt; font-weight:800; font-size:1.5rem; color:#1e293b; margin-bottom:-5px;"><i class="fas fa-truck-loading" style="color:#ea580c;"></i> นำของออกจากหน้างาน</div>',
+        html: htmlForm,
+        width: "600px",
+        showCancelButton: true,
+        confirmButtonText: '<i class="fas fa-save"></i> บันทึกข้อมูล',
+        confirmButtonColor: "#ea580c",
+        cancelButtonText: "ยกเลิก",
+        customClass: {
+          popup: "rounded-2xl shadow-2xl",
+          confirmButton: "font-bold rounded-xl px-5 py-2",
+          cancelButton: "font-bold rounded-xl px-5 py-2",
         },
-    });
+        preConfirm: () => {
+          const formData = new FormData();
+          formData.append("action", "receive_item");
+          formData.append("req_id", reqId);
+          let count = 0;
+          displayItems.forEach((it, idx) => {
+            if (it.isFinished || it.isReceived || it.isAtExternal) return; // ข้ามตัวที่ล็อค
+            const chk = document.getElementById(`chk_${idx}`);
+            if (chk && chk.checked) {
+              count++;
+              const destInp = document.querySelector(
+                `input[name="dest_${idx}"]:checked`,
+              );
+              if (!destInp) return;
+              const dest = destInp.value;
+              const remark = document
+                .getElementById(`remark_${idx}`)
+                .value.trim();
+
+              if (!remark) {
+                Swal.showValidationMessage(
+                  `กรุณาใส่หมายเหตุรายการที่ ${idx + 1}`,
+                );
+                return false;
+              }
+
+              formData.append(`items[${idx}][name]`, it.name);
+              formData.append(`items[${idx}][destination]`, dest);
+              formData.append(`items[${idx}][remark]`, remark);
+
+              if (dest === "external") {
+                const sName = document
+                  .getElementById(`s_name_${idx}`)
+                  .value.trim();
+                if (!sName) {
+                  Swal.showValidationMessage(
+                    `กรุณาใส่ชื่อร้านค้ารายการที่ ${idx + 1}`,
+                  );
+                  return false;
+                }
+                formData.append(`items[${idx}][shop_name]`, sName);
+                formData.append(
+                  `items[${idx}][shop_owner]`,
+                  document.getElementById(`s_owner_${idx}`).value,
+                );
+                formData.append(
+                  `items[${idx}][shop_phone]`,
+                  document.getElementById(`s_phone_${idx}`).value,
+                );
+              }
+              const fInp = document.getElementById(`file_${idx}`);
+              if (fInp && fInp.files.length > 0)
+                formData.append(`item_files_${idx}`, fInp.files[0]);
+            }
+          });
+          if (count === 0) {
+            Swal.showValidationMessage(
+              "กรุณาเลือกรายการสินค้าที่ยังค้างอยู่อย่างน้อย 1 รายการ",
+            );
+            return false;
+          }
+          return formData;
+        },
+      }).then((res) => {
+        if (res.isConfirmed) {
+          Swal.fire({
+            title: "กำลังบันทึก...",
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading(),
+          });
+          $.ajax({
+            url: "service_dashboard.php",
+            type: "POST",
+            data: res.value,
+            processData: false,
+            contentType: false,
+            dataType: "json",
+            success: (r) => {
+              if (r.status === "success") {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<div style="font-family:Prompt; font-weight:800; font-size:1.5rem; color:#10b981;">บันทึกข้อมูลสำเร็จ!</div>',
+                    showConfirmButton: false,
+                    timer: 1500, }).then(() => updateData());
+              } else {
+                Swal.fire("Error", r.message, "error");
+              }
+            },
+          });
+        }
+      });
+    },
+  });
 }
 
 // 🟢 ฟังก์ชันควบคุมการเปิดดู (View-Only)
 window.toggleItemCardViewOnly = function (index, isLocked) {
-    if (!isLocked) {
-        const chk = document.getElementById(`chk_${index}`);
-        chk.checked = !chk.checked;
-        window.toggleItemCard(index);
-    } else {
-        const card = document.getElementById(`card_${index}`);
-        const details = $(`#details_${index}`);
-        const arrow = document.getElementById(`arrow_${index}`);
-        if (card.classList.contains("active")) {
-            card.classList.remove("active");
-            arrow.style.transform = "rotate(0deg)";
-            details.slideUp(250);
-        } else {
-            card.classList.add("active");
-            arrow.style.transform = "rotate(180deg)";
-            details.slideDown(250);
-        }
-    }
-};
-
-window.toggleItemCard = function (index) {
+  if (!isLocked) {
     const chk = document.getElementById(`chk_${index}`);
+    chk.checked = !chk.checked;
+    window.toggleItemCard(index);
+  } else {
     const card = document.getElementById(`card_${index}`);
     const details = $(`#details_${index}`);
     const arrow = document.getElementById(`arrow_${index}`);
-    if (chk.checked) {
-        card.classList.add("active");
-        arrow.style.transform = "rotate(180deg)";
-        details.slideDown(250);
+    if (card.classList.contains("active")) {
+      card.classList.remove("active");
+      arrow.style.transform = "rotate(0deg)";
+      details.slideUp(250);
     } else {
-        card.classList.remove("active");
-        arrow.style.transform = "rotate(0deg)";
-        details.slideUp(250);
+      card.classList.add("active");
+      arrow.style.transform = "rotate(180deg)";
+      details.slideDown(250);
     }
+  }
+};
+
+window.toggleItemCard = function (index) {
+  const chk = document.getElementById(`chk_${index}`);
+  const card = document.getElementById(`card_${index}`);
+  const details = $(`#details_${index}`);
+  const arrow = document.getElementById(`arrow_${index}`);
+  if (chk.checked) {
+    card.classList.add("active");
+    arrow.style.transform = "rotate(180deg)";
+    details.slideDown(250);
+  } else {
+    card.classList.remove("active");
+    arrow.style.transform = "rotate(0deg)";
+    details.slideUp(250);
+  }
 };
 
 window.toggleShopFields = function (index) {
-    const destInp = document.querySelector(`input[name="dest_${index}"]:checked`);
-    if (!destInp) return;
-    const dest = destInp.value;
-    const shopBox = $(`#shop_fields_${index}`);
-    const scrollBox = $("#modal_scroll_container");
-    if (dest === "external") {
-        shopBox.slideDown(250, function () {
-            let cardBottom = document.getElementById(`card_${index}`).offsetTop + document.getElementById(`card_${index}`).offsetHeight;
-            scrollBox.animate({ scrollTop: cardBottom - scrollBox.height() + 30 }, 400);
-        });
-    } else {
-        shopBox.slideUp(250);
-    }
+  const destInp = document.querySelector(`input[name="dest_${index}"]:checked`);
+  if (!destInp) return;
+  const dest = destInp.value;
+  const shopBox = $(`#shop_fields_${index}`);
+  const scrollBox = $("#modal_scroll_container");
+  if (dest === "external") {
+    shopBox.slideDown(250, function () {
+      let cardBottom =
+        document.getElementById(`card_${index}`).offsetTop +
+        document.getElementById(`card_${index}`).offsetHeight;
+      scrollBox.animate(
+        { scrollTop: cardBottom - scrollBox.height() + 30 },
+        400,
+      );
+    });
+  } else {
+    shopBox.slideUp(250);
+  }
 };
-
 
 // 9.1 ฟังก์ชันช่วยสลับช่องกรอก (ปลายทาง)
 function toggleDest(t) {
@@ -680,7 +840,7 @@ function confirmOfficeReceipt(reqId, jsonInput) {
   let officeLogs =
     data.details && data.details.office_log ? data.details.office_log : [];
 
-  // 🔥 [เพิ่มส่วนนี้] ดึงรายการที่คืนลูกค้าไปแล้ว เพื่อเอามาเช็คไม่ให้แสดงซ้ำ
+  // ดึงรายการที่คืนลูกค้าไปแล้ว เพื่อเอามาเช็คไม่ให้แสดงซ้ำ
   let returnedItems =
     data.details &&
     data.details.customer_return &&
@@ -692,10 +852,9 @@ function confirmOfficeReceipt(reqId, jsonInput) {
   currentHolding.forEach((itemName) => {
     let currentStatus = itemsStatus[itemName] || "";
 
-    // 🔥 [แก้ส่วนนี้] เช็คเพิ่มว่า "ต้องไม่ได้ถูกคืนลูกค้าไปแล้ว" (ไม่อยู่ใน returnedItems)
+    // เช็คว่า "ต้องไม่ได้ถูกคืนลูกค้าไปแล้ว"
     let isAlreadyReturned = returnedItems.includes(itemName);
 
-    // ถ้าไม่ได้อยู่ร้านนอก และ ยังไม่ได้คืนลูกค้า ให้เอามาแสดง
     if (currentStatus !== "at_external" && !isAlreadyReturned) {
       let initialMove = itemsMovedList.find((it) => it.name === itemName);
       let lastHandover = [...officeLogs]
@@ -718,40 +877,53 @@ function confirmOfficeReceipt(reqId, jsonInput) {
   let itemsHtml = "";
   pendingItems.forEach((it, idx) => {
     let uniqueId = `conf_chk_${idx}`;
+
+    // 🎨 ปรับปุ่มดูรูปตอนนำออก (แก้ปัญหาเครื่องหมายคำพูดตีกัน)
     let initialImgBtn = it.initialFile
-      ? `<a href="uploads/proofs/${it.initialFile}" target="_blank" style="display:inline-flex; align-items:center; gap:5px; margin-top:8px; background:#f1f5f9; color:#475569; padding:5px 10px; border-radius:6px; font-size:11px; text-decoration:none; font-weight:700; border:1px solid #e2e8f0; white-space:nowrap;">
-                <i class="fas fa-image"></i> รูปนำออก
-            </a>`
+      ? `<button type="button" class="btn-mini-3d outline" style="margin-top:8px; cursor:pointer;" 
+            onclick="let url='uploads/proofs/${it.initialFile}'; let ext=url.split('.').pop().toLowerCase(); if(['avif','heic'].includes(ext)){ let win=window.open(); win.document.write('<html><body style=&quot;margin:0; background:#111; display:flex; align-items:center; justify-content:center;&quot;><img src=&quot;'+url+'&quot; style=&quot;max-width:100%; max-height:100vh; box-shadow:0 0 50px rgba(0,0,0,0.5);&quot;></body></html>'); win.document.close(); }else{ window.open(url,'_blank'); }">
+            <i class="fas fa-image text-slate-500"></i> ดูรูปตอนนำออก
+         </button>`
       : "";
 
     let lastHandoverHtml = "";
     if (it.lastRemark) {
+      // 🎨 ปรับปุ่มดูรูปล่าสุด (แก้ปัญหาเครื่องหมายคำพูดตีกัน)
       let lastImgBtn = it.lastFile
-        ? `<a href="uploads/proofs/${it.lastFile}" target="_blank" style="display:inline-flex; align-items:center; gap:5px; margin-top:5px; background:#eff6ff; color:#2563eb; padding:5px 10px; border-radius:6px; font-size:11px; text-decoration:none; font-weight:700; border:1px solid #dbeafe; white-space:nowrap;">
-                    <i class="fas fa-camera"></i> รูปรับล่าสุด
-                </a>`
+        ? `<button type="button" class="btn-mini-3d solid-blue" style="margin-top:6px; cursor:pointer;" 
+              onclick="let url='uploads/proofs/${it.lastFile}'; let ext=url.split('.').pop().toLowerCase(); if(['avif','heic'].includes(ext)){ let win=window.open(); win.document.write('<html><body style=&quot;margin:0; background:#111; display:flex; align-items:center; justify-content:center;&quot;><img src=&quot;'+url+'&quot; style=&quot;max-width:100%; max-height:100vh; box-shadow:0 0 50px rgba(0,0,0,0.5);&quot;></body></html>'); win.document.close(); }else{ window.open(url,'_blank'); }">
+              <i class="fas fa-camera"></i> ดูรูปล่าสุด
+           </button>`
         : "";
 
       lastHandoverHtml = `
-            <div style="margin-top:8px; padding-top:8px; border-top:1px dashed #cbd5e1; width:100%;">
-                <div style="font-size:11px; color:#3b82f6; font-weight:800; text-transform:uppercase; margin-bottom:2px;">บันทึกรับล่าสุด:</div>
-                <div style="font-size:13px; color:#1e40af; line-height:1.4; word-break:break-word;">${it.lastRemark}</div>
+            <div style="margin-top:10px; padding-top:10px; border-top:1px dashed #cbd5e1; width:100%;">
+                <div style="font-size:10px; color:#3b82f6; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;"><i class="fas fa-history"></i> บันทึกรับล่าสุด:</div>
+                <div style="font-size:13px; color:#1e3a8a; font-weight:500; line-height:1.5; word-break:break-word;">${it.lastRemark}</div>
                 ${lastImgBtn}
             </div>`;
     }
 
+    // 🎨 Tag สี
+    let badgeStyle =
+      it.dest === "รอตรวจรับเข้า"
+        ? "background: linear-gradient(135deg, #fef3c7, #fde68a); color: #b45309; border: 1px solid #fcd34d;"
+        : "background: linear-gradient(135deg, #dcfce7, #bbf7d0); color: #15803d; border: 1px solid #86efac;";
+
     itemsHtml += `
-        <div class="conf-card-premium" style="animation-delay: ${idx * 0.1}s;">
-            <label for="${uniqueId}" style="display:flex; align-items:flex-start; padding:12px; cursor:pointer; gap:12px; margin:0; width:100%; box-sizing:border-box;">
-                <input type="checkbox" id="${uniqueId}" class="item-chk-conf" value="${it.name}" style="width:20px; height:20px; accent-color:#3b82f6; cursor:pointer; flex-shrink:0; margin-top:2px;">
+        <div class="conf-card-premium log-anim" style="animation-delay: ${idx * 0.1}s;">
+            <label for="${uniqueId}" style="display:flex; align-items:flex-start; padding:15px; cursor:pointer; gap:12px; margin:0; width:100%; box-sizing:border-box;">
+                <div style="margin-top:2px;">
+                    <input type="checkbox" id="${uniqueId}" class="item-chk-conf custom-chk" value="${it.name}">
+                </div>
                 <div style="flex:1; min-width:0;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:6px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px;">
                         <span style="font-weight:800; color:#1e293b; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${it.name}</span>
-                        <span style="font-size:10px; background:${it.dest === "รอตรวจรับเข้า" ? "#fef3c7" : "#dcfce7"}; color:${it.dest === "รอตรวจรับเข้า" ? "#d97706" : "#166534"}; padding:2px 8px; border-radius:12px; font-weight:700; border:1px solid ${it.dest === "รอตรวจรับเข้า" ? "#fcd34d" : "#86efac"}; flex-shrink:0;">${it.dest}</span>
+                        <span style="font-size:10px; padding:3px 10px; border-radius:50px; font-weight:800; flex-shrink:0; box-shadow:0 2px 4px rgba(0,0,0,0.05); ${badgeStyle}">${it.dest}</span>
                     </div>
-                    <div style="background:#f8fafc; padding:10px; border-radius:10px; border-left:4px solid #3b82f6; width:100%; box-sizing:border-box;">
-                        <div style="font-size:11px; color:#64748b; font-weight:800; text-transform:uppercase; margin-bottom:2px;">ข้อมูลตอนนำออก:</div>
-                        <div style="font-size:13px; color:#334155; line-height:1.4; word-break:break-word;">${it.initialRemark}</div>
+                    <div class="info-inner-box">
+                        <div style="font-size:10px; color:#64748b; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;"><i class="fas fa-info-circle"></i> ข้อมูลตอนนำออก:</div>
+                        <div style="font-size:13px; color:#334155; line-height:1.5; word-break:break-word;">${it.initialRemark}</div>
                         ${initialImgBtn}
                         ${lastHandoverHtml}
                     </div>
@@ -765,55 +937,113 @@ function confirmOfficeReceipt(reqId, jsonInput) {
     html: `
         <style>
             @keyframes fadeInUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
-            .conf-card-premium { background:#fff; border:1px solid #e2e8f0; border-radius:14px; margin-bottom:10px; transition:0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02); opacity:0; animation: fadeInUp 0.4s ease forwards; text-align:left; box-sizing:border-box; overflow:hidden; }
-            .conf-card-premium:hover { border-color:#cbd5e1; background:#fafafa; }
-            .conf-card-premium:has(input:checked) { border-color:#3b82f6; background:#f0f9ff; }
-            .swal-label { font-size:14px; font-weight:700; color:#475569; display:block; text-align:left; margin-bottom:6px; }
-            .swal-input-premium { width:100%; border:1px solid #cbd5e1; border-radius:10px; padding:10px; font-size:14px; box-sizing:border-box; transition:0.2s; background:#fff; font-family:'Prompt', sans-serif; }
-            .swal-input-premium:focus { border-color:#3b82f6; outline:none; box-shadow:0 0 0 3px rgba(59, 130, 246, 0.1); }
+            .log-anim { animation: fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards; opacity: 0; }
+            
+            /* การ์ดหลัก */
+            .conf-card-premium { 
+                background: #ffffff; border: 2px solid #e2e8f0; border-radius: 16px; margin-bottom: 12px; 
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+                box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03); 
+                text-align: left; box-sizing: border-box; overflow: hidden;
+            }
+            .conf-card-premium:hover { border-color: #93c5fd; box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.15); transform: translateY(-2px); }
+            .conf-card-premium:has(input:checked) { border-color: #3b82f6; background: #f0f9ff; box-shadow: 0 0 0 1px #3b82f6, 0 10px 15px -3px rgba(59, 130, 246, 0.2); }
+
+            /* Checkbox */
+            .custom-chk { width: 22px; height: 22px; accent-color: #2563eb; cursor: pointer; border-radius: 6px; }
+
+            /* กล่องสีเทาด้านใน */
+            .info-inner-box { background: #f8fafc; padding: 12px; border-radius: 12px; border-left: 4px solid #94a3b8; width: 100%; box-sizing: border-box; transition: all 0.3s; }
+            .conf-card-premium:has(input:checked) .info-inner-box { background: #ffffff; border-left-color: #3b82f6; }
+
+            /* ปุ่มจิ๋วแบบ 3D */
+            .btn-mini-3d { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 50px; font-size: 11px; text-decoration: none !important; font-weight: 700; transition: all 0.2s; border: none; box-sizing: border-box; }
+            .btn-mini-3d.outline { background: linear-gradient(to bottom, #ffffff, #f1f5f9); color: #475569; border: 1px solid #cbd5e1; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+            .btn-mini-3d.outline:hover { background: #f8fafc; color: #0f172a; border-color: #94a3b8; transform: translateY(-1px); }
+            .btn-mini-3d.solid-blue { background: linear-gradient(135deg, #dbeafe, #bfdbfe); color: #1d4ed8; border: 1px solid #93c5fd; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.15); }
+            .btn-mini-3d.solid-blue:hover { filter: brightness(0.95); transform: translateY(-1px); }
+
+            /* Input 3D Premium */
+            .swal-label { font-size: 14px; font-weight: 800; color: #334155; display: block; text-align: left; margin-bottom: 8px; }
+            .swal-input-premium { width: 100%; border: 2px solid #e2e8f0; border-radius: 12px; padding: 12px; font-size: 14px; box-sizing: border-box; transition: all 0.3s; background: #f8fafc; font-family: 'Prompt', sans-serif; color: #1e293b; }
+            .swal-input-premium:focus { background: #ffffff; border-color: #3b82f6; outline: none; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15); }
+
+            /* 🔥 กล่องอัปโหลดไฟล์สไตล์พรีเมียม */
+            .custom-file-upload { position: relative; width: 100%; border: 2px dashed #cbd5e1; border-radius: 12px; background: #f8fafc; padding: 20px 10px; text-align: center; transition: all 0.3s; cursor: pointer; box-sizing: border-box; }
+            .custom-file-upload:hover { border-color: #3b82f6; background: #eff6ff; }
+            .custom-file-upload input[type="file"] { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 10; }
+            .upload-icon { font-size: 28px; color: #94a3b8; margin-bottom: 8px; transition: color 0.3s; }
+            .custom-file-upload:hover .upload-icon { color: #3b82f6; }
+            .upload-text { font-size: 13px; color: #64748b; font-family: 'Prompt', sans-serif; font-weight: 600; transition: color 0.3s; }
+            .custom-file-upload:hover .upload-text { color: #1e3a8a; }
+
+            /* Scrollbar */
             ::-webkit-scrollbar { width: 6px; }
-            ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
+            ::-webkit-scrollbar-track { background: transparent; }
             ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+            ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         </style>
 
-        <div style="padding:0; box-sizing:border-box;">
-            <div style="text-align:center; margin-bottom:20px;">
-                <div style="width:60px; height:60px; background:linear-gradient(135deg, #3b82f6, #1d4ed8); color:#fff; border-radius:18px; display:flex; align-items:center; justify-content:center; margin:0 auto 10px; box-shadow:0 8px 16px -4px rgba(59, 130, 246, 0.4);">
+        <div style="padding:0 5px; box-sizing:border-box;">
+            <div style="text-align:center; margin-bottom:25px; animation: fadeInUp 0.4s ease;">
+                <div style="width:65px; height:65px; background:linear-gradient(135deg, #3b82f6, #1d4ed8); color:#fff; border-radius:20px; display:flex; align-items:center; justify-content:center; margin:0 auto 15px; box-shadow:0 10px 25px -5px rgba(59, 130, 246, 0.5);">
                     <i class="fas fa-handshake fa-2x"></i>
                 </div>
-                <div style="font-size:22px; font-weight:900; color:#1e293b;">รับช่วงต่อ / ตรวจรับ</div>
-                <div style="font-size:13px; color:#64748b;">กรุณาเลือกรายการและระบุหมายเหตุเพื่อยืนยัน</div>
+                <div style="font-size:24px; font-weight:900; color:#0f172a; letter-spacing:-0.5px;">รับช่วงต่อ / ตรวจรับ</div>
+                <div style="font-size:14px; color:#64748b; margin-top:2px;">กรุณาเลือกรายการและระบุหมายเหตุเพื่อยืนยัน</div>
             </div>
 
-            <div style="text-align:left; margin-bottom:15px;">
-                <label class="swal-label"><i class="fas fa-list-check"></i> รายการสินค้า (${pendingItems.length})</label>
-                <div style="max-height:35vh; overflow-y:auto; padding:2px; margin-bottom:5px; box-sizing:border-box;">
-                    ${itemsHtml || '<div style="text-align:center; padding:20px; color:#94a3b8;">- ไม่มีรายการ -</div>'}
+            <div style="text-align:left; margin-bottom:20px;">
+                <label class="swal-label"><i class="fas fa-list-check" style="color:#3b82f6; margin-right:5px;"></i> รายการสินค้า <span style="color:#94a3b8; font-weight:500;">(${pendingItems.length} รายการ)</span></label>
+                <div style="max-height:40vh; overflow-y:auto; padding:4px; margin-bottom:5px; box-sizing:border-box; border-radius:12px;">
+                    ${itemsHtml || '<div style="text-align:center; padding:30px; background:#f8fafc; border-radius:12px; border:2px dashed #cbd5e1; color:#94a3b8; font-weight:600;"><i class="fas fa-inbox fa-2x" style="margin-bottom:10px; display:block; opacity:0.5;"></i>ไม่มีรายการรอรับ</div>'}
                 </div>
             </div>
 
-            <div style="text-align:left; margin-bottom:15px;">
-                <label class="swal-label">📝 หมายเหตุตรวจรับใหม่ <span style="color:#ef4444;">*</span></label>
-                <textarea id="conf_remark" class="swal-input-premium" placeholder="ระบุสภาพของล่าสุด หรือข้อความถึงผู้ส่ง..." style="height:80px; resize:none;"></textarea>
+            <div style="text-align:left; margin-bottom:20px;">
+                <label class="swal-label"><i class="fas fa-edit" style="color:#f59e0b; margin-right:5px;"></i> หมายเหตุการตรวจรับ <span style="color:#ef4444;">*</span></label>
+                <textarea id="conf_remark" class="swal-input-premium" placeholder="ระบุสภาพของล่าสุด, ปัญหาที่พบ หรือข้อความถึงผู้ส่ง..." style="height:90px; resize:none;"></textarea>
             </div>
 
             <div style="text-align:left;">
-                <label class="swal-label">📎 แนบรูปภาพ (ถ้ามี)</label>
-                <input type="file" id="conf_file" class="swal-input-premium" style="padding:7px; font-size:12px;">
+                <label class="swal-label"><i class="fas fa-paperclip" style="color:#10b981; margin-right:5px;"></i> แนบรูปภาพ / เอกสาร <span style="color:#94a3b8; font-weight:500; font-size:12px;">(รูปภาพ หรือ PDF)</span></label>
+                
+                <div class="custom-file-upload">
+                    <input type="file" id="conf_file" accept="image/*,.pdf,.avif,.heic" onchange="
+                        let fileName = this.files[0] ? this.files[0].name : 'คลิกเพื่อเลือกไฟล์ หรือลากมาวาง';
+                        let textColor = this.files[0] ? '#2563eb' : '#64748b';
+                        let iconColor = this.files[0] ? '#3b82f6' : '#94a3b8';
+                        document.getElementById('conf_file_name').innerText = fileName;
+                        document.getElementById('conf_file_name').style.color = textColor;
+                        document.getElementById('conf_file_icon').style.color = iconColor;
+                        document.getElementById('conf_file_icon').className = this.files[0] ? (this.files[0].name.toLowerCase().endsWith('.pdf') ? 'fas fa-file-pdf' : 'fas fa-image') : 'fas fa-cloud-upload-alt';
+                    ">
+                    <div class="upload-icon"><i id="conf_file_icon" class="fas fa-cloud-upload-alt"></i></div>
+                    <div class="upload-text" id="conf_file_name">คลิกเพื่อเลือกไฟล์ (รูปภาพ หรือ PDF) หรือลากมาวาง</div>
+                </div>
             </div>
         </div>
         `,
-    width: "550px",
+    width: "600px",
     showCancelButton: true,
-    confirmButtonText: "ยืนยันการรับ",
-    confirmButtonColor: "#3b82f6",
-    cancelButtonText: "ยกเลิก",
+    confirmButtonText:
+      '<i class="fas fa-check-circle" style="margin-right:6px;"></i> ยืนยันการรับ',
+    cancelButtonText:
+      '<i class="fas fa-times" style="margin-right:6px;"></i> ยกเลิก',
+    customClass: {
+      confirmButton: "swal2-confirm-btn-blue",
+      cancelButton: "swal2-cancel-btn-gray",
+    },
     preConfirm: () => {
       const checked = document.querySelectorAll(".item-chk-conf:checked");
       const remark = document.getElementById("conf_remark").value.trim();
       if (checked.length === 0)
-        return Swal.showValidationMessage("กรุณาเลือกสินค้าอย่างน้อย 1 รายการ");
-      if (!remark) return Swal.showValidationMessage("กรุณากรอกหมายเหตุ");
+        return Swal.showValidationMessage(
+          "⚠️ กรุณาเลือกสินค้าอย่างน้อย 1 รายการ",
+        );
+      if (!remark)
+        return Swal.showValidationMessage("⚠️ กรุณากรอกหมายเหตุการตรวจรับ");
+
       let sel = [];
       checked.forEach((c) => sel.push(c.value));
       return {
@@ -832,11 +1062,14 @@ function confirmOfficeReceipt(reqId, jsonInput) {
       res.value.items.forEach((it, idx) =>
         fd.append(`checked_items[${idx}]`, it),
       );
+
       Swal.fire({
         title: "กำลังบันทึก...",
+        text: "กรุณารอสักครู่",
         allowOutsideClick: false,
         didOpen: () => Swal.showLoading(),
       });
+
       $.ajax({
         url: "service_dashboard.php",
         type: "POST",
@@ -844,91 +1077,103 @@ function confirmOfficeReceipt(reqId, jsonInput) {
         processData: false,
         contentType: false,
         dataType: "json",
-        success: (response) =>
-          response.status === "success"
-            ? location.reload()
-            : Swal.fire("Error", response.message, "error"),
+        success: (response) => {
+          if (response.status === "success") {
+            Swal.fire({
+                icon: 'success',
+                title: '<div style="font-family:Prompt; font-weight:800; font-size:1.5rem; color:#10b981;">บันทึกข้อมูลสำเร็จ!</div>',
+                showConfirmButton: false,
+                timer: 1500,
+                backdrop: `rgba(0,0,0,0.7)`
+            }).then(() => {
+                location.reload();
+            });
+          } else {
+            Swal.fire("เกิดข้อผิดพลาด", response.message, "error");
+          }
+        },
+        error: () =>
+          Swal.fire("เกิดข้อผิดพลาด", "ไม่สามารถติดต่อเซิร์ฟเวอร์ได้", "error"),
       });
     }
   });
 }
 
-
 // 11. ดูประวัติ Timeline (Premium UI + Smooth Animations)
 function viewReceiverDetails(jsonInput) {
-    let data = typeof jsonInput === "string" ? JSON.parse(jsonInput) : jsonInput;
-    if (typeof data === "string") data = JSON.parse(data);
-    let d = data.details || {};
+  let data = typeof jsonInput === "string" ? JSON.parse(jsonInput) : jsonInput;
+  if (typeof data === "string") data = JSON.parse(data);
+  let d = data.details || {};
 
-    let stepCount = 1;
-    let delayCounter = 0;
+  let stepCount = 1;
+  let delayCounter = 0;
 
-    // --- Helper: แปลงวันที่ (DD/MM/YYYY HH:mm) เป็นตัวเลขเพื่อใช้เรียงลำดับ ---
-    function parseDate(dateStr) {
-        if (!dateStr || dateStr === "-") return 0;
-        let parts = dateStr.split(/[\s/:]+/);
-        if (parts.length >= 5) {
-            let day = parseInt(parts[0], 10);
-            let month = parseInt(parts[1], 10) - 1;
-            let year = parseInt(parts[2], 10);
-            if (year < 100) year += 2000;
-            let hours = parseInt(parts[3], 10);
-            let mins = parseInt(parts[4], 10);
-            return new Date(year, month, day, hours, mins).getTime();
-        }
-        return 0;
+  // --- Helper: แปลงวันที่ (DD/MM/YYYY HH:mm) เป็นตัวเลขเพื่อใช้เรียงลำดับ ---
+  function parseDate(dateStr) {
+    if (!dateStr || dateStr === "-") return 0;
+    let parts = dateStr.split(/[\s/:]+/);
+    if (parts.length >= 5) {
+      let day = parseInt(parts[0], 10);
+      let month = parseInt(parts[1], 10) - 1;
+      let year = parseInt(parts[2], 10);
+      if (year < 100) year += 2000;
+      let hours = parseInt(parts[3], 10);
+      let mins = parseInt(parts[4], 10);
+      return new Date(year, month, day, hours, mins).getTime();
+    }
+    return 0;
+  }
+
+  // --- Helper: จัด Format วันที่ให้สวยงาม (แยกบรรทัดวันที่กับเวลา) ---
+  function formatTimeDisplay(dateStr) {
+    if (!dateStr || dateStr === "-") return '<span class="time-date">-</span>';
+    let split = dateStr.split(" ");
+    if (split.length >= 2) {
+      return `<span class="time-date">${split[0]}</span><span class="time-clock"><i class="far fa-clock"></i> ${split[1]}</span>`;
+    }
+    return `<span class="time-date">${dateStr}</span>`;
+  }
+
+  // --- Helper: สร้าง HTML สำหรับ Timeline Item (ดีไซน์พรีเมียม) ---
+  const createItem = (type, icon, title, subtitle, content, extraHtml = "") => {
+    delayCounter += 0.12; // หน่วงเวลาให้โผล่ทีละกล่อง
+    let colorClass = "";
+    let iconBg = "";
+    let shadowColor = "";
+
+    switch (type) {
+      case "start":
+        colorClass = "blue";
+        iconBg = "linear-gradient(135deg, #3b82f6, #1d4ed8)";
+        shadowColor = "rgba(59, 130, 246, 0.3)";
+        break;
+      case "shop":
+        colorClass = "orange";
+        iconBg = "linear-gradient(135deg, #f59e0b, #b45309)";
+        shadowColor = "rgba(245, 158, 11, 0.3)";
+        break;
+      case "check":
+        colorClass = "green";
+        iconBg = "linear-gradient(135deg, #10b981, #047857)";
+        shadowColor = "rgba(16, 185, 129, 0.3)";
+        break;
+      case "back":
+        colorClass = "pink";
+        iconBg = "linear-gradient(135deg, #ec4899, #be185d)";
+        shadowColor = "rgba(236, 72, 153, 0.3)";
+        break;
+      case "finish":
+        colorClass = "purple";
+        iconBg = "linear-gradient(135deg, #8b5cf6, #5b21b6)";
+        shadowColor = "rgba(139, 92, 246, 0.3)";
+        break;
+      default:
+        colorClass = "gray";
+        iconBg = "linear-gradient(135deg, #94a3b8, #475569)";
+        shadowColor = "rgba(148, 163, 184, 0.3)";
     }
 
-    // --- Helper: จัด Format วันที่ให้สวยงาม (แยกบรรทัดวันที่กับเวลา) ---
-    function formatTimeDisplay(dateStr) {
-        if (!dateStr || dateStr === "-") return '<span class="time-date">-</span>';
-        let split = dateStr.split(" ");
-        if(split.length >= 2) {
-            return `<span class="time-date">${split[0]}</span><span class="time-clock"><i class="far fa-clock"></i> ${split[1]}</span>`;
-        }
-        return `<span class="time-date">${dateStr}</span>`;
-    }
-
-    // --- Helper: สร้าง HTML สำหรับ Timeline Item (ดีไซน์พรีเมียม) ---
-    const createItem = (type, icon, title, subtitle, content, extraHtml = "") => {
-        delayCounter += 0.12; // หน่วงเวลาให้โผล่ทีละกล่อง
-        let colorClass = "";
-        let iconBg = "";
-        let shadowColor = "";
-
-        switch (type) {
-            case "start":
-                colorClass = "blue";
-                iconBg = "linear-gradient(135deg, #3b82f6, #1d4ed8)";
-                shadowColor = "rgba(59, 130, 246, 0.3)";
-                break;
-            case "shop":
-                colorClass = "orange";
-                iconBg = "linear-gradient(135deg, #f59e0b, #b45309)";
-                shadowColor = "rgba(245, 158, 11, 0.3)";
-                break;
-            case "check":
-                colorClass = "green";
-                iconBg = "linear-gradient(135deg, #10b981, #047857)";
-                shadowColor = "rgba(16, 185, 129, 0.3)";
-                break;
-            case "back":
-                colorClass = "pink";
-                iconBg = "linear-gradient(135deg, #ec4899, #be185d)";
-                shadowColor = "rgba(236, 72, 153, 0.3)";
-                break;
-            case "finish":
-                colorClass = "purple";
-                iconBg = "linear-gradient(135deg, #8b5cf6, #5b21b6)";
-                shadowColor = "rgba(139, 92, 246, 0.3)";
-                break;
-            default:
-                colorClass = "gray";
-                iconBg = "linear-gradient(135deg, #94a3b8, #475569)";
-                shadowColor = "rgba(148, 163, 184, 0.3)";
-        }
-
-        return `
+    return `
         <div class="timeline-row" style="animation-delay: ${delayCounter}s;">
             <div class="timeline-time-col">
                 <div class="time-text">${formatTimeDisplay(subtitle)}</div>
@@ -952,75 +1197,106 @@ function viewReceiverDetails(jsonInput) {
                 </div>
             </div>
         </div>`;
-    };
+  };
 
-    let events = []; // เก็บประวัติทั้งหมดเพื่อนำมาเรียง
+  let events = []; // เก็บประวัติทั้งหมดเพื่อนำมาเรียง
 
-    // 1. นำของออก / ส่งร้าน (ดึงจาก items_moved)
-    if (data.items_moved && data.items_moved.length > 0) {
-        let move_groups = {};
-        // จัดกลุ่มรายการที่ทำพร้อมกัน
-        data.items_moved.forEach((m) => {
-            let m_at = m.at || d.pickup_at || data.db_received_at || "-";
-            let m_by = m.by || d.pickup_by || data.db_received_by || "ไม่ระบุชื่อ";
-            let dest = m.destination || "office";
-            let shopName = m.shop_info ? m.shop_info.name : "";
+  // 1. นำของออก / ส่งร้าน (ดึงจาก items_moved)
+  if (data.items_moved && data.items_moved.length > 0) {
+    let move_groups = {};
+    // จัดกลุ่มรายการที่ทำพร้อมกัน
+    data.items_moved.forEach((m) => {
+      let m_at = m.at || d.pickup_at || data.db_received_at || "-";
+      let m_by = m.by || d.pickup_by || data.db_received_by || "ไม่ระบุชื่อ";
+      let dest = m.destination || "office";
+      let shopName = m.shop_info ? m.shop_info.name : "";
 
-            let groupKey = m_at + "_" + m_by + "_" + dest + "_" + shopName;
+      let groupKey = m_at + "_" + m_by + "_" + dest + "_" + shopName;
 
-            if (!move_groups[groupKey]) {
-                move_groups[groupKey] = { at: m_at, by: m_by, dest: dest, shop_info: m.shop_info, items: [] };
-            }
-            let attach = m.file ? `<a href="uploads/proofs/${m.file}" target="_blank" class="btn-attach-mini"><i class="fas fa-image"></i> ดูรูป</a>` : "";
-            move_groups[groupKey].items.push(`<li><i class="fas fa-caret-right" style="color:#cbd5e1; margin-right:5px;"></i> <b>${m.name}</b> ${m.remark ? `<span style="color:#94a3b8; font-weight:normal;">(${m.remark})</span>` : ""} ${attach}</li>`);
-        });
+      if (!move_groups[groupKey]) {
+        move_groups[groupKey] = {
+          at: m_at,
+          by: m_by,
+          dest: dest,
+          shop_info: m.shop_info,
+          items: [],
+        };
+      }
+      let attach = m.file
+        ? `<a href="uploads/proofs/${m.file}" target="_blank" class="btn-attach-mini"><i class="fas fa-image"></i> ดูรูป</a>`
+        : "";
+      move_groups[groupKey].items.push(
+        `<li><i class="fas fa-caret-right" style="color:#cbd5e1; margin-right:5px;"></i> <b>${m.name}</b> ${m.remark ? `<span style="color:#94a3b8; font-weight:normal;">(${m.remark})</span>` : ""} ${attach}</li>`,
+      );
+    });
 
-        // นำกลุ่มที่จัดไว้ แปลงเป็น Event
-        for (let key in move_groups) {
-            let g = move_groups[key];
-            let title = g.dest === "external" ? "ส่งซ่อมร้านภายนอก" : "นำของกลับบริษัท (จากหน้างาน)";
-            let icon = g.dest === "external" ? "fa-store" : "fa-building";
-            let type = g.dest === "external" ? "shop" : "start";
+    // นำกลุ่มที่จัดไว้ แปลงเป็น Event
+    for (let key in move_groups) {
+      let g = move_groups[key];
+      let title =
+        g.dest === "external"
+          ? "ส่งซ่อมร้านภายนอก"
+          : "นำของกลับบริษัท (จากหน้างาน)";
+      let icon = g.dest === "external" ? "fa-store" : "fa-building";
+      let type = g.dest === "external" ? "shop" : "start";
 
-            let content = `<div class="user-action-text"><i class="fas fa-user-tag"></i> ผู้ดำเนินการ: <b>${g.by}</b></div>`;
+      let content = `<div class="user-action-text"><i class="fas fa-user-tag"></i> ผู้ดำเนินการ: <b>${g.by}</b></div>`;
 
-            if (g.dest === "external" && g.shop_info) {
-                content += `
+      if (g.dest === "external" && g.shop_info) {
+        content += `
                 <div class="shop-info-box">
                     <div class="shop-name-title"><i class="fas fa-store-alt"></i> ${g.shop_info.name || "-"}</div>
                     <div class="shop-contact-sub"><i class="fas fa-user-tie"></i> ติดต่อ: ${g.shop_info.owner || "-"} | <i class="fas fa-phone"></i> ${g.shop_info.phone || "-"}</div>
                 </div>`;
-            }
+      }
 
-            content += `<div class="remark-text">
+      content += `<div class="remark-text">
                             <div class="remark-title">📦 รายการสินค้า:</div>
                             <ul class="clean-list">${g.items.join("")}</ul>
                         </div>`;
 
-            events.push({ type: type, icon: icon, title: title, at: g.at, by: g.by, content: content, timestamp: parseDate(g.at), order: 1 });
-        }
-    } else if (d.pickup_by) {
-        // Fallback ของเก่า
-        events.push({
-            type: "start", icon: "fa-dolly", title: "นำออกจากหน้างาน", at: d.pickup_at || "-", by: d.pickup_by,
-            content: `<div class="user-action-text"><i class="fas fa-user-tag"></i> ผู้ดำเนินการ: <b>${d.pickup_by}</b></div>
-                      <div class="remark-text"><i class="fas fa-quote-left" style="color:#cbd5e1;"></i> ${d.pickup_remark || "-"}</div>`,
-            timestamp: parseDate(d.pickup_at), order: 1,
-        });
+      events.push({
+        type: type,
+        icon: icon,
+        title: title,
+        at: g.at,
+        by: g.by,
+        content: content,
+        timestamp: parseDate(g.at),
+        order: 1,
+      });
     }
+  } else if (d.pickup_by) {
+    // Fallback ของเก่า
+    events.push({
+      type: "start",
+      icon: "fa-dolly",
+      title: "นำออกจากหน้างาน",
+      at: d.pickup_at || "-",
+      by: d.pickup_by,
+      content: `<div class="user-action-text"><i class="fas fa-user-tag"></i> ผู้ดำเนินการ: <b>${d.pickup_by}</b></div>
+                      <div class="remark-text"><i class="fas fa-quote-left" style="color:#cbd5e1;"></i> ${d.pickup_remark || "-"}</div>`,
+      timestamp: parseDate(d.pickup_at),
+      order: 1,
+    });
+  }
 
-    // 2. ประวัติในบริษัท (office_log)
-    if (d.office_log && d.office_log.length > 0) {
-        d.office_log.forEach((log) => {
-            let isBack = log.status === "back_from_shop";
-            let type = isBack ? "back" : "check";
-            let icon = isBack ? "fa-undo-alt" : "fa-clipboard-check";
-            let title = isBack ? "รับของกลับจากร้านซ่อม" : "ตรวจสอบ / รับช่วงต่อ (ในบริษัท)";
-            let attach = log.file ? `<a href="uploads/${isBack ? "repairs" : "proofs"}/${log.file}" target="_blank" class="btn-attach-full"><i class="fas fa-paperclip"></i> ดูไฟล์หลักฐานแนบ</a>` : "";
+  // 2. ประวัติในบริษัท (office_log)
+  if (d.office_log && d.office_log.length > 0) {
+    d.office_log.forEach((log) => {
+      let isBack = log.status === "back_from_shop";
+      let type = isBack ? "back" : "check";
+      let icon = isBack ? "fa-undo-alt" : "fa-clipboard-check";
+      let title = isBack
+        ? "รับของกลับจากร้านซ่อม"
+        : "ตรวจสอบ / รับช่วงต่อ (ในบริษัท)";
+      let attach = log.file
+        ? `<a href="uploads/${isBack ? "repairs" : "proofs"}/${log.file}" target="_blank" class="btn-attach-full"><i class="fas fa-paperclip"></i> ดูไฟล์หลักฐานแนบ</a>`
+        : "";
 
-            let expenseTable = "";
-            if (isBack && log.expenses && log.expenses.length > 0) {
-                expenseTable = `
+      let expenseTable = "";
+      if (isBack && log.expenses && log.expenses.length > 0) {
+        expenseTable = `
                 <div class="modern-expense-table">
                     <div class="table-header"><i class="fas fa-file-invoice-dollar"></i> รายละเอียดค่าใช้จ่าย</div>
                     <table>
@@ -1032,17 +1308,22 @@ function viewReceiverDetails(jsonInput) {
                             </tr>
                         </thead>
                         <tbody>`;
-                log.expenses.forEach((ex) => {
-                    let total = parseFloat(ex.total || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
-                    expenseTable += `
+        log.expenses.forEach((ex) => {
+          let total = parseFloat(ex.total || 0).toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+          });
+          expenseTable += `
                             <tr>
                                 <td style="color:#334155; font-weight:500;">${ex.name}</td>
                                 <td style="text-align:center; color:#64748b;">${ex.qty}</td>
                                 <td style="text-align:right; color:#db2777; font-weight:600;">${total}</td>
                             </tr>`;
-                });
-                let grandTotal = parseFloat(log.total_cost || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
-                expenseTable += `
+        });
+        let grandTotal = parseFloat(log.total_cost || 0).toLocaleString(
+          "en-US",
+          { minimumFractionDigits: 2 },
+        );
+        expenseTable += `
                         </tbody>
                         <tfoot>
                             <tr>
@@ -1052,14 +1333,14 @@ function viewReceiverDetails(jsonInput) {
                         </tfoot>
                     </table>
                 </div>`;
-            }
+      }
 
-            let itemsHtml = "";
-            if (log.items && log.items.length > 0) {
-                itemsHtml = `<div class="item-tag-box"><i class="fas fa-box-open"></i> <b>รายการ:</b> ${log.items.join(", ")}</div>`;
-            }
+      let itemsHtml = "";
+      if (log.items && log.items.length > 0) {
+        itemsHtml = `<div class="item-tag-box"><i class="fas fa-box-open"></i> <b>รายการ:</b> ${log.items.join(", ")}</div>`;
+      }
 
-            let content = `
+      let content = `
                 <div class="user-action-text"><i class="fas fa-user-check"></i> ผู้ดำเนินการ: <b>${log.by || "-"}</b></div>
                 ${isBack && log.shop ? `<div class="shop-name-mini"><i class="fas fa-store"></i> จากร้าน: <b>${log.shop}</b></div>` : ""}
                 ${itemsHtml}
@@ -1067,34 +1348,55 @@ function viewReceiverDetails(jsonInput) {
                 ${expenseTable}
             `;
 
-            events.push({ type: type, icon: icon, title: title, at: log.at || "-", by: log.by, content: content, extraHtml: attach, timestamp: parseDate(log.at), order: 2 });
+      events.push({
+        type: type,
+        icon: icon,
+        title: title,
+        at: log.at || "-",
+        by: log.by,
+        content: content,
+        extraHtml: attach,
+        timestamp: parseDate(log.at),
+        order: 2,
+      });
+    });
+  }
+
+  // 3. จบงาน / ส่งมอบลูกค้า (return_history)
+  if (data.return_history && data.return_history.length > 0) {
+    data.return_history.forEach((rh, idx) => {
+      let stars = "";
+      for (let i = 1; i <= 5; i++) {
+        stars +=
+          i <= (rh.rating || 0)
+            ? '<i class="fas fa-star" style="color:#f59e0b; text-shadow:0 1px 2px rgba(245,158,11,0.3);"></i> '
+            : '<i class="fas fa-star" style="color:#e2e8f0;"></i> ';
+      }
+      let attach = rh.file
+        ? `<a href="uploads/returns/${rh.file}" target="_blank" class="btn-attach-full btn-purple"><i class="fas fa-image"></i> รูปส่งงาน (บิลรวม)</a>`
+        : "";
+
+      let itemsListHtml = "";
+      if (rh.items_detail) {
+        itemsListHtml = '<ul class="clean-list" style="margin-bottom:10px;">';
+        rh.items_detail.forEach((it) => {
+          let itemFileLink = it.file
+            ? `<a href="uploads/returns/${it.file}" target="_blank" class="btn-attach-mini"><i class="fas fa-image"></i> รูป</a>`
+            : "";
+          itemsListHtml += `<li><i class="fas fa-check-circle" style="color:#10b981; margin-right:5px;"></i> <b>${it.name}</b> ${itemFileLink}</li>`;
         });
-    }
+        itemsListHtml += "</ul>";
+      } else if (rh.items) {
+        itemsListHtml = `<div class="item-tag-box"><i class="fas fa-box"></i> <b>สินค้า:</b> ${rh.items.join(", ")}</div>`;
+      }
 
-    // 3. จบงาน / ส่งมอบลูกค้า (return_history)
-    if (data.return_history && data.return_history.length > 0) {
-        data.return_history.forEach((rh, idx) => {
-            let stars = "";
-            for (let i = 1; i <= 5; i++) {
-                stars += i <= (rh.rating || 0) ? '<i class="fas fa-star" style="color:#f59e0b; text-shadow:0 1px 2px rgba(245,158,11,0.3);"></i> ' : '<i class="fas fa-star" style="color:#e2e8f0;"></i> ';
-            }
-            let attach = rh.file ? `<a href="uploads/returns/${rh.file}" target="_blank" class="btn-attach-full btn-purple"><i class="fas fa-image"></i> รูปส่งงาน (บิลรวม)</a>` : "";
-
-            let itemsListHtml = "";
-            if (rh.items_detail) {
-                itemsListHtml = '<ul class="clean-list" style="margin-bottom:10px;">';
-                rh.items_detail.forEach((it) => {
-                    let itemFileLink = it.file ? `<a href="uploads/returns/${it.file}" target="_blank" class="btn-attach-mini"><i class="fas fa-image"></i> รูป</a>` : "";
-                    itemsListHtml += `<li><i class="fas fa-check-circle" style="color:#10b981; margin-right:5px;"></i> <b>${it.name}</b> ${itemFileLink}</li>`;
-                });
-                itemsListHtml += "</ul>";
-            } else if (rh.items) {
-                itemsListHtml = `<div class="item-tag-box"><i class="fas fa-box"></i> <b>สินค้า:</b> ${rh.items.join(", ")}</div>`;
-            }
-
-            events.push({
-                type: "finish", icon: "fa-flag-checkered", title: `ส่งมอบ / คืนลูกค้า (รอบที่ ${idx + 1})`, at: rh.at || "-", by: rh.by,
-                content: `<div class="user-action-text"><i class="fas fa-user-check"></i> ผู้ดำเนินการ: <b>${rh.by || "-"}</b></div>
+      events.push({
+        type: "finish",
+        icon: "fa-flag-checkered",
+        title: `ส่งมอบ / คืนลูกค้า (รอบที่ ${idx + 1})`,
+        at: rh.at || "-",
+        by: rh.by,
+        content: `<div class="user-action-text"><i class="fas fa-user-check"></i> ผู้ดำเนินการ: <b>${rh.by || "-"}</b></div>
                           <div class="rating-box">
                               <span class="rating-label">ความพึงพอใจ:</span>
                               <span class="stars">${stars}</span>
@@ -1103,36 +1405,45 @@ function viewReceiverDetails(jsonInput) {
                           <div class="remark-title" style="margin-top:10px;">📦 รายการที่ส่งมอบ:</div>
                           ${itemsListHtml}
                           ${rh.remark ? `<div class="remark-text"><i class="fas fa-comment"></i> "${rh.remark}"</div>` : ""}`,
-                extraHtml: attach, timestamp: parseDate(rh.at), order: 3,
-            });
-        });
-    }
-
-    // 🏆 ทำการเรียงลำดับเวลา
-    events.sort((a, b) => {
-        if (a.timestamp === b.timestamp) return a.order - b.order;
-        return a.timestamp - b.timestamp;
+        extraHtml: attach,
+        timestamp: parseDate(rh.at),
+        order: 3,
+      });
     });
+  }
 
-    // วาด Timeline HTML
-    let timelineHtml = '<div class="premium-timeline">';
-    events.forEach((e) => {
-        timelineHtml += createItem(e.type, e.icon, e.title, e.at, e.content, e.extraHtml);
-    });
+  // 🏆 ทำการเรียงลำดับเวลา
+  events.sort((a, b) => {
+    if (a.timestamp === b.timestamp) return a.order - b.order;
+    return a.timestamp - b.timestamp;
+  });
 
-    if (events.length === 0) {
-        timelineHtml += `
+  // วาด Timeline HTML
+  let timelineHtml = '<div class="premium-timeline">';
+  events.forEach((e) => {
+    timelineHtml += createItem(
+      e.type,
+      e.icon,
+      e.title,
+      e.at,
+      e.content,
+      e.extraHtml,
+    );
+  });
+
+  if (events.length === 0) {
+    timelineHtml += `
         <div class="empty-timeline">
             <div class="empty-icon"><i class="fas fa-folder-open"></i></div>
             <div class="empty-text">ยังไม่มีประวัติการดำเนินการในขณะนี้</div>
         </div>`;
-    }
-    timelineHtml += "</div>";
+  }
+  timelineHtml += "</div>";
 
-    // --- UI Popup (SweetAlert2) ---
-    Swal.fire({
-        title: "",
-        html: `
+  // --- UI Popup (SweetAlert2) ---
+  Swal.fire({
+    title: "",
+    html: `
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
             
@@ -1233,16 +1544,16 @@ function viewReceiverDetails(jsonInput) {
             </div>
         </div>
         `,
-        width: "650px", // ขยายให้กว้างขึ้นนิดนึงเพื่อรับความสวย
-        showConfirmButton: true,
-        confirmButtonText: "ปิดหน้าต่าง",
-        confirmButtonColor: "#475569",
-        buttonsStyling: true,
-        customClass: { 
-            popup: "rounded-2xl shadow-2xl",
-            confirmButton: "px-6 py-2 font-bold text-sm rounded-full"
-        },
-    });
+    width: "650px", // ขยายให้กว้างขึ้นนิดนึงเพื่อรับความสวย
+    showConfirmButton: true,
+    confirmButtonText: "ปิดหน้าต่าง",
+    confirmButtonColor: "#475569",
+    buttonsStyling: true,
+    customClass: {
+      popup: "rounded-2xl shadow-2xl",
+      confirmButton: "px-6 py-2 font-bold text-sm rounded-full",
+    },
+  });
 }
 
 // 12. ฟังก์ชันส่งคืนลูกค้า / จบงาน (ฉบับสมบูรณ์: โชว์ประวัติการประเมินแยกตามรอบ)
@@ -1398,9 +1709,25 @@ function returnToCustomer(reqId, jsonInput, isEditMode = false) {
       let itemInfo = [...moveHistory]
         .reverse()
         .find((m) => m.name === itNameTrim);
-      let prevRemark = itemInfo
+        
+      let prevRemark = itemInfo && itemInfo.remark
         ? itemInfo.remark
         : "- สินค้าอยู่ที่หน้างานเดิม -";
+
+      // 🌟 ดึงไฟล์แนบตอนนำของออก มาสร้างเป็นปุ่ม
+      let initialFileBtn = "";
+      if (itemInfo && itemInfo.file) {
+          let fUrl = `uploads/proofs/${itemInfo.file}`;
+          initialFileBtn = `
+          <div style="margin-top:8px;">
+              <button type="button" style="border:1px solid #c7d2fe; cursor:pointer; display:inline-flex; align-items:center; gap:5px; background:#e0e7ff; color:#4338ca; font-size:0.75rem; padding:5px 12px; border-radius:50px; font-weight:700; font-family:'Prompt', sans-serif; transition:all 0.2s;"
+                  onmouseover="this.style.background='#c7d2fe';"
+                  onmouseout="this.style.background='#e0e7ff';"
+                  onclick="let url='${fUrl}'; let ext=url.split('.').pop().toLowerCase(); if(['jpg','jpeg','png','gif','webp','avif','heic'].includes(ext)){ let win=window.open(); win.document.write('<html><body style=&quot;margin:0; background:#111; display:flex; align-items:center; justify-content:center;&quot;><img src=&quot;'+url+'&quot; style=&quot;max-width:100%; max-height:100vh; box-shadow:0 0 50px rgba(0,0,0,0.5);&quot;></body></html>'); win.document.close(); }else{ window.open(url,'_blank'); }">
+                  <i class="fas fa-image"></i> ดูรูปตอนนำออก
+              </button>
+          </div>`;
+      }
 
       itemCheckHtml += `
             <div class="item-card-3d ${isLocked ? "" : "active"}" id="card_wrap_${idx}" style="${isLocked ? "opacity:0.8;" : ""} margin-bottom:10px;">
@@ -1416,8 +1743,12 @@ function returnToCustomer(reqId, jsonInput, isEditMode = false) {
                         <div style="font-size:0.75rem; color:${hasSummary ? "#065f46" : "#991b1b"}; font-weight:800; text-transform:uppercase;">ผลการซ่อม:</div>
                         <div style="font-size:0.85rem;">${hasSummary ? repairSummaries[itNameTrim] : "กรุณาระบุสรุปงานซ่อมก่อน"}</div>
                     </div>
-                    <div style="font-size:0.8rem; color:#6b7280; font-weight:600; margin-bottom:2px;">บันทึกเคลื่อนย้าย:</div>
-                    <div style="background:#f9fafb; padding:8px; border-radius:6px; font-size:0.85rem; border-left:3px solid #ddd6fe;">${prevRemark}</div>
+                    
+                    <div style="font-size:0.8rem; color:#6b7280; font-weight:600; margin-bottom:2px;"><i class="fas fa-clipboard-list" style="color:#8b5cf6;"></i> หมายเหตุ / อาการเสีย (ตอนนำออก):</div>
+                    <div style="background:#f9fafb; padding:10px; border-radius:8px; font-size:0.85rem; border-left:3px solid #ddd6fe;">
+                        <div style="color:#334155; line-height:1.5;">${prevRemark}</div>
+                        ${initialFileBtn}
+                    </div>
                 </div>
             </div>`;
     }
@@ -1562,10 +1893,21 @@ function returnToCustomer(reqId, jsonInput, isEditMode = false) {
         processData: false,
         contentType: false,
         dataType: "json",
-        success: (r) =>
-          r.status === "success"
-            ? location.reload()
-            : Swal.fire("Error", r.message, "error"),
+        success: (r) => {
+              if (r.status === "success") {
+                Swal.fire({
+                    icon: 'success',
+                    title: '<div style="font-family:Prompt; font-weight:800; font-size:1.5rem; color:#10b981;">บันทึกข้อมูลสำเร็จ!</div>',
+                    showConfirmButton: false,
+                    timer: 1500, // โชว์ติ๊กถูก 1.5 วินาที
+                    backdrop: `rgba(0,0,0,0.7)`
+                }).then(() => {
+                    location.reload();
+                });
+              } else {
+                Swal.fire("Error", r.message, "error");
+              }
+            },
       });
     }
   });
@@ -1608,52 +1950,62 @@ function receiveFromShop(reqId, jsonInput) {
     title: "",
     html: `
         <style>
-            .shop-selector-box { background: #be185d; padding: 20px; border-radius: 15px 15px 0 0; margin: -25px -30px 20px -30px; color: #fff; }
-            .modern-select { width: 100%; padding: 12px; border-radius: 10px; border: none; font-weight: 700; color: #be185d; cursor: pointer; }
-            .section-label { font-size: 0.9rem; font-weight: 700; color: #831843; margin-bottom: 10px; display: block; }
-            .item-container { background: #fff; border: 1px solid #fbcfe8; border-radius: 12px; padding: 10px; display: none; margin-bottom: 20px; }
-            .expense-row { display: flex; gap: 8px; margin-bottom: 8px; }
-            .f-input { border: 1px solid #fbcfe8; border-radius: 8px; padding: 8px; font-size: 0.85rem; outline: none; width: 100%; box-sizing: border-box; }
-            .modern-textarea { width: 100%; border: 1px solid #fbcfe8; border-radius: 10px; padding: 10px; font-size: 0.9rem; margin-bottom: 15px; }
-            .file-upload-pink { background: #fff; border: 2px dashed #f9a8d4; border-radius: 12px; padding: 15px; text-align: center; cursor: pointer; color: #9d174d; }
+            .shop-selector-box { background: linear-gradient(135deg, #db2777, #9d174d); padding: 25px 20px 20px 20px; border-radius: 16px 16px 0 0; margin: -20px -20px 20px -20px; color: #fff; box-shadow: 0 4px 10px rgba(157, 23, 77, 0.2); }
+            .modern-select { width: 100%; padding: 12px; border-radius: 10px; border: 2px solid #fbcfe8; font-weight: 700; color: #831843; cursor: pointer; outline: none; font-family: 'Prompt', sans-serif; transition: 0.3s; }
+            .modern-select:focus { border-color: #db2777; box-shadow: 0 0 0 3px rgba(219, 39, 119, 0.2); }
+            .section-label { font-size: 14px; font-weight: 800; color: #831843; margin-bottom: 10px; display: block; text-align: left; }
+            .item-container { background: #fdf2f8; border: 1px solid #fce7f3; border-radius: 12px; padding: 15px; margin-bottom: 20px; text-align: left; max-height: 250px; overflow-y: auto; }
+            .modern-textarea { width: 100%; border: 2px solid #fce7f3; border-radius: 12px; padding: 12px; font-size: 14px; margin-bottom: 15px; font-family: 'Prompt', sans-serif; transition: 0.3s; box-sizing: border-box; }
+            .modern-textarea:focus { border-color: #db2777; outline: none; box-shadow: 0 0 0 3px rgba(219, 39, 119, 0.1); }
+            
+            .custom-file-upload { position: relative; width: 100%; border: 2px dashed #f9a8d4; border-radius: 12px; background: #fff; padding: 20px 10px; text-align: center; transition: all 0.3s; cursor: pointer; box-sizing: border-box; margin-bottom: 10px;}
+            .custom-file-upload:hover { border-color: #db2777; background: #fdf2f8; }
+            .custom-file-upload input[type="file"] { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 10; }
+            .upload-icon { font-size: 28px; color: #f472b6; margin-bottom: 8px; transition: color 0.3s; }
+            .custom-file-upload:hover .upload-icon { color: #db2777; }
+            .upload-text { font-size: 13px; color: #9d174d; font-family: 'Prompt', sans-serif; font-weight: 600; transition: color 0.3s; }
+            .custom-file-upload:hover .upload-text { color: #831843; }
+
+            ::-webkit-scrollbar { width: 6px; }
+            ::-webkit-scrollbar-track { background: transparent; }
+            ::-webkit-scrollbar-thumb { background: #fbcfe8; border-radius: 10px; }
+            ::-webkit-scrollbar-thumb:hover { background: #f9a8d4; }
         </style>
 
         <div style="padding:0;">
             <div class="shop-selector-box">
-                <div style="font-size: 1.1rem; font-weight: 800; margin-bottom: 10px;"><i class="fas fa-store"></i> ดำเนินการรับของจากร้านค้า</div>
+                <div style="font-size: 20px; font-weight: 900; margin-bottom: 15px; text-align: center;"><i class="fas fa-store-alt fa-lg"></i> ดำเนินการรับของจากร้านซ่อม</div>
                 <select id="selected_shop_name" class="modern-select" onchange="updateShopItems()">
                     ${shopOptions}
                 </select>
-                <div id="shop_contact_info" style="margin-top:10px; font-size:0.8rem; display:none;">
-                    <i class="fas fa-user-tie"></i> ผู้ติดต่อ: <span id="lbl_owner">-</span> | <i class="fas fa-phone-alt"></i> <span id="lbl_phone">-</span>
+                <div id="shop_contact_info" style="margin-top:12px; font-size:12px; display:none; background: rgba(255,255,255,0.2); padding: 8px; border-radius: 8px; text-align: center;">
+                    <i class="fas fa-user-tie"></i> ผู้ติดต่อ: <span id="lbl_owner" style="font-weight:700;">-</span> | <i class="fas fa-phone-alt"></i> <span id="lbl_phone" style="font-weight:700;">-</span>
                 </div>
             </div>
 
-            <div id="main_form_content" style="opacity: 0.5; pointer-events: none;">
-                <label class="section-label">📦 เลือกสินค้าที่รับกลับ</label>
+            <div id="main_form_content" style="opacity: 0.5; pointer-events: none; padding: 0 5px;">
+                <label class="section-label"><i class="fas fa-box-open text-pink-600"></i> เลือกสินค้าที่รับกลับ</label>
                 <div id="item_list_area" class="item-container" style="display:block;">
-                    <div style="text-align:center; color:#94a3b8; padding:10px;">กรุณาเลือกร้านค้าก่อน</div>
+                    <div style="text-align:center; color:#f472b6; padding:20px; font-weight:600;"><i class="fas fa-store fa-2x" style="display:block; margin-bottom:10px; opacity:0.5;"></i> กรุณาเลือกร้านค้าก่อน</div>
                 </div>
 
-                <label class="section-label">📋 บันทึกค่าใช้จ่าย (ตามบิลใบเสร็จ)</label>
-                <div id="expense-list-container" style="margin-bottom:10px;"></div>
-                <button type="button" class="btn-add-row" onclick="addExpenseRow()" style="width:100%; padding:8px; border:1px dashed #db2777; border-radius:8px; background:none; color:#db2777; cursor:pointer; font-weight:700;">
-                    <i class="fas fa-plus-circle"></i> เพิ่มรายการค่าใช้จ่าย
-                </button>
-
-                <div style="margin-top:15px; background:#fff; padding:12px; border-radius:10px; display:flex; justify-content:space-between; align-items:center; border:1px solid #fbcfe8;">
-                    <div style="font-weight:700; color:#831843;">💰 ยอดรวมร้านนี้</div>
-                    <div id="total-display" style="font-size:1.3rem; font-weight:800; color:#db2777;">0.00</div>
-                    <input type="hidden" id="final_total_cost" value="0">
-                </div>
-
-                <div style="margin-top:20px;">
-                    <label class="section-label">🧾 หลักฐานการรับกลับ / ใบเสร็จ</label>
-                    <textarea id="shop_return_remark" class="modern-textarea" placeholder="หมายเหตุเพิ่มเติม..."></textarea>
-                    <div class="file-upload-pink" onclick="document.getElementById('shop_file').click()">
-                        <i class="fas fa-cloud-upload-alt fa-lg"></i>
-                        <div id="file-label-text" style="font-size:0.85rem; margin-top:5px;">แนบใบเสร็จ/รูปภาพ</div>
-                        <input type="file" id="shop_file" style="display:none;" onchange="if(this.files.length>0) document.getElementById('file-label-text').innerText='แนบแล้ว: '+this.files[0].name;">
+                <div style="margin-top:20px; text-align:left;">
+                    <label class="section-label"><i class="fas fa-edit text-pink-600"></i> หมายเหตุการรับของกลับ</label>
+                    <textarea id="shop_return_remark" class="modern-textarea" placeholder="ระบุสภาพของที่รับกลับ หรือข้อควรระวัง..." rows="3"></textarea>
+                    
+                    <label class="section-label"><i class="fas fa-camera text-pink-600"></i> แนบรูปภาพ / เอกสารอ้างอิง <span style="color:#f472b6; font-weight:400; font-size:12px;">(ถ้ามี)</span></label>
+                    <div class="custom-file-upload">
+                        <input type="file" id="shop_file" accept="image/*,.pdf" onchange="
+                            let fileName = this.files[0] ? this.files[0].name : 'คลิกเพื่อเลือกไฟล์ หรือลากมาวาง';
+                            let textColor = this.files[0] ? '#db2777' : '#9d174d';
+                            let iconColor = this.files[0] ? '#be185d' : '#f472b6';
+                            document.getElementById('shop_file_name').innerText = fileName;
+                            document.getElementById('shop_file_name').style.color = textColor;
+                            document.getElementById('shop_file_icon').style.color = iconColor;
+                            document.getElementById('shop_file_icon').className = this.files[0] ? 'fas fa-file-check' : 'fas fa-cloud-upload-alt';
+                        ">
+                        <div class="upload-icon"><i id="shop_file_icon" class="fas fa-cloud-upload-alt"></i></div>
+                        <div class="upload-text" id="shop_file_name">คลิกเพื่อเลือกไฟล์ หรือลากมาวาง</div>
                     </div>
                 </div>
             </div>
@@ -1661,10 +2013,11 @@ function receiveFromShop(reqId, jsonInput) {
         `,
     width: "550px",
     showCancelButton: true,
-    confirmButtonText: "บันทึกการรับกลับ",
+    confirmButtonText: '<i class="fas fa-check-circle"></i> ยืนยันรับของกลับ',
+    cancelButtonText: "ยกเลิก",
     confirmButtonColor: "#db2777",
+    customClass: { confirmButton: "swal2-confirm-btn-pink" },
     didOpen: () => {
-      // ฟังก์ชันอัปเดตรายการสินค้าเมื่อเปลี่ยนร้าน
       window.updateShopItems = function () {
         let sName = document.getElementById("selected_shop_name").value;
         let area = document.getElementById("item_list_area");
@@ -1672,9 +2025,9 @@ function receiveFromShop(reqId, jsonInput) {
         let contact = document.getElementById("shop_contact_info");
 
         if (!sName) {
-          area.innerHTML = `<div style="text-align:center; color:#94a3b8; padding:10px;">กรุณาเลือกร้านค้าก่อน</div>`;
+          area.innerHTML = `<div style="text-align:center; color:#f472b6; padding:20px; font-weight:600;"><i class="fas fa-store fa-2x" style="display:block; margin-bottom:10px; opacity:0.5;"></i> กรุณาเลือกร้านค้าก่อน</div>`;
           form.style.opacity = "0.5";
-          form.style.pointer_events = "none";
+          form.style.pointerEvents = "none";
           contact.style.display = "none";
           return;
         }
@@ -1690,72 +2043,32 @@ function receiveFromShop(reqId, jsonInput) {
         let html = "";
         group.items.forEach((itemName) => {
           html += `
-                    <label style="display:flex; align-items:center; gap:10px; padding:10px; border-radius:8px; cursor:pointer; background:#fdf2f8; margin-bottom:5px; border:1px solid #fce7f3;">
-                        <input type="checkbox" class="return-item-chk" value="${itemName}" checked style="width:18px; height:18px; accent-color:#db2777;">
-                        <span style="font-size:0.9rem; color:#831843; font-weight:600;">${itemName}</span>
+                    <label style="display:flex; align-items:center; gap:10px; padding:12px 15px; border-radius:10px; cursor:pointer; background:#ffffff; margin-bottom:8px; border:1px solid #fbcfe8; transition:0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);" onmouseover="this.style.borderColor='#f9a8d4'" onmouseout="this.style.borderColor='#fbcfe8'">
+                        <input type="checkbox" class="return-item-chk" value="${itemName}" checked style="width:20px; height:20px; accent-color:#db2777; cursor:pointer;">
+                        <span style="font-size:14px; color:#831843; font-weight:700;">${itemName}</span>
                     </label>`;
         });
         area.innerHTML = html;
       };
-
-      window.addExpenseRow = function () {
-        const container = document.getElementById("expense-list-container");
-        const row = document.createElement("div");
-        row.className = "expense-row";
-        row.innerHTML = `
-                    <input type="text" class="exp-name f-input" style="flex:3;" placeholder="รายการ..." oninput="updateTotal()">
-                    <input type="number" class="exp-qty f-input" style="flex:1; text-align:center;" value="1" oninput="updateTotal()">
-                    <input type="number" class="exp-price f-input" style="flex:1.5; text-align:right;" placeholder="0.00" oninput="updateTotal()">
-                    <button type="button" onclick="this.parentElement.remove(); updateTotal();" style="border:none; background:none; color:#ef4444; cursor:pointer; width:30px;"><i class="fas fa-times-circle"></i></button>
-                `;
-        container.appendChild(row);
-      };
-
-      window.updateTotal = function () {
-        let total = 0;
-        document.querySelectorAll(".expense-row").forEach((row) => {
-          const qty = parseFloat(row.querySelector(".exp-qty").value) || 0;
-          const price = parseFloat(row.querySelector(".exp-price").value) || 0;
-          total += qty * price;
-        });
-        document.getElementById("total-display").innerText =
-          total.toLocaleString(undefined, { minimumFractionDigits: 2 });
-        document.getElementById("final_total_cost").value = total;
-      };
-
-      addExpenseRow();
     },
     preConfirm: () => {
       let shopName = document.getElementById("selected_shop_name").value;
-      if (!shopName) return Swal.showValidationMessage("กรุณาเลือกร้านค้า");
+      if (!shopName) return Swal.showValidationMessage("⚠️ กรุณาเลือกร้านค้า");
 
       let selectedItems = [];
       document
         .querySelectorAll(".return-item-chk:checked")
         .forEach((chk) => selectedItems.push(chk.value));
-      if (selectedItems.length === 0)
-        return Swal.showValidationMessage("กรุณาเลือกสินค้าอย่างน้อย 1 รายการ");
 
-      let expenses = [];
-      document.querySelectorAll(".expense-row").forEach((row) => {
-        let name = row.querySelector(".exp-name").value.trim();
-        let qty = parseFloat(row.querySelector(".exp-qty").value) || 0;
-        let price = parseFloat(row.querySelector(".exp-price").value) || 0;
-        if (name)
-          expenses.push({
-            name: name,
-            qty: qty,
-            price: price,
-            total: qty * price,
-          });
-      });
+      if (selectedItems.length === 0)
+        return Swal.showValidationMessage(
+          "⚠️ กรุณาเลือกสินค้าอย่างน้อย 1 รายการ",
+        );
 
       return {
         req_id: reqId,
         shop_name: shopName,
         selected_items: selectedItems,
-        expenses: expenses,
-        total: document.getElementById("final_total_cost").value,
         remark: document.getElementById("shop_return_remark").value,
         file: document.getElementById("shop_file").files[0],
       };
@@ -1767,10 +2080,14 @@ function receiveFromShop(reqId, jsonInput) {
       fd.append("req_id", res.value.req_id);
       fd.append("shop_name", res.value.shop_name);
       fd.append("return_items", JSON.stringify(res.value.selected_items));
-      fd.append("repair_items", JSON.stringify(res.value.expenses));
-      fd.append("repair_cost", res.value.total);
       fd.append("return_remark", res.value.remark);
       if (res.value.file) fd.append("shop_file", res.value.file);
+
+      Swal.fire({
+        title: "กำลังบันทึก...",
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading(),
+      });
 
       $.ajax({
         url: "service_dashboard.php",
@@ -1780,8 +2097,17 @@ function receiveFromShop(reqId, jsonInput) {
         contentType: false,
         dataType: "json",
         success: (resp) => {
-          if (resp.status === "success") location.reload();
-          else Swal.fire("Error", resp.message, "error");
+          if (resp.status === "success") {
+            Swal.fire({
+                icon: 'success',
+                title: '<div style="font-family:Prompt; font-weight:800; font-size:1.5rem; color:#10b981;">รับของกลับสำเร็จ!</div>',
+                showConfirmButton: false,
+                timer: 1500, // โชว์ติ๊กถูก 1.5 วินาที
+                backdrop: `rgba(0,0,0,0.7)`
+            }).then(() => { updateData(); });
+          } else {
+            Swal.fire("Error", resp.message, "error");
+          }
         },
       });
     }
@@ -1789,49 +2115,154 @@ function receiveFromShop(reqId, jsonInput) {
 }
 
 // 14. ฟังก์ชันเปิดหน้าต่างอัปเดตความคืบหน้า (ฉบับแยกปุ่ม: บันทึกทั่วไป vs จบงานรายการที่เลือก)
+// ==============================================================
+// 🔥 1. ระบบจัดการช่องเลือกช่าง (Dynamic Fields + บังคับเลือกจาก List)
+// ==============================================================
+function getTechOptionsHTML(inputId, dropId) {
+  let optionsHtml = '';
+  if (typeof allEmployeeList !== 'undefined') {
+      allEmployeeList.forEach(emp => {
+          optionsHtml += `
+          <div class="dropdown-item" 
+               onmousedown="
+                   let inp = document.getElementById('${inputId}');
+                   inp.value='${emp}'; 
+                   inp.setAttribute('data-valid', 'true');
+                   inp.style.borderColor = '#10b981';
+                   inp.style.backgroundColor = '#ecfdf5';
+                   document.getElementById('${dropId}').style.display='none';
+               " 
+               style="padding: 10px 15px; border-bottom: 1px solid #f1f5f9; cursor: pointer; color: #334155; font-size: 0.85rem; transition: background 0.2s;" 
+               onmouseover="this.style.background='#f0f9ff'; this.style.color='#0369a1';" 
+               onmouseout="this.style.background='transparent'; this.style.color='#334155';">
+               <i class="fas fa-user" style="color:#94a3b8; margin-right:5px;"></i> ${emp}
+          </div>`;
+      });
+  }
+  return optionsHtml;
+}
+
+window.addTechField = function() {
+  const container = document.getElementById('dynamic-tech-container');
+  if (!container) return;
+
+  const uniqueId = Date.now() + Math.random().toString(36).substring(2, 6);
+  const fieldId = 'tech_field_' + uniqueId;
+  const inputId = 'tech_input_' + uniqueId;
+  const dropId = 'tech_drop_' + uniqueId;
+  
+  const div = document.createElement('div');
+  div.id = fieldId;
+  // ปรับให้ช่องและปุ่มลบอยู่ระดับเดียวกันสวยๆ
+  div.style.cssText = "display: flex; gap: 10px; margin-bottom: 12px; align-items: stretch; opacity: 0; transform: translateY(-10px); transition: all 0.3s ease;";
+
+  div.innerHTML = `
+      <div style="flex-grow: 1; position: relative;">
+          <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #3b82f6; font-size: 0.9rem;">
+              <i class="fas fa-search"></i>
+          </span>
+          <input type="text" id="${inputId}" class="tech-multi-input" placeholder="พิมพ์ค้นหาและเลือกชื่อจากรายการ..." autocomplete="off" data-valid="false"
+              style="width: 100%; height: 100%; padding: 12px 10px 12px 35px; border-radius: 8px; border: 1px solid #cbd5e1; background: #ffffff; font-family: 'Prompt', sans-serif; font-size: 0.85rem; outline: none; transition: 0.2s; box-shadow: inset 0 1px 2px rgba(0,0,0,0.02); box-sizing:border-box;"
+              onfocus="document.getElementById('${dropId}').style.display='block'; this.style.borderColor='#3b82f6'; this.style.boxShadow='0 0 0 3px rgba(59,130,246,0.1)';"
+              onblur="
+                  setTimeout(() => { 
+                      let d = document.getElementById('${dropId}'); 
+                      if(d) d.style.display='none'; 
+                      // 🔥 ระบบเช็คว่าค่าที่พิมพ์ตรงกับ List ไหม ถ้าไม่ตรง ให้ล้างทิ้ง
+                      if(this.getAttribute('data-valid') !== 'true') {
+                          if(typeof allEmployeeList !== 'undefined' && allEmployeeList.includes(this.value.trim())) {
+                              this.setAttribute('data-valid', 'true');
+                              this.style.borderColor = '#10b981';
+                              this.style.backgroundColor = '#ecfdf5';
+                          } else {
+                              this.value = ''; 
+                              this.setAttribute('data-valid', 'false');
+                              this.style.borderColor = '#ef4444';
+                              this.style.backgroundColor = '#fef2f2';
+                              setTimeout(()=>{ this.style.borderColor = '#cbd5e1'; this.style.backgroundColor = '#ffffff'; }, 1000);
+                          }
+                      }
+                  }, 200); 
+                  this.style.boxShadow='none';
+              "
+              oninput="
+                  this.setAttribute('data-valid', 'false'); 
+                  this.style.borderColor='#3b82f6'; 
+                  this.style.backgroundColor='#ffffff';
+                  filterTechDropdown(this, '${dropId}')
+              ">
+          
+          <div id="${dropId}" style="display: none; position: absolute; top: 100%; left: 0; width: 100%; max-height: 160px; overflow-y: auto; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; z-index: 99999; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); margin-top: 4px;">
+              ${getTechOptionsHTML(inputId, dropId)}
+          </div>
+      </div>
+      <button type="button" onclick="removeTechField('${fieldId}')" title="ลบช่องนี้"
+          style="flex-shrink: 0; width: 45px; border-radius: 8px; background: #fff1f2; border: 1px solid #fecdd3; color: #e11d48; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; transition: all 0.2s;"
+          onmouseover="this.style.background='#ffe4e6'; this.style.transform='scale(1.05)';" 
+          onmouseout="this.style.background='#fff1f2'; this.style.transform='scale(1)';">
+          <i class="fas fa-trash-alt"></i>
+      </button>
+  `;
+  container.appendChild(div);
+
+  setTimeout(() => { div.style.opacity = "1"; div.style.transform = "translateY(0)"; }, 10);
+};
+
+window.filterTechDropdown = function(inputEl, dropId) {
+  const val = inputEl.value.toLowerCase();
+  const drop = document.getElementById(dropId);
+  if (!drop) return;
+  const items = drop.querySelectorAll('.dropdown-item');
+  let hasMatch = false;
+  items.forEach(item => {
+      if (item.textContent.toLowerCase().includes(val)) {
+          item.style.display = "block";
+          hasMatch = true;
+      } else {
+          item.style.display = "none";
+      }
+  });
+  drop.style.display = hasMatch ? "block" : "none";
+};
+
+window.removeTechField = function(id) {
+  const el = document.getElementById(id);
+  if (el) {
+      el.style.opacity = "0";
+      el.style.transform = "translateX(20px)";
+      setTimeout(() => el.remove(), 300);
+  }
+};
+
+// ==============================================================
+// 🔥 2. ฟังก์ชันเปิด Modal อัปเดตความคืบหน้า 
+// ==============================================================
 function openUpdateModal(data) {
   console.log("🔍 Data Processing:", data);
 
-  // 1. แปลง Data เป็น Object
   if (typeof data === "string") {
-    try {
-      data = JSON.parse(data);
-    } catch (e) {}
+    try { data = JSON.parse(data); } catch (e) {}
   }
 
   let logs = [];
-  try {
-    logs = JSON.parse(data.progress_logs) || [];
-  } catch (e) {}
+  try { logs = JSON.parse(data.progress_logs) || []; } catch (e) {}
 
-  // 🔥 จุดสำคัญ: ดึงรายชื่อรายการที่ทำเสร็จไปแล้ว และสถานะที่อยู่ปัจจุบัน
   let finishedItems = [];
   let itemsStatus = {};
   try {
-    let rec =
-      typeof data.received_item_list === "string"
-        ? JSON.parse(data.received_item_list)
-        : data.received_item_list;
+    let rec = typeof data.received_item_list === "string" ? JSON.parse(data.received_item_list) : data.received_item_list;
     finishedItems = rec.finished_items || [];
-    itemsStatus = rec.items_status || {}; // 👈 ดึงสถานะที่อยู่สินค้ามาเก็บไว้
+    itemsStatus = rec.items_status || {};
   } catch (e) {}
 
-  // --- 📦 ส่วนการสกัดรายชื่อสินค้า (Clean Name Only) ---
   let finalItemsSet = new Set();
-
   const extractNameOnly = (val) => {
     if (!val) return;
     let str = typeof val === "string" ? val.trim() : JSON.stringify(val);
     if (str === "" || str === "-" || str === "null") return;
-
     if (str.startsWith("[") || str.startsWith("{")) {
-      try {
-        let p = JSON.parse(str);
-        recursiveFind(p);
-        return;
-      } catch (e) {}
+      try { let p = JSON.parse(str); recursiveFind(p); return; } catch (e) {}
     }
-
     let parts = str.split(/[\r\n]+/);
     parts.forEach((pt) => {
       let v = pt.trim();
@@ -1846,10 +2277,7 @@ function openUpdateModal(data) {
 
   const recursiveFind = (obj) => {
     if (!obj || typeof obj !== "object") return;
-    if (Array.isArray(obj)) {
-      obj.forEach((item) => recursiveFind(item));
-      return;
-    }
+    if (Array.isArray(obj)) { obj.forEach((item) => recursiveFind(item)); return; }
     if (obj.product) extractNameOnly(obj.product);
     if (obj.items) recursiveFind(obj.items);
     if (obj.accumulated_moved) recursiveFind(obj.accumulated_moved);
@@ -1860,66 +2288,33 @@ function openUpdateModal(data) {
 
   recursiveFind(data);
   if (data.received_item_list && typeof data.received_item_list === "string") {
-    try {
-      recursiveFind(JSON.parse(data.received_item_list));
-    } catch (e) {}
+    try { recursiveFind(JSON.parse(data.received_item_list)); } catch (e) {}
   }
 
   let allItems = Array.from(finalItemsSet);
-  // --- จบกระบวนการสกัดชื่อ ---
-
   const isCompleted = data.status === "completed";
 
-  // Timeline Log
   let reqDate = new Date(data.request_date);
-  let dateStr = isNaN(reqDate.getTime())
-    ? "-"
-    : ("0" + reqDate.getDate()).slice(-2) +
-      "/" +
-      ("0" + (reqDate.getMonth() + 1)).slice(-2) +
-      "/" +
-      reqDate.getFullYear() +
-      " " +
-      ("0" + reqDate.getHours()).slice(-2) +
-      ":" +
-      ("0" + reqDate.getMinutes()).slice(-2);
-  logs.unshift({
-    msg: "รับเรื่องแจ้งซ่อม (เข้าระบบ)",
-    by: data.receiver_by || "System",
-    at: dateStr,
-    is_system: true,
-  });
+  let dateStr = isNaN(reqDate.getTime()) ? "-" : ("0" + reqDate.getDate()).slice(-2) + "/" + ("0" + (reqDate.getMonth() + 1)).slice(-2) + "/" + reqDate.getFullYear() + " " + ("0" + reqDate.getHours()).slice(-2) + ":" + ("0" + reqDate.getMinutes()).slice(-2);
+  logs.unshift({ msg: "รับเรื่องแจ้งซ่อม (เข้าระบบ)", by: data.receiver_by || "System", at: dateStr, is_system: true });
 
   let logHtml = "";
   logs.forEach((l, index) => {
-    let dotClass =
-      index === 0
-        ? "background:#10b981; border-color:#d1fae5;"
-        : "background:#3b82f6; border-color:#dbeafe;";
-    if (index === logs.length - 1 && logs.length > 1)
-      dotClass = "background:#f59e0b; border-color:#fef3c7;";
+    let dotClass = index === 0 ? "background:#10b981; border-color:#d1fae5;" : "background:#3b82f6; border-color:#dbeafe;";
+    if (index === logs.length - 1 && logs.length > 1) dotClass = "background:#f59e0b; border-color:#fef3c7;";
     logHtml += `
-            <div class="timeline-item">
-                <div class="timeline-marker" style="${dotClass}"></div>
-                <div class="timeline-content">
-                    <div class="timeline-header">
-                        <span class="timeline-user"><i class="fas fa-user-circle"></i> ${l.by}</span>
-                        <span class="timeline-time"><i class="far fa-clock"></i> ${l.at}</span>
-                    </div>
-                    <div class="timeline-body">${l.msg}</div>
-                </div>
-            </div>`;
+      <div class="timeline-item">
+          <div class="timeline-marker" style="${dotClass}"></div>
+          <div class="timeline-content">
+              <div class="timeline-header">
+                  <span class="timeline-user"><i class="fas fa-user-circle"></i> ${l.by}</span>
+                  <span class="timeline-time"><i class="far fa-clock"></i> ${l.at}</span>
+              </div>
+              <div class="timeline-body">${l.msg}</div>
+          </div>
+      </div>`;
   });
 
-  // Dropdown ช่าง
-  let listItemsHtml = "";
-  if (!isCompleted && typeof allEmployeeList !== "undefined") {
-    allEmployeeList.forEach((name) => {
-      listItemsHtml += `<div class="dropdown-item" onclick="selectTech('${name}')" style="padding: 10px 15px; border-bottom: 1px solid #f1f5f9; cursor: pointer;">${name}</div>`;
-    });
-  }
-
-  // 🔥 เตรียมเนื้อหา Content
   let contentBody = "";
   if (isCompleted) {
     contentBody = `<div style="background:#ecfdf5; border:1px solid #10b981; border-radius:12px; padding:20px; text-align:center; margin-bottom:20px;"><i class="fas fa-check-circle" style="font-size:3rem; color:#10b981;"></i><h3 style="color:#065f46;">ดำเนินการเสร็จสิ้นแล้ว</h3></div>`;
@@ -1928,77 +2323,95 @@ function openUpdateModal(data) {
     if (allItems.length > 0) {
       let chkList = "";
       allItems.forEach((item) => {
-        const isDone = finishedItems.includes(item); // 1. เช็คว่าเสร็จหรือยัง
-
-        // 🔥 [เพิ่มใหม่] 2. เช็คสถานะที่อยู่ปัจจุบัน
+        const isDone = finishedItems.includes(item);
         let currentStat = itemsStatus[item] || "";
-        let isAtExternal = currentStat === "at_external"; // อยู่ร้านนอก
-        let isAtOffice =
-          currentStat.includes("at_office") || currentStat === "back_from_shop"; // อยู่บริษัท
+        let isAtExternal = currentStat === "at_external";
+        let isAtOffice = currentStat.includes("at_office") || currentStat === "back_from_shop";
 
-        // 🔥 [เพิ่มใหม่] 3. เงื่อนไขการล็อก (ถ้าจบงาน หรือ ย้ายออกจากหน้างานแล้ว = ติ๊กไม่ได้)
-        let isLocked = isDone || isAtExternal || isAtOffice;
+        let isDisabled = isDone;
+        let isRestricted = isAtExternal || isAtOffice;
 
-        // 🔥 [เพิ่มใหม่] 4. สร้าง Badge
         let statusBadge = "";
-        if (isAtExternal) {
-          statusBadge = `<span style="font-size:0.7rem; background:#fff7ed; color:#f97316; border:1px solid #fdba74; padding:1px 6px; border-radius:4px; margin-left:5px;"><i class="fas fa-store"></i> อยู่ร้านนอก</span>`;
-        } else if (isAtOffice) {
-          statusBadge = `<span style="font-size:0.7rem; background:#f0f9ff; color:#0ea5e9; border:1px solid #7dd3fc; padding:1px 6px; border-radius:4px; margin-left:5px;"><i class="fas fa-building"></i> อยู่บริษัท</span>`;
-        }
+        if (isAtExternal) statusBadge = `<span style="font-size:0.7rem; background:#fff7ed; color:#f97316; border:1px solid #fdba74; padding:1px 6px; border-radius:4px; margin-left:5px;"><i class="fas fa-store"></i> อยู่ร้านนอก</span>`;
+        else if (isAtOffice) statusBadge = `<span style="font-size:0.7rem; background:#f0f9ff; color:#0ea5e9; border:1px solid #7dd3fc; padding:1px 6px; border-radius:4px; margin-left:5px;"><i class="fas fa-building"></i> อยู่บริษัท</span>`;
 
         chkList += `
-                <label style="display:flex; align-items:center; gap:10px; cursor:${isLocked ? "default" : "pointer"}; background:${isDone ? "#f0fdf4" : "#fff"}; padding:10px 12px; border-radius:8px; border:1px solid ${isDone ? "#4ade80" : "#e2e8f0"}; margin-bottom:0; opacity: ${isLocked ? "0.85" : "1"};">
-                    <input type="checkbox" class="completed-item-chk" value="${item}" 
-                        ${isDone ? "checked" : ""} 
-                        ${isLocked ? "disabled" : ""} 
-                        style="width:18px; height:18px; accent-color:#10b981; cursor:${isLocked ? "default" : "pointer"};">
-                    <div style="flex-grow:1; text-align:left;">
-                        <span style="font-size:0.95rem; color:${isDone ? "#166534" : "#334155"}; flex-grow:1; font-weight: ${isDone ? "600" : "400"};">
-                            ${item} 
-                        </span>
-                        ${statusBadge} 
-                        ${isDone ? '<span style="font-size:0.7rem; background:#10b981; color:#fff; padding:2px 8px; border-radius:10px; margin-left:8px; vertical-align:middle;">เสร็จสิ้น</span>' : ""}
-                    </div>
-                </label>`;
+          <label style="display:flex; align-items:center; gap:10px; cursor:${isDisabled ? "default" : "pointer"}; background:${isDone ? "#f0fdf4" : "#fff"}; padding:10px 12px; border-radius:8px; border:1px solid ${isDone ? "#4ade80" : "#e2e8f0"}; margin-bottom:0; opacity: ${isDisabled ? "0.85" : "1"};">
+              <input type="checkbox" class="completed-item-chk" value="${item}" ${isDone ? "checked" : ""} ${isDisabled ? "disabled" : ""} data-restricted="${isRestricted ? "true" : "false"}" style="width:18px; height:18px; accent-color:#10b981; cursor:${isDisabled ? "default" : "pointer"};">
+              <div style="flex-grow:1; text-align:left;">
+                  <span style="font-size:0.95rem; color:${isDone ? "#166534" : "#334155"}; flex-grow:1; font-weight: ${isDone ? "600" : "400"};">${item}</span>
+                  ${statusBadge} 
+                  ${isDone ? '<span style="font-size:0.7rem; background:#10b981; color:#fff; padding:2px 8px; border-radius:10px; margin-left:8px; vertical-align:middle;">เสร็จสิ้น</span>' : ""}
+              </div>
+          </label>`;
       });
 
       itemsSection = `
-            <div style="background:#f8fafc; border:1px dashed #cbd5e1; border-radius:12px; padding:15px; margin-bottom:15px; text-align:left;">
-                <label style="font-size:0.85rem; font-weight:700; color:#64748b; margin-bottom:10px; display:block;">
-                    <i class="fas fa-tasks" style="color:#f59e0b;"></i> รายการสินค้า (รายการที่เป็นสีเขียวคือจบงานแล้ว)
-                </label>
-                <div style="display:flex; flex-direction:column; gap:8px; max-height:220px; overflow-y:auto;">${chkList}</div>
-            </div>`;
+        <div style="background:#f8fafc; border:1px dashed #cbd5e1; border-radius:12px; padding:15px; margin-bottom:15px; text-align:left;">
+            <label style="font-size:0.85rem; font-weight:700; color:#64748b; margin-bottom:10px; display:block;">
+                <i class="fas fa-tasks" style="color:#f59e0b;"></i> รายการสินค้า (รายการสีเขียวคือจบงานแล้ว)
+            </label>
+            <div style="display:flex; flex-direction:column; gap:8px; max-height:220px; overflow-y:auto;">${chkList}</div>
+        </div>`;
     } else {
       itemsSection = `<div style="text-align:center; color:#94a3b8; padding:15px; border:1px dashed #e2e8f0; border-radius:8px; margin-bottom:15px;">ไม่พบรายการสินค้า</div>`;
     }
 
     contentBody = `
-            ${itemsSection}
-            <div style="margin-bottom: 15px; text-align:left;">
-                <label style="font-size: 0.9rem; font-weight: 700; color: #1e293b; margin-bottom: 8px; display: block;">
-                    <i class="fas fa-pen"></i> บันทึกรายละเอียดงาน:
-                </label>
-                <textarea id="up_msg" class="modern-textarea" placeholder="ระบุสิ่งที่ดำเนินการไป..."></textarea>
-            </div>
-            <div style="background: #f0fdf4; padding: 15px; border-radius: 12px; border: 1px solid #dcfce7; text-align:left;">
-                <div style="margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
-                    <input type="checkbox" id="chk_tech" style="width: 16px; height: 16px; cursor: pointer;">
-                    <label for="chk_tech" style="font-weight: 600; color: #166534; cursor: pointer;">มอบหมายช่างเพิ่ม</label>
-                </div>
-                <div id="tech_wrapper" style="display:none; position: relative; width: 100%;">
-                    <input type="text" id="tech_input" class="modern-select" placeholder="-- ค้นหาชื่อช่าง --" value="${data.technician_name || ""}" style="width: 100%;">
-                    <div id="tech_dropdown" style="position: absolute; top: 100%; left: 0; width: 100%; max-height: 180px; overflow-y: auto; background: #fff; border: 1px solid #e2e8f0; z-index: 9999; display: none;">${listItemsHtml}</div>
-                </div>
-            </div>
-        `;
+      ${itemsSection}
+      <div style="margin-bottom: 15px; text-align:left;">
+          <label style="font-size: 0.9rem; font-weight: 700; color: #1e293b; margin-bottom: 8px; display: block;">
+              <i class="fas fa-pen"></i> บันทึกรายละเอียดงาน:
+          </label>
+          <textarea id="up_msg" class="modern-textarea" placeholder="ระบุสิ่งที่ดำเนินการไป..."></textarea>
+      </div>
+      
+      <div style="background: #f0fdf4; padding: 15px; border-radius: 12px; border: 1px solid #dcfce7; text-align:left;">
+          <div style="margin-bottom: 5px; display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" id="chk_tech" style="width: 16px; height: 16px; cursor: pointer; accent-color: #16a34a;">
+              <label for="chk_tech" style="font-weight: 700; color: #166534; cursor: pointer; font-size:0.9rem;">ต้องการมอบหมายช่างเพิ่ม</label>
+          </div>
+          
+          <div id="tech_wrapper" style="display:none; width: 100%; border-top: 1px dashed #bbf7d0; padding-top: 15px; margin-top: 10px;">
+              <div id="dynamic-tech-container"></div>
+              
+              <button type="button" onclick="addTechField()" 
+                  style="width: 100%; padding: 10px; margin-top: 5px; background: #ffffff; border: 1px dashed #4ade80; color: #16a34a; border-radius: 8px; font-family: 'Prompt', sans-serif; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.2s;"
+                  onmouseover="this.style.background='#dcfce7'; this.style.borderColor='#16a34a';" 
+                  onmouseout="this.style.background='#ffffff'; this.style.borderColor='#4ade80';">
+                  <i class="fas fa-plus-circle"></i> กดเพื่อเพิ่มรายชื่อช่าง
+              </button>
+          </div>
+      </div>
+    `;
   }
 
   Swal.fire({
     title: "",
-    html: `<div style="padding: 5px;"><div class="modal-modern-header"><div class="modal-title-text">${isCompleted ? "สรุปงานซ่อม" : '<i class="fas fa-edit" style="color:#3b82f6;"></i> อัปเดตความคืบหน้า'}</div></div><div class="history-timeline-container"><div class="timeline-list">${logHtml}</div></div>${contentBody}</div>`,
-    width: "600px",
+    html: `
+        <style>
+            .btn-expand-modal { position: absolute; top: 15px; right: 15px; background: #f1f5f9; border: none; width: 35px; height: 35px; border-radius: 8px; color: #64748b; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; z-index: 9999; }
+            .btn-expand-modal:hover { background: #e2e8f0; color: #0f172a; }
+            .history-timeline-container { max-height: 60vh; overflow-y: auto; padding: 15px 10px; margin-bottom: 25px; background: #f8fafc; border-radius: 18px; border: 1px solid #e2e8f0; box-shadow: inset 0 2px 6px rgba(0,0,0,0.05); }
+            .swal2-popup.is-fullscreen .history-timeline-container { max-height: 75vh; }
+        </style>
+        
+        <button type="button" class="btn-expand-modal" id="btn_toggle_fullscreen" title="ขยาย/ย่อ เต็มจอ"><i class="fas fa-expand"></i></button>
+
+        <div style="padding: 5px;">
+            <div class="modal-modern-header">
+                <div class="modal-title-text" style="padding-right: 40px;">
+                    ${isCompleted ? "สรุปงานซ่อม" : '<i class="fas fa-edit" style="color:#3b82f6;"></i> อัปเดตความคืบหน้า'}
+                </div>
+            </div>
+            
+            <div class="history-timeline-container">
+                <div class="timeline-list">${logHtml}</div>
+            </div>
+            ${contentBody}
+        </div>
+    `,
+    width: "700px",
     padding: "0",
     showCancelButton: true,
     cancelButtonText: "ปิด",
@@ -2006,170 +2419,220 @@ function openUpdateModal(data) {
     confirmButtonText: '<i class="fas fa-save"></i> บันทึกความคืบหน้า',
     confirmButtonColor: "#3b82f6",
     showDenyButton: !isCompleted,
-    denyButtonText:
-      '<i class="fas fa-check-circle"></i> เสร็จสิ้นรายการที่เลือก',
+    denyButtonText: '<i class="fas fa-check-circle"></i> เสร็จสิ้นรายการที่เลือก',
     denyButtonColor: "#10b981",
 
     didOpen: () => {
+      const popup = Swal.getPopup();
+      const btnExpand = popup.querySelector("#btn_toggle_fullscreen");
+      let isFullscreen = false;
+      btnExpand.addEventListener("click", () => {
+        isFullscreen = !isFullscreen;
+        if (isFullscreen) {
+          popup.style.width = "95vw"; popup.style.maxWidth = "1400px"; popup.classList.add("is-fullscreen"); btnExpand.innerHTML = '<i class="fas fa-compress"></i>';
+        } else {
+          popup.style.width = "700px"; popup.style.maxWidth = "100%"; popup.classList.remove("is-fullscreen"); btnExpand.innerHTML = '<i class="fas fa-expand"></i>';
+        }
+      });
+
       if (isCompleted) return;
-      const container = Swal.getPopup().querySelector(
-        ".history-timeline-container",
-      );
+      const container = Swal.getPopup().querySelector(".history-timeline-container");
       if (container) container.scrollTop = container.scrollHeight;
+
       const chk = Swal.getPopup().querySelector("#chk_tech");
       const wrapper = Swal.getPopup().querySelector("#tech_wrapper");
-      const input = Swal.getPopup().querySelector("#tech_input");
-      const dropdown = Swal.getPopup().querySelector("#tech_dropdown");
-      const items = Swal.getPopup().querySelectorAll(".dropdown-item");
+      const techContainer = Swal.getPopup().querySelector("#dynamic-tech-container");
 
-      if (chk)
+      if (chk) {
         chk.addEventListener("change", () => {
-          wrapper.style.display = chk.checked ? "block" : "none";
-        });
-
-      if (input) {
-        input.addEventListener("input", function () {
-          const val = this.value.toLowerCase();
-          let hasMatch = false;
-          dropdown.style.display = "block";
-          items.forEach((item) => {
-            if (item.textContent.toLowerCase().includes(val)) {
-              item.style.display = "block";
-              hasMatch = true;
-            } else {
-              item.style.display = "none";
-            }
-          });
-          if (!hasMatch) dropdown.style.display = "none";
-        });
-        input.addEventListener("focus", () => {
-          dropdown.style.display = "block";
-        });
-        input.addEventListener("blur", () => {
-          setTimeout(() => {
-            dropdown.style.display = "none";
-          }, 200);
+          if (chk.checked) {
+              wrapper.style.display = "block";
+              techContainer.innerHTML = ''; 
+              addTechField(); 
+          } else {
+              wrapper.style.display = "none";
+              techContainer.innerHTML = ''; 
+          }
         });
       }
-      window.selectTech = function (name) {
-        if (input) input.value = name;
-        if (dropdown) dropdown.style.display = "none";
-      };
     },
 
     preConfirm: () => {
       const msg = Swal.getPopup().querySelector("#up_msg").value.trim();
       const isChecked = Swal.getPopup().querySelector("#chk_tech").checked;
-      const techVal = Swal.getPopup().querySelector("#tech_input").value.trim();
+      
+      let selectedTechs = [];
+      let hasInvalidTech = false;
+
+      if (isChecked) {
+          const inputs = Swal.getPopup().querySelectorAll('.tech-multi-input');
+          inputs.forEach(input => {
+              // 🔥 เช็คว่าพิมพ์ชื่อมั่วๆ ค้างไว้โดยไม่กดเลือกจาก List ไหม
+              if (input.value.trim() !== "") {
+                  if (input.getAttribute('data-valid') === 'true') {
+                      selectedTechs.push(input.value.trim());
+                  } else {
+                      hasInvalidTech = true;
+                  }
+              }
+          });
+      }
+      
+      if (hasInvalidTech) {
+          Swal.showValidationMessage("กรุณาเลือกชื่อช่างจากรายการที่เด้งขึ้นมาเท่านั้นครับ");
+          return false;
+      }
+
+      const finalTechString = selectedTechs.join(', ');
 
       let selectedItems = [];
-      Swal.getPopup()
-        .querySelectorAll(".completed-item-chk:checked:not(:disabled)")
-        .forEach((c) => selectedItems.push(c.value));
+      Swal.getPopup().querySelectorAll(".completed-item-chk:checked:not(:disabled)").forEach((c) => selectedItems.push(c.value));
 
       if (!msg && !isChecked && selectedItems.length === 0) {
         Swal.showValidationMessage("กรุณากรอกข้อมูลหรือเลือกสินค้า");
         return false;
       }
-      return {
-        actionType: "update",
-        msg: msg,
-        tech: isChecked ? techVal : "",
-        items: selectedItems,
-      };
+      if (isChecked && selectedTechs.length === 0) {
+        Swal.showValidationMessage("กรุณาเลือกชื่อช่างอย่างน้อย 1 คน");
+        return false;
+      }
+
+      return { actionType: "update", msg: msg, tech: finalTechString, items: selectedItems };
     },
 
     preDeny: () => {
       const msg = Swal.getPopup().querySelector("#up_msg").value.trim();
       const isChecked = Swal.getPopup().querySelector("#chk_tech").checked;
-      const techVal = Swal.getPopup().querySelector("#tech_input").value.trim();
+      
+      let selectedTechs = [];
+      let hasInvalidTech = false;
+
+      if (isChecked) {
+          const inputs = Swal.getPopup().querySelectorAll('.tech-multi-input');
+          inputs.forEach(input => {
+              if (input.value.trim() !== "") {
+                  if (input.getAttribute('data-valid') === 'true') {
+                      selectedTechs.push(input.value.trim());
+                  } else {
+                      hasInvalidTech = true;
+                  }
+              }
+          });
+      }
+      
+      if (hasInvalidTech) {
+          Swal.showValidationMessage("กรุณาเลือกชื่อช่างจากรายการที่เด้งขึ้นมาเท่านั้นครับ");
+          return false;
+      }
+
+      const finalTechString = selectedTechs.join(', ');
 
       let selectedItems = [];
-      Swal.getPopup()
-        .querySelectorAll(".completed-item-chk:checked:not(:disabled)")
-        .forEach((c) => selectedItems.push(c.value));
+      let hasRestrictedItem = false; 
+
+      Swal.getPopup().querySelectorAll(".completed-item-chk:checked:not(:disabled)").forEach((c) => {
+        selectedItems.push(c.value);
+        if (c.getAttribute("data-restricted") === "true") hasRestrictedItem = true;
+      });
 
       if (selectedItems.length === 0) {
         Swal.showValidationMessage("กรุณาเลือกรายการสินค้าที่ทำเสร็จแล้ว");
         return false;
       }
-      return {
-        actionType: "finish",
-        msg: msg,
-        tech: isChecked ? techVal : "",
-        items: selectedItems,
-      };
+      if (isChecked && selectedTechs.length === 0) {
+        Swal.showValidationMessage("กรุณาเลือกชื่อช่างอย่างน้อย 1 คน");
+        return false;
+      }
+      if (hasRestrictedItem) {
+        Swal.showValidationMessage("⚠️ ไม่สามารถกดเสร็จสิ้นรายการที่ติดสถานะ (อยู่ร้านนอก/อยู่บริษัท) ได้");
+        return false;
+      }
+
+      return { actionType: "finish", msg: msg, tech: finalTechString, items: selectedItems };
     },
   }).then((res) => {
     if (!isCompleted) {
-      let dataToSend = res.isConfirmed
-        ? res.value
-        : res.isDenied
-          ? res.value
-          : null;
+      let dataToSend = res.isConfirmed ? res.value : res.isDenied ? res.value : null;
+          
       if (dataToSend) {
-        $.post(
-          "service_dashboard.php",
-          {
-            action: "update_progress",
-            req_id: data.id,
-            update_msg: dataToSend.msg,
-            technician_name: dataToSend.tech,
-            completed_items: dataToSend.items,
-            action_type: dataToSend.actionType,
-          },
-          function (response) {
-            location.reload();
-          },
-        );
+        let isFinishAction = (dataToSend.actionType === "finish");
+        let confirmTitle = isFinishAction ? "ยืนยันปิดจ๊อบรายการ?" : "ยืนยันบันทึกความคืบหน้า?";
+        let confirmText = isFinishAction ? "คุณแน่ใจหรือไม่ที่จะอัปเดตรายการที่เลือกเป็น 'เสร็จสิ้น'? (ระบบจะล็อคสถานะทันที)" : "คุณต้องการบันทึกรายละเอียดความคืบหน้าของงานนี้ใช่หรือไม่?";
+        let confirmBtnColor = isFinishAction ? "#10b981" : "#3b82f6";
+        let confirmIcon = isFinishAction ? "warning" : "question";
+
+        Swal.fire({
+            title: confirmTitle, text: confirmText, icon: confirmIcon,
+            showCancelButton: true, confirmButtonColor: confirmBtnColor,
+            cancelButtonColor: "#94a3b8", confirmButtonText: "ยืนยันบันทึก", cancelButtonText: "ยกเลิก"
+        }).then((confirmRes) => {
+            if (confirmRes.isConfirmed) {
+                Swal.fire({ title: "กำลังบันทึก...", allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                
+                $.post("service_dashboard.php", {
+                    action: "update_progress", req_id: data.id, update_msg: dataToSend.msg,
+                    technician_name: dataToSend.tech, completed_items: dataToSend.items, action_type: dataToSend.actionType,
+                }, function (response) {
+                    if (response.status === 'success') {
+                        Swal.fire({
+                            icon: 'success', title: '<div style="font-family:Prompt; font-weight:800; font-size:1.5rem; color:#10b981;">บันทึกสำเร็จ!</div>',
+                            html: '<div style="font-family:Prompt; color:#64748b;">ระบบได้อัปเดตข้อมูลเรียบร้อยแล้ว</div>',
+                            showConfirmButton: false, timer: 1500, backdrop: `rgba(0,0,0,0.7)`
+                        }).then(() => { updateData(); });
+                    } else {
+                        Swal.fire("เกิดข้อผิดพลาด", response.message, "error");
+                    }
+                }, "json");
+            }
+        });
       }
     }
   });
 }
 function updateData() {
-  // 1. แสดง Loading (เลือกทำหรือไม่ก็ได้)
   const btn = document.querySelector(".btn-search-solid");
   const originalText = btn.innerHTML;
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> โหลด...';
   btn.disabled = true;
 
-  // 2. เก็บค่าจากฟอร์ม
   const formData = new FormData(document.getElementById("filterForm"));
   const params = new URLSearchParams(formData);
 
-  // 3. ยิง Request ไปที่ไฟล์เดิม
   fetch(`service_dashboard.php?${params.toString()}`)
     .then((response) => response.text())
     .then((html) => {
-      // 4. แปลง Text เป็น HTML เพื่อดึงเฉพาะส่วนที่ต้องการ
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, "text/html");
 
-      // 5. อัปเดต Grid 4 เสา (ยอดตัวเลข)
+      // 1. อัปเดต Grid 4 เสา (ยอดตัวเลข)
       const newGrid = doc.getElementById("dashboard-grid");
-      if (newGrid) {
-        document.getElementById("dashboard-grid").innerHTML = newGrid.innerHTML;
+      if (newGrid) document.getElementById("dashboard-grid").innerHTML = newGrid.innerHTML;
+
+      // 2. อัปเดตยอดค่าใช้จ่าย (Approved / Pending)
+      const newCost = doc.getElementById("cost-summary-section");
+      if (newCost) document.getElementById("cost-summary-section").innerHTML = newCost.innerHTML;
+
+      // 🔥 3. อัปเดตส่วนความพึงพอใจ (Satisfaction) - จุดที่เพิ่มเข้ามา
+      const newSatisfaction = doc.getElementById("satisfaction-section");
+      if (newSatisfaction) {
+        document.getElementById("satisfaction-section").innerHTML = newSatisfaction.innerHTML;
       }
 
-      // 6. อัปเดตตารางรายการ (Table)
+      // 🔥 [เพิ่มบรรทัดนี้] อัปเดตก้อนความพึงพอใจ
+      const newSatis = doc.getElementById("satisfaction-section");
+      if (newSatis) {
+        document.getElementById("satisfaction-section").innerHTML = newSatis.innerHTML;
+      }
+
+      // 4. อัปเดตตารางรายการ
       const newTable = doc.getElementById("data-table");
-      if (newTable) {
-        document.getElementById("data-table").innerHTML = newTable.innerHTML;
-      }
+      if (newTable) document.getElementById("data-table").innerHTML = newTable.innerHTML;
 
-      // 7. อัปเดต URL บน Browser (เผื่อกด Refresh แล้วค่าไม่หาย)
-      window.history.pushState(
-        {},
-        "",
-        `service_dashboard.php?${params.toString()}`,
-      );
-
-      // 8. รันฟังก์ชันนับเวลาถอยหลังใหม่ (เพราะ HTML เปลี่ยนไปแล้ว)
-      updateSLACountdown();
+      window.history.pushState({}, "", `service_dashboard.php?${params.toString()}`);
+      if (typeof updateSLACountdown === "function") updateSLACountdown();
     })
     .catch((err) => console.error("Error loading data:", err))
     .finally(() => {
-      // คืนค่าปุ่ม
       btn.innerHTML = originalText;
       btn.disabled = false;
     });
@@ -2301,7 +2764,7 @@ window.calculateTotalExpense = function () {
     });
   if (hiddenInp) hiddenInp.value = total;
 };
-// 🔥 ฟังก์ชันสรุปงานซ่อม (Version: โชว์ของเดิม + แก้ไขได้ทันที)
+// 🔥 ฟังก์ชันสรุปงานซ่อม (Version: ล็อคไม่ให้ติ๊กถ้าของอยู่ร้านนอก)
 function openRepairSummaryModal(reqId) {
   Swal.fire({
     title: "กำลังโหลดข้อมูล...",
@@ -2319,7 +2782,7 @@ function openRepairSummaryModal(reqId) {
       let itemsStatus = data.items_status || {};
       let currentSummaries = data.item_repair_summaries || {};
 
-      // 🔥 1. ดึงข้อมูลรายการที่ "จบงานแล้ว" (คืนแล้ว หรือ เสร็จสิ้นหน้างาน)
+      // 1. ดึงข้อมูลรายการที่ "จบงานแล้ว" (คืนแล้ว หรือ เสร็จสิ้นหน้างาน)
       let alreadyReturned =
         data.details &&
         data.details.customer_return &&
@@ -2336,15 +2799,11 @@ function openRepairSummaryModal(reqId) {
       }
 
       // 3. กรองเฉพาะของที่นำออกมาแล้ว และ "ยังไม่ได้จบงาน"
-      // 🔥 หมายเหตุ: รายการที่ "สรุปงานแล้ว" จะยังโชว์อยู่ เพื่อให้กดเข้าไปแก้ไขข้อความได้
       let filteredItems = allItems.filter((item) => {
         let status = itemsStatus[item] || "";
         let itTrim = item.trim();
-
-        // เช็คว่ารายการนี้ยังไม่ถูกคืนลูกค้า และยังไม่ถูกกดเสร็จสิ้นหน้างาน
         let isNotClosed =
           !alreadyReturned.includes(itTrim) && !finishedItems.includes(itTrim);
-
         return status !== "" && status !== "pending" && isNotClosed;
       });
 
@@ -2358,7 +2817,7 @@ function openRepairSummaryModal(reqId) {
         });
       }
 
-      // 4. สร้าง HTML (โครงสร้างและ Style เดิม 100%)
+      // 4. สร้าง HTML
       let html = `
         <style>
             @keyframes slideUpFade { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
@@ -2413,41 +2872,49 @@ function openRepairSummaryModal(reqId) {
       filteredItems.forEach((item, idx) => {
         let val = currentSummaries[item] || "";
         let status = itemsStatus[item] || "";
-
-        // ตรวจสอบว่ามีข้อมูลเดิมไหม? ถ้ามีให้เปิดเลย (โชว์ไว้ให้แก้ได้)
+        
+        // 🔥 เช็คว่าสถานะคือส่งร้านนอกหรือไม่
+        let isAtExternal = status === "at_external";
+        
         let hasData = val.trim() !== "";
 
         // Logic เลือก Badge สถานะ
         let badgeHtml = "";
-        if (status === "at_external")
+        if (isAtExternal)
           badgeHtml = `<span class="status-badge badge-shop"><i class="fas fa-tools"></i> อยู่ร้านซ่อม</span>`;
         else if (status === "back_from_shop")
           badgeHtml = `<span class="status-badge badge-back"><i class="fas fa-undo"></i> กลับจากร้าน</span>`;
         else
           badgeHtml = `<span class="status-badge badge-office"><i class="fas fa-building"></i> อยู่ที่บริษัท</span>`;
 
-        // ถ้ามีบันทึกแล้ว เพิ่ม Badge บอก
         if (hasData) {
           badgeHtml += `<span class="status-badge badge-saved"><i class="fas fa-check"></i> บันทึกแล้ว</span>`;
         }
 
+        // 🔥 สร้างตัวแปรล็อคการกด ถ้าอยู่ร้านนอกให้ Disabled
+        let disabledAttr = isAtExternal ? "disabled" : "";
+        let cursorStyle = isAtExternal ? "cursor: not-allowed; opacity: 0.65;" : "cursor: pointer;";
+        let isChecked = (hasData && !isAtExternal) ? "checked" : "";
+        let activeClass = (hasData && !isAtExternal) ? "active" : "";
+
         let delay = idx * 0.05;
 
         html += `
-            <div class="repair-card ${hasData ? "active" : ""}" id="card_${idx}" style="animation-delay: ${delay}s">
-                <label class="repair-header">
+            <div class="repair-card ${activeClass}" id="card_${idx}" style="animation-delay: ${delay}s; ${isAtExternal ? 'background:#f8fafc; border-color:#e2e8f0;' : ''}">
+                <label class="repair-header" style="${cursorStyle}">
                     <div class="chk-modern-wrapper">
                         <input type="checkbox" class="chk-modern" id="chk_${idx}" value="${idx}" 
-                            onchange="toggleRepairInput(${idx})" ${hasData ? "checked" : ""}>
-                        <div class="checkmark"><i class="fas fa-check fa-xs"></i></div>
+                            onchange="toggleRepairInput(${idx})" ${isChecked} ${disabledAttr}>
+                        <div class="checkmark" style="${isAtExternal ? 'background:#e2e8f0; border-color:#cbd5e1;' : ''}"><i class="fas fa-check fa-xs"></i></div>
                     </div>
                     <div class="item-info">
-                        <span class="item-name">${idx + 1}. ${item}</span>
+                        <span class="item-name" style="${isAtExternal ? 'color:#94a3b8; text-decoration:line-through;' : ''}">${idx + 1}. ${item}</span>
                         <div>${badgeHtml}</div>
+                        ${isAtExternal ? `<div style="font-size:0.75rem; color:#ef4444; margin-top:6px; font-weight:600;"><i class="fas fa-lock"></i> ไม่สามารถสรุปได้ (ของไม่อยู่ที่บริษัท)</div>` : ''}
                     </div>
                 </label>
                 
-                <div class="repair-body" id="body_${idx}" style="${hasData ? "display: block;" : ""}">
+                <div class="repair-body" id="body_${idx}" style="${isChecked ? "display: block;" : ""}">
                     <div class="input-label"><i class="fas fa-pen"></i> รายละเอียดผลการซ่อม:</div>
                     <textarea id="text_${idx}" class="repair-textarea" placeholder="เช่น เปลี่ยนอะไหล่เรียบร้อย, ทำความสะอาดแล้ว...">${val}</textarea>
                     <input type="hidden" id="name_${idx}" value="${item}">
@@ -2490,7 +2957,7 @@ function openRepairSummaryModal(reqId) {
           let count = 0;
           filteredItems.forEach((_, idx) => {
             const chk = document.getElementById(`chk_${idx}`);
-            // บันทึกเฉพาะรายการที่ติ๊กอยู่
+            // บันทึกเฉพาะรายการที่ติ๊กอยู่ (ที่ Disabled จะไม่ถูกติ๊กแน่นอน)
             if (chk && chk.checked) {
               let name = document.getElementById(`name_${idx}`).value;
               let text = document.getElementById(`text_${idx}`).value.trim();
@@ -2547,10 +3014,11 @@ function openRepairSummaryModal(reqId) {
     "json",
   );
 }
-// 🔥 ฟังก์ชันพิจารณาค่าใช้จ่าย (Update: โชว์รายการรับกลับ + หมายเหตุ + ไฟล์แนบ)
+
+// 🔥 ฟังก์ชันพิจารณาค่าใช้จ่าย (โชว์ข้อมูลผู้ทำรายการ + เวลาที่เบิก)
 function approveCost(reqId) {
   Swal.fire({
-    title: "กำลังดึงข้อมูลบิล...",
+    title: "กำลังโหลดข้อมูล...",
     allowOutsideClick: false,
     didOpen: () => Swal.showLoading(),
   });
@@ -2558,360 +3026,336 @@ function approveCost(reqId) {
   $.post(
     "service_dashboard.php",
     { action: "get_latest_item_data", req_id: reqId },
-    function (data) {
-      Swal.close();
+    function (res) {
+      let officeLogs =
+        res.details && res.details.office_log ? res.details.office_log : [];
 
-      let officeLog =
-        data && data.details && data.details.office_log
-          ? data.details.office_log
-          : [];
-      let moveHistory = data && data.items_moved ? data.items_moved : [];
-
-      let pendingBills = officeLog
-        .map((log, index) => ({ ...log, logIndex: index }))
+      // 🔥 ดึงข้อมูล "เบิกค่าใช้จ่าย" และ "รับของกลับจากร้าน"
+      let pendingList = officeLogs
+        .map((log, index) => {
+          return { ...log, originalIndex: index };
+        })
         .filter(
           (log) =>
-            log.status === "back_from_shop" &&
-            log.approved !== true &&
-            log.approved !== "rejected",
+            (log.status === "expense_request" ||
+              log.status === "back_from_shop") &&
+            (log.approved === undefined || log.approved === false),
         );
 
-      if (pendingBills.length === 0) {
-        return Swal.fire(
-          "ไม่พบรายการรออนุมัติ",
-          "รายการทั้งหมดอาจถูกจัดการไปแล้ว",
-          "info",
-        );
+      if (pendingList.length === 0) {
+        Swal.fire({
+          icon: "info",
+          title: "ไม่มีรายการค้าง",
+          text: "ไม่พบรายการรออนุมัติ หรือรายการทั้งหมดถูกจัดการไปแล้ว",
+        }).then(() => updateData());
+        return;
       }
 
-      let html = `
-        <style>
-            .bill-list-container { display: flex; flex-direction: column; height: 60vh; text-align: left; }
-            .bill-scroll-area { flex-grow: 1; overflow-y: auto; padding: 5px; padding-right: 10px; margin-bottom: 10px; }
-            .bill-scroll-area::-webkit-scrollbar { width: 6px; }
-            .bill-scroll-area::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
-            .bill-scroll-area::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-            
-            .bill-card { background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; overflow: hidden; margin-bottom: 15px; flex-shrink: 0; position: relative; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
-            .bill-card.approved { border: 2px solid #10b981; background: #f0fdf4; }
-            .bill-card.rejected { border: 2px solid #ef4444; background: #fff1f2; }
-            
-            .shop-header { background: #f8fafc; padding: 10px 12px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: start; gap: 10px; }
-            .shop-icon { width: 36px; height: 36px; background: #e0f2fe; color: #0284c7; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-            .shop-info { flex-grow: 1; font-size: 0.8rem; color: #475569; }
-            .shop-name { font-weight: 800; font-size: 0.95rem; color: #1e293b; display: block; margin-bottom: 2px;}
-            
-            /* ส่วนแสดงรายการสินค้าที่รับกลับ */
-            .returned-items-box {
-                margin: 10px 15px 5px 15px;
-                padding: 8px;
-                background: #f1f5f9;
-                border-radius: 8px;
-                font-size: 0.85rem;
-                color: #334155;
-                border: 1px dashed #cbd5e1;
-            }
+      let htmlContent = `<div style="text-align:left; max-height:55vh; overflow-y:auto; padding:5px 10px;" id="approval_list_container">`;
 
-            .item-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-top: 5px; background: #fff; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; }
-            .item-table th { background: #f8fafc; color: #64748b; padding: 6px 8px; font-weight: 600; text-align: left; }
-            .item-table td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; color: #334155; }
-            .item-table tr:last-child td { border-bottom: none; }
-            
-            /* ส่วนหมายเหตุและไฟล์แนบ */
-            .extra-info { padding: 0 15px 10px 15px; }
-            .remark-box { 
-                margin-top: 8px; padding: 8px; background: #fffbeb; 
-                border-radius: 6px; font-size: 0.8rem; color: #92400e; 
-                border: 1px solid #fcd34d; 
-            }
-            .file-btn {
-                display: inline-flex; align-items: center; gap: 5px;
-                margin-top: 8px; padding: 5px 10px;
-                background: #e0e7ff; color: #4338ca;
-                border-radius: 20px; text-decoration: none;
-                font-size: 0.75rem; font-weight: 600;
-                border: 1px solid #c7d2fe; transition: 0.2s;
-            }
-            .file-btn:hover { background: #c7d2fe; }
+      pendingList.forEach((item, i) => {
+        let isExpense = item.status === "expense_request";
 
-            .action-bar { padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; background: #fff; border-top: 1px dashed #e2e8f0; }
-            .chk-wrapper { display: flex; align-items: center; gap: 8px; cursor: pointer; }
-            .custom-chk { width: 22px; height: 22px; border: 2px solid #cbd5e1; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: transparent; transition: 0.2s; background:#fff; }
-            .real-chk:checked + .custom-chk { background: #10b981; border-color: #10b981; color: #fff; }
-            
-            .btn-reject-modern { background: #fff; color: #ef4444; border: 1px solid #ef4444; padding: 5px 12px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 5px; }
-            .btn-undo-modern { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 5px 12px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 5px; }
-            
-            .reject-box { display: none; margin: 10px 15px; background: #fff; border: 1px solid #fca5a5; border-radius: 8px; padding: 10px; }
-            .reject-textarea { width: 100%; border: 1px solid #fda4af; border-radius: 6px; padding: 8px; font-size: 0.9rem; min-height: 60px; }
+        let title = isExpense ? "ใบเบิกค่าใช้จ่าย" : "รายการจากร้านซ่อม";
+        let icon = isExpense
+          ? '<i class="fas fa-file-invoice-dollar text-purple-600"></i>'
+          : '<i class="fas fa-tools text-orange-500"></i>';
+        let borderColor = isExpense ? "#8b5cf6" : "#f59e0b";
+        let bgHeader = isExpense
+          ? "linear-gradient(135deg, #f5f3ff, #ede9fe)"
+          : "linear-gradient(135deg, #fffbeb, #fef3c7)";
+        let textColor = isExpense ? "#6d28d9" : "#d97706";
 
-            .total-footer { background: #1e293b; color: #fff; padding: 12px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; font-weight: 700; flex-shrink: 0; }
-        </style>
+        let totalCost = parseFloat(item.total_cost || 0).toLocaleString(
+          "en-US",
+          { minimumFractionDigits: 2 },
+        );
 
-        <div class="bill-list-container">
-            <div style="font-size:0.8rem; color:#64748b; margin-bottom:8px; padding-left:5px;">
-                <i class="fas fa-tasks"></i> ตรวจสอบรายละเอียดสินค้าและค่าใช้จ่ายก่อนอนุมัติ
-            </div>
-            
-            <div class="bill-scroll-area">`;
-
-      pendingBills.forEach((bill, i) => {
-        // --- Safe Mode Code ---
-        let amount = 0;
-        let displayShopName = "ร้านซ่อมภายนอก";
-        let sPhone = "-";
-        let sContact = "-";
-        let tableRows = "";
-        let returnedItemsList = [];
-
-        try {
-          amount = parseFloat(bill.total_cost || 0);
-          let rawShopName = bill.shop || "";
-          displayShopName = rawShopName || "ร้านซ่อมภายนอก";
-
-          // ค้นหาข้อมูลร้าน
-          let matchedMove = null;
-          if (rawShopName && rawShopName !== "ร้านซ่อมภายนอก") {
-            matchedMove = moveHistory.find(
-              (m) => m.shop_info && m.shop_info.name === rawShopName,
-            );
-          }
-          if (!matchedMove) {
-            let searchItems = [];
-            if (bill.items && Array.isArray(bill.items))
-              searchItems = [...bill.items];
-            if (bill.expenses && Array.isArray(bill.expenses))
-              bill.expenses.forEach((e) => {
-                if (e.name) searchItems.push(e.name);
-              });
-            for (let itemName of searchItems) {
-              let cleanItemName = itemName.toString().trim();
-              let found = moveHistory
-                .slice()
-                .reverse()
-                .find(
-                  (m) =>
-                    m.name &&
-                    m.name.trim() === cleanItemName &&
-                    m.destination === "external" &&
-                    m.shop_info,
-                );
-              if (found) {
-                matchedMove = found;
-                break;
-              }
-            }
-          }
-          if (matchedMove && matchedMove.shop_info) {
-            if (!rawShopName || rawShopName === "ร้านซ่อมภายนอก")
-              displayShopName = matchedMove.shop_info.name || displayShopName;
-            sPhone = matchedMove.shop_info.phone || "-";
-            sContact = matchedMove.shop_info.owner || "-";
-          }
-
-          // สร้างตารางรายการค่าใช้จ่าย
-          let expensesList = Array.isArray(bill.expenses) ? bill.expenses : [];
-          tableRows = expensesList
-            .map(
-              (ex, idx) => `
-                    <tr>
-                        <td style="width: 50%;">${idx + 1}. ${ex.name || "-"}</td>
-                        <td style="width: 15%; text-align: center;">${ex.qty || 0}</td>
-                        <td style="width: 15%; text-align: right;">${parseFloat(ex.price || 0).toLocaleString()}</td>
-                        <td style="width: 20%; text-align: right; font-weight: 700;">${parseFloat(ex.total || 0).toLocaleString()}</td>
-                    </tr>
-                `,
-            )
-            .join("");
-
-          // รายการที่รับกลับ (Items Returned)
-          if (Array.isArray(bill.items)) {
-            returnedItemsList = bill.items;
-          }
-        } catch (err) {
-          console.error(err);
-        }
-
-        // 🔥 [ส่วนเสริม] สร้าง HTML สำหรับรายการรับกลับ / หมายเหตุ / ไฟล์แนบ
-        let returnedItemsHtml = "";
-        if (returnedItemsList.length > 0) {
-          returnedItemsHtml = `
-                <div class="returned-items-box">
-                    <div style="font-weight:700; margin-bottom:4px; color:#475569;"><i class="fas fa-box-open"></i> รายการสินค้าที่รับกลับ:</div>
-                    <ul style="margin:0; padding-left:20px; list-style-type:circle;">
-                        ${returnedItemsList.map((it) => `<li>${it}</li>`).join("")}
-                    </ul>
-                </div>`;
-        }
-
-        let remarkHtml = "";
-        if (bill.remark && bill.remark.trim() !== "") {
-          remarkHtml = `<div class="remark-box"><i class="fas fa-comment-dots"></i> <b>หมายเหตุ:</b> ${bill.remark}</div>`;
-        }
-
-        let fileHtml = "";
-        if (bill.file) {
-          fileHtml = `
-                <a href="uploads/repairs/${bill.file}" target="_blank" class="file-btn">
-                    <i class="fas fa-paperclip"></i> ดูหลักฐานแนบ/ใบเสร็จ
-                </a>`;
-        }
-
-        html += `
-            <div class="bill-card" id="card_${i}">
-                <div class="shop-header">
-                    <div class="shop-icon"><i class="fas fa-store"></i></div>
-                    <div class="shop-info">
-                        <span class="shop-name">${displayShopName}</span>
-                        <div><i class="fas fa-user"></i> ติดต่อ: <span style="color:#0284c7;">${sContact}</span> | <i class="fas fa-phone"></i> โทร: <span style="color:#0284c7;">${sPhone}</span></div>
-                    </div>
-                    <div style="text-align:right;">
-                        <div style="font-size:0.7rem; color:#64748b;">ยอดสุทธิ</div>
-                        <div style="font-size:1.1rem; font-weight:800; color:#db2777;">฿${amount.toLocaleString()}</div>
-                    </div>
-                </div>
-
-                ${returnedItemsHtml}
-
-                <div style="padding: 0 15px;">
-                    <table class="item-table">
-                        <thead><tr><th>รายการค่าใช้จ่าย</th><th style="text-align:center;">จำนวน</th><th style="text-align:right;">ราคา</th><th style="text-align:right;">รวม</th></tr></thead>
-                        <tbody>${tableRows}</tbody>
-                    </table>
-                </div>
-
-                <div class="extra-info">
-                    ${remarkHtml}
-                    ${fileHtml}
-                </div>
-
-                <div class="action-bar">
-                    <label class="chk-wrapper" id="lbl_${i}">
-                        <input type="checkbox" class="real-chk" id="chk_${i}" value="${i}" onchange="toggleBill(${i})">
-                        <div class="custom-chk"><i class="fas fa-check"></i></div>
-                        <span style="font-weight:700; color:#10b981; font-size:0.9rem;">อนุมัติรายการนี้</span>
-                    </label>
-                    
-                    <div class="btn-reject-modern" id="btn_reject_${i}" onclick="activateReject(${i})">
-                        <i class="fas fa-times-circle"></i> ไม่ผ่าน
-                    </div>
-
-                    <div class="btn-undo-modern" id="btn_undo_${i}" style="display:none;" onclick="undoReject(${i})">
-                        <i class="fas fa-undo"></i> ยกเลิกการปฏิเสธ
-                    </div>
-                </div>
-                
-                <div class="reject-box" id="reject_area_${i}">
-                    <div class="reject-title"><i class="fas fa-exclamation-triangle"></i> ระบุสาเหตุที่ไม่อนุมัติ:</div>
-                    <textarea id="note_${i}" class="reject-textarea" placeholder="เช่น ราคาแพงเกินจริง, ไม่ได้ซ่อมรายการนี้..."></textarea>
-                </div>
+        // 🌟 [เพิ่มใหม่] ข้อมูลผู้ขอเบิก และ เวลาที่ขอเบิก
+        let requesterInfo = `
+            <div style="font-size: 11px; color: #64748b; margin-top: 8px; margin-bottom: 6px; display: flex; flex-wrap: wrap; gap: 6px;">
+                <span style="background: rgba(255,255,255,0.6); padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.05); display: inline-flex; align-items: center; gap: 4px;">
+                    <i class="fas fa-user-edit" style="color:${borderColor};"></i> ผู้ทำรายการ: <b style="color:#334155;">${item.by || 'ไม่ระบุ'}</b>
+                </span>
+                <span style="background: rgba(255,255,255,0.6); padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.05); display: inline-flex; align-items: center; gap: 4px;">
+                    <i class="far fa-clock" style="color:${borderColor};"></i> เวลา: <b style="color:#334155;">${item.at || '-'}</b>
+                </span>
             </div>`;
-      });
 
-      html += `</div> <div class="total-footer">
-                <span><i class="fas fa-coins"></i> ยอดอนุมัติรวมทั้งสิ้น</span>
-                <span style="font-size:1.3rem; color:#4ade80;" id="sum_display">฿0</span>
+        // 🌟 จัดการ "อ้างอิงรายการสินค้า"
+        let refText = "";
+        if (isExpense && item.ref_item) {
+          let refs = [];
+          try {
+            if (
+              typeof item.ref_item === "string" &&
+              item.ref_item.startsWith("[")
+            ) {
+              refs = JSON.parse(item.ref_item);
+            } else if (Array.isArray(item.ref_item)) {
+              refs = item.ref_item;
+            } else {
+              refs = item.ref_item
+                .split(",")
+                .map((r) => r.trim())
+                .filter((r) => r !== "");
+            }
+          } catch (e) {
+            refs = [item.ref_item];
+          }
+
+          if (refs.length > 0) {
+            let tagsHtml = refs
+              .map(
+                (r) =>
+                  `<span style="background: #ffffff; color: #4f46e5; border: 1px solid #c7d2fe; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; box-shadow: 0 1px 2px rgba(0,0,0,0.02);"><i class="fas fa-cube" style="color:#8b5cf6; font-size:10px;"></i> ${r}</span>`,
+              )
+              .join("");
+            refText = `
+                        <div style="margin-top: 10px; width: 100%;">
+                            <div style="font-size: 11px; color: #64748b; font-weight: 800; margin-bottom: 6px;"><i class="fas fa-tags" style="color:#8b5cf6;"></i> อ้างอิงรายการสินค้า:</div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 6px;">${tagsHtml}</div>
+                        </div>`;
+          }
+        } else if (item.shop) {
+          refText = `<div style="margin-top:6px; font-size:12px; color:${textColor}; font-weight:700;"><i class="fas fa-store"></i> ร้าน: ${item.shop}</div>`;
+        }
+
+        // 🟢 วาดรายการย่อย (ตารางชิดซ้ายเรียบร้อย)
+        let expRows = "";
+        if (item.expenses && item.expenses.length > 0) {
+          expRows += `
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 5px;">
+                    <thead>
+                        <tr style="color: #64748b; border-bottom: 2px solid #e2e8f0; font-size: 11px;">
+                            <th style="padding: 6px; text-align: left; font-weight: 800;">รายการ</th>
+                            <th style="padding: 6px; text-align: center; font-weight: 800; width: 60px;">จำนวน</th>
+                            <th style="padding: 6px; text-align: right; font-weight: 800; width: 80px;">ราคา</th>
+                            <th style="padding: 6px; text-align: right; font-weight: 800; width: 90px;">รวม (฿)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                `;
+
+          item.expenses.forEach((ex) => {
+            let qty = ex.qty || 0;
+            let price = parseFloat(ex.price || 0).toLocaleString("en-US", {
+              minimumFractionDigits: 2,
+            });
+            let lineTotal = parseFloat(ex.total || 0).toLocaleString("en-US", {
+              minimumFractionDigits: 2,
+            });
+
+            expRows += `
+                        <tr style="border-bottom: 1px dashed #e2e8f0; transition: background 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'">
+                            <td style="padding: 8px 6px; text-align: left; color: #334155; font-weight: 500;">${ex.name}</td>
+                            <td style="padding: 8px 6px; text-align: center; color: #64748b;">
+                                <span style="background: #ffffff; border: 1px solid #cbd5e1; padding: 2px 6px; border-radius: 6px; font-size: 11px;">x${qty}</span>
+                            </td>
+                            <td style="padding: 8px 6px; text-align: right; color: #64748b;">${price}</td>
+                            <td style="padding: 8px 6px; text-align: right; font-weight: 800; color: #0f172a;">${lineTotal}</td>
+                        </tr>
+                    `;
+          });
+          expRows += `</tbody></table>`;
+        }
+
+        let fileBtn = "";
+        if (item.file) {
+          let dir = isExpense ? "expenses" : "repairs";
+          let fileUrl = `uploads/${dir}/${item.file}`;
+          
+          fileBtn = `
+            <div style='margin-bottom:15px;'>
+                <button type='button' class='btn-mini-3d outline' onclick=\"
+                    let url = '${fileUrl}';
+                    let ext = url.split('.').pop().toLowerCase();
+                    if(['jpg','jpeg','png','gif','webp','avif','heic'].includes(ext)) {
+                        let win = window.open();
+                        win.document.write('<html><head><title>Preview</title></head><body style=&quot;margin:0; background:#111; display:flex; align-items:center; justify-content:center;&quot;><img src=&quot;' + url + '&quot; style=&quot;max-width:100%; max-height:100vh; box-shadow:0 0 50px rgba(0,0,0,0.5);&quot;></body></html>');
+                        win.document.close();
+                    } else {
+                        window.open(url, '_blank');
+                    }
+                \">
+                    <i class='fas fa-paperclip text-blue-500'></i> ดูไฟล์แนบ / ใบเสนอราคา
+                </button>
+            </div>`;
+        }
+
+        htmlContent += `
+            <div class="approval-card-3d log-anim" data-idx="${item.originalIndex}" data-amount="${item.total_cost}" data-status="${item.status}" style="animation-delay: ${i * 0.1}s; border-left: 5px solid ${borderColor};">
+                
+                <div style="background:${bgHeader}; padding:15px; display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid #e2e8f0;">
+                    <div style="flex:1; padding-right: 15px;">
+                        <div style="font-weight:900; color:#1e293b; font-size:16px;">${icon} ${title}</div>
+                        ${requesterInfo} ${refText}
+                    </div>
+                    <div style="text-align:right; flex-shrink: 0;">
+                        <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase;">ยอดรวมสุทธิ</div>
+                        <div style="font-weight:900; color:${borderColor}; font-size:22px; letter-spacing:-0.5px;">฿${totalCost}</div>
+                    </div>
+                </div>
+
+                <div style="padding:15px;">
+                    ${fileBtn}
+                    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:12px; margin-bottom:15px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);">
+                        <div style="font-size:12px; font-weight:900; color:#334155; text-transform:uppercase; margin-bottom:5px;"><i class="fas fa-list-ul" style="color:#8b5cf6;"></i> รายละเอียดการเบิก</div>
+                        ${expRows}
+                    </div>
+                    
+                    ${item.remark ? `<div style="font-size:13px; color:#b45309; background:#fffbeb; padding:12px; border-radius:10px; margin-bottom:15px; border:1px dashed #fcd34d;"><i class="fas fa-comment-dots fa-lg" style="color:#f59e0b; margin-right:5px;"></i> <b>หมายเหตุ:</b> ${item.remark}</div>` : ""}
+                    
+                    <div class="decision-group" style="display:flex; gap:10px; margin-top:15px;">
+                        <label class="decision-btn approve-btn">
+                            <input type="radio" class="rb-approve" name="decision_${item.originalIndex}" value="approved"> 
+                            <div class="btn-content"><i class="fas fa-check-circle fa-lg"></i> อนุมัติ</div>
+                        </label>
+                        <label class="decision-btn reject-btn">
+                            <input type="radio" class="rb-reject" name="decision_${item.originalIndex}" value="rejected"> 
+                            <div class="btn-content"><i class="fas fa-times-circle fa-lg"></i> ไม่อนุมัติ</div>
+                        </label>
+                    </div>
+                    
+                    <div class="reject-reason-box" style="display:none; margin-top:15px;">
+                        <label style="font-size:12px; font-weight:800; color:#ef4444; margin-bottom:5px; display:block;"><i class="fas fa-exclamation-triangle"></i> เหตุผลที่ไม่อนุมัติ <span style="color:#ef4444;">*</span></label>
+                        <input type="text" class="reject-reason-input swal-input-premium" placeholder="ระบุเหตุผล...">
+                    </div>
+                </div>
             </div>
-        </div>`;
+            `;
+      });
+      htmlContent += `</div>`;
 
       Swal.fire({
-        title:
-          '<div style="font-family:Prompt; font-weight:800;">พิจารณาอนุมัติค่าใช้จ่าย</div>',
-        html: html,
+        title: "",
+        html: `
+            <style>
+                @keyframes fadeInUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+                .log-anim { animation: fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards; opacity: 0; }
+                
+                .approval-card-3d { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; margin-bottom: 20px; transition: all 0.3s; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); overflow: hidden; }
+                .approval-card-3d:hover { box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.15); transform: translateY(-2px); }
+
+                .decision-btn { flex: 1; cursor: pointer; position: relative; }
+                .decision-btn input { display: none; } 
+                .decision-btn .btn-content { padding: 12px; border-radius: 12px; text-align: center; font-weight: 800; font-size: 14px; transition: all 0.2s; border: 2px solid transparent; display:flex; justify-content:center; align-items:center; gap:8px; }
+                
+                .approve-btn .btn-content, .reject-btn .btn-content { background: #f8fafc; color: #64748b; border-color: #e2e8f0; }
+                .approve-btn input:checked + .btn-content { background: #f0fdf4; color: #166534; border-color: #4ade80; box-shadow: 0 4px 10px rgba(74, 222, 128, 0.2); }
+                .reject-btn input:checked + .btn-content { background: #fef2f2; color: #991b1b; border-color: #f87171; box-shadow: 0 4px 10px rgba(248, 113, 113, 0.2); }
+
+                .swal-input-premium { width: 100%; border: 2px solid #fca5a5; border-radius: 10px; padding: 12px; font-size: 14px; box-sizing: border-box; transition: all 0.3s; background: #fff; font-family: 'Prompt', sans-serif; color: #1e293b; }
+                .swal-input-premium:focus { border-color: #ef4444; outline: none; box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.15); }
+
+                .btn-mini-3d { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 50px; font-size: 12px; text-decoration: none !important; font-weight: 700; transition: all 0.2s; border: none; box-sizing: border-box; cursor: pointer; }
+                .btn-mini-3d.outline { background: linear-gradient(to bottom, #ffffff, #f1f5f9); color: #475569; border: 1px solid #cbd5e1; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+                .btn-mini-3d.outline:hover { background: #f8fafc; color: #0f172a; border-color: #94a3b8; transform: translateY(-1px); }
+
+                ::-webkit-scrollbar { width: 6px; }
+                ::-webkit-scrollbar-track { background: transparent; }
+                ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+            </style>
+
+            <div style="padding:0;">
+                <div style="text-align:center; margin-bottom:15px; animation: fadeInUp 0.4s ease;">
+                    <div style="width:65px; height:65px; background:linear-gradient(135deg, #3b82f6, #1d4ed8); color:#fff; border-radius:20px; display:flex; align-items:center; justify-content:center; margin:0 auto 15px; box-shadow:0 10px 25px -5px rgba(59, 130, 246, 0.5);">
+                        <i class="fas fa-tasks fa-2x"></i>
+                    </div>
+                    <div style="font-size:24px; font-weight:900; color:#0f172a; letter-spacing:-0.5px;">พิจารณาอนุมัติการเบิกจ่าย</div>
+                    <div style="font-size:13px; color:#64748b; margin-top:5px;">เลือกพิจารณาเฉพาะรายการที่ต้องการ<br>(รายการที่ไม่ได้เลือก จะถูกยกยอดไปรอบหน้า)</div>
+                </div>
+                ${htmlContent}
+            </div>
+            `,
         width: "600px",
         showCancelButton: true,
         confirmButtonText:
-          '<i class="fas fa-check-circle"></i> ยืนยันผลการพิจารณา',
-        confirmButtonColor: "#10b981",
-        cancelButtonText: "ปิด",
+          '<i class="fas fa-save" style="margin-right:5px;"></i> บันทึกรายการที่เลือก',
+        cancelButtonText: "ยกเลิก",
+        confirmButtonColor: "#3b82f6",
+        customClass: {
+          confirmButton: "swal2-confirm-btn-blue",
+          cancelButton: "swal2-cancel-btn-gray",
+        },
         didOpen: () => {
-          window.calculateSum = () => {
-            let sum = 0;
-            document.querySelectorAll(".real-chk:checked").forEach((chk) => {
-              let idx = chk.value;
-              sum += parseFloat(pendingBills[idx].total_cost || 0);
+          // Event: สลับแสดงกล่องเหตุผลเมื่อกดไม่อนุมัติ
+          const cards = document.querySelectorAll(".approval-card-3d");
+          cards.forEach((card) => {
+            const radios = card.querySelectorAll('input[type="radio"]');
+            const reasonBox = card.querySelector(".reject-reason-box");
+            const reasonInput = card.querySelector(".reject-reason-input");
+            radios.forEach((r) => {
+              r.addEventListener("change", function () {
+                if (card.querySelector(".rb-reject").checked) {
+                  reasonBox.style.display = "block";
+                  reasonInput.focus();
+                } else {
+                  reasonBox.style.display = "none";
+                }
+              });
             });
-            document.getElementById("sum_display").innerText =
-              "฿" + sum.toLocaleString();
-          };
-          window.toggleBill = (idx) => {
-            const card = document.getElementById(`card_${idx}`);
-            const chk = document.getElementById(`chk_${idx}`);
-            if (chk.checked) {
-              card.classList.add("approved");
-              card.classList.remove("rejected");
-            } else {
-              card.classList.remove("approved");
-            }
-            calculateSum();
-          };
-          window.activateReject = (idx) => {
-            document.getElementById(`chk_${idx}`).checked = false;
-            document.getElementById(`card_${idx}`).classList.remove("approved");
-            document.getElementById(`card_${idx}`).classList.add("rejected");
-            $(`#reject_area_${idx}`).slideDown(200);
-            $(`#btn_reject_${idx}`).hide();
-            $(`#btn_undo_${idx}`).show();
-            $(`#lbl_${idx}`).css({ "pointer-events": "none", opacity: "0.5" });
-            calculateSum();
-          };
-          window.undoReject = (idx) => {
-            document.getElementById(`chk_${idx}`).checked = false;
-            document.getElementById(`card_${idx}`).classList.remove("approved");
-            document.getElementById(`card_${idx}`).classList.remove("rejected");
-            $(`#reject_area_${idx}`).slideUp(200);
-            $(`#btn_reject_${idx}`).show();
-            $(`#btn_undo_${idx}`).hide();
-            $(`#lbl_${idx}`).css({ "pointer-events": "auto", opacity: "1" });
-            calculateSum();
-          };
+          });
         },
         preConfirm: () => {
           let decisions = [];
-          let hasError = false;
-          pendingBills.forEach((bill, i) => {
-            const chk = document.getElementById(`chk_${i}`);
-            const isRejected = document
-              .getElementById(`card_${i}`)
-              .classList.contains("rejected");
-            let displayedShopName = document
-              .querySelector(`#card_${i} .shop-name`)
-              .innerText.trim();
+          let isValid = true;
+          let errorMsg = "";
+          let hasSelection = false;
 
-            if (isRejected) {
-              let note = document.getElementById(`note_${i}`).value.trim();
-              if (!note) {
-                Swal.showValidationMessage(
-                  `กรุณาระบุเหตุผลสำหรับร้าน: ${displayedShopName}`,
-                );
-                hasError = true;
+          document
+            .querySelectorAll(".approval-card-3d")
+            .forEach((card, index) => {
+              let idx = card.getAttribute("data-idx");
+              let amount = card.getAttribute("data-amount");
+              let statusType = card.getAttribute("data-status");
+
+              // หาว่ามีการติ๊กเลือก Radio หรือไม่
+              let checkedInput = card.querySelector(
+                `input[name="decision_${idx}"]:checked`,
+              );
+
+              // 🔥 ถ้ารายการนี้ "ถูกพิจารณาแล้ว" (มีการเลือก) ค่อยเก็บข้อมูลไปบันทึก
+              if (checkedInput) {
+                hasSelection = true;
+                let decisionStatus = checkedInput.value;
+                let note = card
+                  .querySelector(".reject-reason-input")
+                  .value.trim();
+
+                if (decisionStatus === "rejected" && !note) {
+                  isValid = false;
+                  errorMsg = `กรุณาระบุเหตุผลที่ไม่อนุมัติ สำหรับรายการที่ ${index + 1}`;
+                }
+
+                decisions.push({
+                  logIndex: parseInt(idx),
+                  status: decisionStatus,
+                  note: note,
+                  amount: amount,
+                  type: statusType,
+                });
               }
-              decisions.push({
-                logIndex: bill.logIndex,
-                status: "rejected",
-                note: note,
-                amount: bill.total_cost,
-                shop: displayedShopName,
-              });
-            } else if (chk.checked) {
-              decisions.push({
-                logIndex: bill.logIndex,
-                status: "approved",
-                note: "",
-                amount: bill.total_cost,
-                shop: displayedShopName,
-              });
-            }
-          });
-          if (hasError) return false;
-          if (decisions.length === 0)
+            });
+
+          // ตรวจสอบว่าไม่ได้เลือกอะไรเลยสักอัน
+          if (!hasSelection) {
             return Swal.showValidationMessage(
-              "กรุณาเลือกอนุมัติ หรือ ปฏิเสธ อย่างน้อย 1 รายการ",
+              "⚠️ กรุณาเลือกดำเนินการอย่างน้อย 1 รายการ หรือกดยกเลิก",
             );
+          }
+
+          if (!isValid) return Swal.showValidationMessage("⚠️ " + errorMsg);
+
           return decisions;
         },
       }).then((res) => {
         if (res.isConfirmed) {
+          Swal.fire({
+            title: "กำลังบันทึก...",
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading(),
+          });
           $.post(
             "service_dashboard.php",
             {
@@ -2919,16 +3363,14 @@ function approveCost(reqId) {
               req_id: reqId,
               decisions: JSON.stringify(res.value),
             },
-            function (r) {
-              if (r.status === "success") {
-                Swal.fire({
-                  icon: "success",
-                  title: "บันทึกเรียบร้อย",
-                  timer: 1000,
-                  showConfirmButton: false,
-                }).then(() => location.reload());
+            function (response) {
+              if (response.status === "success") {
+                Swal.fire(
+                  "สำเร็จ",
+                  "บันทึกผลการพิจารณาเรียบร้อย",
+                  "success", ).then(() => updateData());
               } else {
-                Swal.fire("Error", r.message, "error");
+                Swal.fire("เกิดข้อผิดพลาด", response.message, "error");
               }
             },
             "json",
@@ -2937,7 +3379,9 @@ function approveCost(reqId) {
       });
     },
     "json",
-  );
+  ).fail(function () {
+    Swal.fire("ข้อผิดพลาด", "ไม่สามารถดึงข้อมูลได้", "error");
+  });
 }
 $(document).ready(function () {
   // โหลดคะแนนความพึงพอใจทันทีที่เปิดหน้าเว็บ
@@ -2992,60 +3436,362 @@ function loadSatisfactionStats() {
 }
 // 🟢 ฟังก์ชันคัดลอกข้อมูลร้านค้าไปยังรายการอื่นที่เลือกไว้ (แบบ Popup ไม่หาย)
 window.applyShopToAllChecked = function (sourceIdx, btnElement) {
-    const sName = document.getElementById(`s_name_${sourceIdx}`).value.trim();
-    const sOwner = document.getElementById(`s_owner_${sourceIdx}`).value.trim();
-    const sPhone = document.getElementById(`s_phone_${sourceIdx}`).value.trim();
+  const sName = document.getElementById(`s_name_${sourceIdx}`).value.trim();
+  const sOwner = document.getElementById(`s_owner_${sourceIdx}`).value.trim();
+  const sPhone = document.getElementById(`s_phone_${sourceIdx}`).value.trim();
 
-    if (!sName) {
-        // ใช้แจ้งเตือนธรรมดาแทน จะได้ไม่เตะ Swal ตัวหลัก
-        alert('กรุณาพิมพ์ชื่อร้านค้าให้เรียบร้อยก่อนกดคัดลอกครับ');
-        return;
-    }
+  if (!sName) {
+    // ใช้แจ้งเตือนธรรมดาแทน จะได้ไม่เตะ Swal ตัวหลัก
+    alert("กรุณาพิมพ์ชื่อร้านค้าให้เรียบร้อยก่อนกดคัดลอกครับ");
+    return;
+  }
 
-    let count = 0;
-    // หา checkbox ทุกตัวที่ถูกติ๊ก
-    document.querySelectorAll('input[id^="chk_"]:checked:not(:disabled)').forEach(chk => {
-        let tIdx = chk.id.split('_')[1]; 
-        
-        if (tIdx !== String(sourceIdx)) {
-            let radioExt = document.querySelector(`input[name="dest_${tIdx}"][value="external"]`);
-            if (radioExt) {
-                radioExt.checked = true;
-                window.toggleShopFields(tIdx); // สั่งกางกล่องออก
-                
-                // ยัดข้อมูลร้านค้าลงไป
-                document.getElementById(`s_name_${tIdx}`).value = sName;
-                document.getElementById(`s_owner_${tIdx}`).value = sOwner;
-                document.getElementById(`s_phone_${tIdx}`).value = sPhone;
-                count++;
-            }
+  let count = 0;
+  // หา checkbox ทุกตัวที่ถูกติ๊ก
+  document
+    .querySelectorAll('input[id^="chk_"]:checked:not(:disabled)')
+    .forEach((chk) => {
+      let tIdx = chk.id.split("_")[1];
+
+      if (tIdx !== String(sourceIdx)) {
+        let radioExt = document.querySelector(
+          `input[name="dest_${tIdx}"][value="external"]`,
+        );
+        if (radioExt) {
+          radioExt.checked = true;
+          window.toggleShopFields(tIdx); // สั่งกางกล่องออก
+
+          // ยัดข้อมูลร้านค้าลงไป
+          document.getElementById(`s_name_${tIdx}`).value = sName;
+          document.getElementById(`s_owner_${tIdx}`).value = sOwner;
+          document.getElementById(`s_phone_${tIdx}`).value = sPhone;
+          count++;
         }
+      }
     });
 
-    // 🌟 ลูกเล่นใหม่: เปลี่ยนสถานะปุ่ม แทนการเรียก Popup ซ้อน
-    if (btnElement) {
-        let originalText = btnElement.innerHTML;
-        let originalBg = btnElement.style.background;
-        let originalColor = btnElement.style.color;
+  // 🌟 ลูกเล่นใหม่: เปลี่ยนสถานะปุ่ม แทนการเรียก Popup ซ้อน
+  if (btnElement) {
+    let originalText = btnElement.innerHTML;
+    let originalBg = btnElement.style.background;
+    let originalColor = btnElement.style.color;
 
-        if (count > 0) {
-            btnElement.innerHTML = `<i class="fas fa-check"></i> ก๊อปปี้สำเร็จ ${count} รายการ!`;
-            btnElement.style.background = '#10b981';
-            btnElement.style.color = '#fff';
-            btnElement.style.borderColor = '#10b981';
-        } else {
-            btnElement.innerHTML = `<i class="fas fa-exclamation-circle"></i> โปรดติ๊ก ✔️ ชิ้นอื่นก่อน`;
-            btnElement.style.background = '#ef4444';
-            btnElement.style.color = '#fff';
-            btnElement.style.borderColor = '#ef4444';
-        }
-        
-        // คืนค่าปุ่มกลับเป็นเหมือนเดิมใน 2.5 วินาที
-        setTimeout(() => {
-            btnElement.innerHTML = originalText;
-            btnElement.style.background = originalBg;
-            btnElement.style.color = originalColor;
-            btnElement.style.borderColor = '';
-        }, 2500);
+    if (count > 0) {
+      btnElement.innerHTML = `<i class="fas fa-check"></i> ก๊อปปี้สำเร็จ ${count} รายการ!`;
+      btnElement.style.background = "#10b981";
+      btnElement.style.color = "#fff";
+      btnElement.style.borderColor = "#10b981";
+    } else {
+      btnElement.innerHTML = `<i class="fas fa-exclamation-circle"></i> โปรดติ๊ก ✔️ ชิ้นอื่นก่อน`;
+      btnElement.style.background = "#ef4444";
+      btnElement.style.color = "#fff";
+      btnElement.style.borderColor = "#ef4444";
     }
+
+    // คืนค่าปุ่มกลับเป็นเหมือนเดิมใน 2.5 วินาที
+    setTimeout(() => {
+      btnElement.innerHTML = originalText;
+      btnElement.style.background = originalBg;
+      btnElement.style.color = originalColor;
+      btnElement.style.borderColor = "";
+    }, 2500);
+  }
 };
+function openExpenseRequest(reqId, jsonInput) {
+  let data = typeof jsonInput === "string" ? JSON.parse(jsonInput) : jsonInput;
+
+  // ดึงรายชื่อสินค้าทั้งหมด
+  let availableItems = [];
+  if (data.items_status) {
+    availableItems = Object.keys(data.items_status);
+  } else if (data.all_project_items) {
+    availableItems = data.all_project_items;
+  }
+
+  // 🌟 สร้าง HTML สำหรับรายการอ้างอิง (List Rows 1 บรรทัด / 1 รายการ)
+  let refItemsHtml = "";
+  if (availableItems.length > 0) {
+    availableItems.forEach((item, idx) => {
+      let delay = idx * 0.05; // หน่วงเวลาเด้งทีละอัน
+      refItemsHtml += `
+                <label class="ref-row-card" style="animation-delay: ${delay}s;">
+                    <input type="checkbox" class="ref-item-chk" value="${item}">
+                    <div class="ref-row-content">
+                        <div class="chk-box-ui"><i class="fas fa-check" style="font-size:10px;"></i></div>
+                        <span class="item-name"><i class="fas fa-box" style="color:#94a3b8; margin-right:5px;"></i> ${item}</span>
+                    </div>
+                </label>
+            `;
+    });
+  } else {
+    refItemsHtml = `<div style="width:100%; text-align:center; padding:15px; color:#94a3b8; font-size:12px;">ไม่มีรายการสินค้าให้อ้างอิง</div>`;
+  }
+
+  // 🌟 ฟังก์ชันคำนวณยอดรวมทุกรายการ (Grand Total)
+  window.calcExpGrandTotal = function () {
+    let grandTotal = 0;
+    document.querySelectorAll(".expense-row").forEach((row) => {
+      let qty = parseFloat(row.querySelector(".exp-qty").value) || 0;
+      let price = parseFloat(row.querySelector(".exp-price").value) || 0;
+      grandTotal += qty * price;
+    });
+    document.getElementById("exp_total_display").value =
+      grandTotal.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    document.getElementById("exp_total_hidden").value = grandTotal;
+  };
+
+  // 🌟 ฟังก์ชันเพิ่มแถวรายการใหม่
+  window.addExpenseRow = function () {
+    const container = document.getElementById("expense-items-container");
+    const rowId = "exp_row_" + Date.now();
+    const rowHtml = `
+            <div class="expense-row" id="${rowId}" style="background:#ffffff; border:1px solid #e2e8f0; border-left:4px solid #8b5cf6; border-radius:10px; padding:12px; margin-bottom:10px; position:relative; box-shadow:0 2px 4px rgba(0,0,0,0.02); animation: popIn 0.3s ease;">
+                <button type="button" onclick="removeExpenseRow('${rowId}')" style="position:absolute; right:10px; top:10px; background:#fee2e2; color:#ef4444; border:none; width:28px; height:28px; border-radius:6px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:0.2s;" onmouseover="this.style.background='#fca5a5'" onmouseout="this.style.background='#fee2e2'">
+                    <i class="fas fa-times"></i>
+                </button>
+                
+                <label class="swal-label" style="font-size:12px;"><i class="fas fa-file-alt" style="color:#8b5cf6;"></i> ชื่อรายการเบิก <span style="color:#ef4444">*</span></label>
+                <input type="text" class="swal-input-premium exp-name" placeholder="ระบุชื่อรายการ (เช่น ค่าเดินทาง, อะไหล่)..." style="margin-bottom:8px; padding:8px; padding-right:40px;">
+                
+                <div style="display:flex; gap:10px;">
+                    <div style="flex:1;">
+                        <label class="swal-label" style="font-size:12px;">จำนวน <span style="color:#ef4444">*</span></label>
+                        <input type="number" class="swal-input-premium exp-qty" placeholder="0" min="1" step="1" oninput="calcExpGrandTotal()" style="padding:8px; margin-bottom:0;">
+                    </div>
+                    <div style="flex:1;">
+                        <label class="swal-label" style="font-size:12px;">ราคา/หน่วย <span style="color:#ef4444">*</span></label>
+                        <input type="number" class="swal-input-premium exp-price" placeholder="0.00" min="0" step="0.01" oninput="calcExpGrandTotal()" style="padding:8px; margin-bottom:0;">
+                    </div>
+                </div>
+            </div>
+        `;
+    container.insertAdjacentHTML("beforeend", rowHtml);
+  };
+
+  // 🌟 ฟังก์ชันลบแถว
+  window.removeExpenseRow = function (rowId) {
+    document.getElementById(rowId).remove();
+    calcExpGrandTotal();
+  };
+
+  Swal.fire({
+    title: "",
+    html: `
+        <style>
+            @keyframes popIn { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+            @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+            
+            .swal-label { font-size: 13px; font-weight: 700; color: #475569; display: block; text-align: left; margin-bottom: 6px; }
+            .swal-input-premium { width: 100%; border: 2px solid #e2e8f0; border-radius: 8px; padding: 10px; font-size: 14px; box-sizing: border-box; transition: all 0.3s; background: #f8fafc; font-family: 'Prompt', sans-serif; color: #1e293b; margin-bottom: 12px; }
+            .swal-input-premium:focus { background: #ffffff; border-color: #8b5cf6; outline: none; box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15); }
+            
+            /* 🌟 สไตล์กล่องเลือกสินค้าอ้างอิงแบบใหม่ (เรียงเป็นบรรทัด) */
+            .ref-list-container {
+                display: flex; flex-direction: column; gap: 6px; background: #f8fafc; border: 1px dashed #cbd5e1;
+                padding: 10px; border-radius: 12px; max-height: 180px; overflow-y: auto; margin-bottom: 15px;
+            }
+            .ref-row-card { cursor: pointer; margin: 0; display: block; opacity: 0; animation: fadeInUp 0.3s ease forwards; width: 100%; }
+            .ref-item-chk { display: none; }
+            .ref-row-content {
+                background: #ffffff; border: 1px solid #e2e8f0; color: #475569; padding: 10px 12px;
+                border-radius: 8px; font-size: 13px; font-weight: 600; font-family: 'Prompt', sans-serif;
+                transition: all 0.2s; display: flex; align-items: center; gap: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+            }
+            .ref-row-card:hover .ref-row-content { border-color: #8b5cf6; background: #f5f3ff; transform: translateY(-1px); }
+            
+            /* UI Checkbox จำลอง */
+            .chk-box-ui {
+                width: 18px; height: 18px; border: 2px solid #cbd5e1; border-radius: 4px; 
+                display: flex; align-items: center; justify-content: center; color: transparent; transition: 0.2s;
+            }
+            
+            /* สไตล์ตอนถูกเลือก (Checked) */
+            .ref-item-chk:checked + .ref-row-content {
+                background: #f5f3ff; color: #4c1d95; border-color: #8b5cf6;
+                box-shadow: 0 4px 6px rgba(139, 92, 246, 0.1);
+            }
+            .ref-item-chk:checked + .ref-row-content .chk-box-ui {
+                background: #8b5cf6; border-color: #8b5cf6; color: #ffffff;
+            }
+            .ref-item-chk:checked + .ref-row-content .item-name i {
+                color: #8b5cf6 !important;
+            }
+
+            /* กล่องอัปโหลดไฟล์ */
+            .custom-file-upload { position: relative; width: 100%; border: 2px dashed #cbd5e1; border-radius: 12px; background: #f8fafc; padding: 15px 10px; text-align: center; transition: all 0.3s; cursor: pointer; box-sizing: border-box; margin-bottom: 10px;}
+            .custom-file-upload:hover { border-color: #8b5cf6; background: #f5f3ff; }
+            .custom-file-upload input[type="file"] { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 10; }
+            .upload-icon { font-size: 24px; color: #94a3b8; margin-bottom: 5px; transition: color 0.3s; }
+            .custom-file-upload:hover .upload-icon { color: #8b5cf6; }
+            .upload-text { font-size: 12px; color: #64748b; font-weight: 600; transition: color 0.3s; }
+            .custom-file-upload:hover .upload-text { color: #4c1d95; }
+            
+            ::-webkit-scrollbar { width: 6px; }
+            ::-webkit-scrollbar-track { background: transparent; }
+            ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        </style>
+
+        <div style="padding:0; box-sizing:border-box;">
+            <div style="text-align:center; margin-bottom:15px; animation: fadeInUp 0.4s ease;">
+                <div style="width:55px; height:55px; background:linear-gradient(135deg, #8b5cf6, #6d28d9); color:#fff; border-radius:16px; display:flex; align-items:center; justify-content:center; margin:0 auto 10px; box-shadow:0 6px 12px -4px rgba(139, 92, 246, 0.5);">
+                    <i class="fas fa-file-invoice-dollar fa-lg"></i>
+                </div>
+                <div style="font-size:18px; font-weight:900; color:#1e293b;">เบิกค่าใช้จ่าย / เสนอราคา</div>
+            </div>
+
+            <div style="text-align:left;">
+                <label class="swal-label"><i class="fas fa-tags" style="color:#8b5cf6;"></i> อ้างอิงรายการสินค้าหลัก <span style="color:#94a3b8; font-weight:500; font-size:11px;">(คลิกเลือกได้หลายรายการ)</span></label>
+                
+                <div class="ref-list-container">
+                    ${refItemsHtml}
+                </div>
+                
+                <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:8px; margin-top:10px;">
+                    <label class="swal-label" style="margin-bottom:0;"><i class="fas fa-list-ul" style="color:#f59e0b;"></i> รายการค่าใช้จ่าย</label>
+                    <button type="button" onclick="addExpenseRow()" style="background:#e0e7ff; color:#4f46e5; border:none; padding:5px 12px; border-radius:50px; font-size:11px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; transition:0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.05);" onmouseover="this.style.background='#c7d2fe'; this.style.transform='translateY(-1px)';" onmouseout="this.style.background='#e0e7ff'; this.style.transform='translateY(0)';">
+                        <i class="fas fa-plus"></i> เพิ่มรายการ
+                    </button>
+                </div>
+
+                <div id="expense-items-container" style="background:#f1f5f9; padding:10px; border-radius:12px; max-height:220px; overflow-y:auto; border:1px solid #e2e8f0; margin-bottom:15px;">
+                    </div>
+
+                <label class="swal-label"><i class="fas fa-calculator" style="color:#10b981;"></i> รวมเป็นเงินสุทธิ (บาท)</label>
+                <input type="text" id="exp_total_display" class="swal-input-premium" placeholder="0.00" readonly style="background:#f0fdf4; border-color:#86efac; font-weight:800; color:#166534; font-size:20px; text-align:right;">
+                <input type="hidden" id="exp_total_hidden" value="0">
+
+                <label class="swal-label"><i class="fas fa-comment-dots" style="color:#0ea5e9;"></i> หมายเหตุเพิ่มเติม</label>
+                <input type="text" id="exp_remark" class="swal-input-premium" placeholder="รายละเอียดเพิ่มเติม (ไม่บังคับ)...">
+
+                <label class="swal-label"><i class="fas fa-paperclip" style="color:#db2777;"></i> แนบไฟล์ใบเสนอราคา/ใบเสร็จ <span style="color:#ef4444">*</span></label>
+                <div class="custom-file-upload">
+                    <input type="file" id="exp_file" accept="image/*,.pdf" onchange="
+                        let fileName = this.files[0] ? this.files[0].name : 'คลิกเพื่อเลือกไฟล์ หรือลากมาวาง (รูปภาพ/PDF)';
+                        let textColor = this.files[0] ? '#8b5cf6' : '#64748b';
+                        let iconColor = this.files[0] ? '#6d28d9' : '#94a3b8';
+                        document.getElementById('exp_file_name').innerText = fileName;
+                        document.getElementById('exp_file_name').style.color = textColor;
+                        document.getElementById('exp_file_icon').style.color = iconColor;
+                        document.getElementById('exp_file_icon').className = this.files[0] ? 'fas fa-file-check' : 'fas fa-cloud-upload-alt';
+                    ">
+                    <div class="upload-icon"><i id="exp_file_icon" class="fas fa-cloud-upload-alt"></i></div>
+                    <div class="upload-text" id="exp_file_name">คลิกเพื่อเลือกไฟล์ หรือลากมาวาง (รูปภาพ/PDF)</div>
+                </div>
+            </div>
+        </div>
+        `,
+    width: "550px",
+    showCancelButton: true,
+    confirmButtonText:
+      '<i class="fas fa-paper-plane" style="margin-right:5px;"></i> ยืนยันเบิกค่าใช้จ่าย',
+    cancelButtonText: "ยกเลิก",
+    confirmButtonColor: "#8b5cf6",
+    customClass: {
+      confirmButton: "swal2-confirm-btn-purple",
+      cancelButton: "swal2-cancel-btn-gray",
+    },
+    didOpen: () => {
+      // สร้างแถวแรกขึ้นมาให้เลยตอนเปิด Popup
+      addExpenseRow();
+    },
+    preConfirm: () => {
+      const file = document.getElementById("exp_file").files[0];
+      const rows = document.querySelectorAll(".expense-row");
+      let expenses = [];
+      let isValid = true;
+      let errorMsg = "";
+
+      // ตรวจสอบและเก็บข้อมูลแต่ละแถว
+      rows.forEach((row, index) => {
+        let name = row.querySelector(".exp-name").value.trim();
+        let qty = parseFloat(row.querySelector(".exp-qty").value) || 0;
+        let price = parseFloat(row.querySelector(".exp-price").value) || 0;
+
+        if (!name || qty <= 0 || price < 0) {
+          isValid = false;
+          errorMsg = `กรุณากรอกข้อมูลรายการที่ ${index + 1} ให้ครบถ้วน`;
+        } else {
+          expenses.push({
+            name: name,
+            qty: qty,
+            price: price,
+            total: qty * price,
+          });
+        }
+      });
+
+      // 🔥 1. ดึงค่ารายการอ้างอิงที่ถูกติ๊กเลือกทั้งหมด
+      let selectedRefs = [];
+      document.querySelectorAll(".ref-item-chk:checked").forEach((chk) => {
+        selectedRefs.push(chk.value);
+      });
+
+      // 🔥 2. [เพิ่มใหม่] บังคับว่าต้องเลือกอ้างอิงสินค้าอย่างน้อย 1 รายการ
+      if (selectedRefs.length === 0) {
+        return Swal.showValidationMessage("⚠️ กรุณาคลิกเลือก 'อ้างอิงรายการสินค้าหลัก' อย่างน้อย 1 รายการ");
+      }
+
+      // ดักจับ Error อื่นๆ
+      if (expenses.length === 0)
+        return Swal.showValidationMessage(
+          "⚠️ กรุณาเพิ่มรายการเบิกอย่างน้อย 1 รายการ",
+        );
+      if (!isValid) return Swal.showValidationMessage("⚠️ " + errorMsg);
+      if (!file)
+        return Swal.showValidationMessage(
+          "⚠️ กรุณาแนบไฟล์ใบเสนอราคาหรือใบเสร็จ",
+        );
+
+      return {
+        ref_item: JSON.stringify(selectedRefs), // ส่งเป็น JSON Array
+        expenses_json: JSON.stringify(expenses),
+        total: document.getElementById("exp_total_hidden").value,
+        remark: document.getElementById("exp_remark").value.trim(),
+        file: file,
+      };
+    },
+  }).then((res) => {
+    if (res.isConfirmed) {
+      let fd = new FormData();
+      fd.append("action", "request_expense");
+      fd.append("req_id", reqId);
+      fd.append("ref_item", res.value.ref_item);
+      fd.append("expenses_json", res.value.expenses_json);
+      fd.append("total", res.value.total);
+      fd.append("remark", res.value.remark);
+      fd.append("expense_file", res.value.file);
+
+      Swal.fire({
+        title: "กำลังส่งเรื่องเบิก...",
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading(),
+      });
+
+      $.ajax({
+        url: "service_dashboard.php",
+        type: "POST",
+        data: fd,
+        processData: false,
+        contentType: false,
+        dataType: "json",
+        success: function (response) {
+          if (response.status === "success") {
+            Swal.fire(
+              "สำเร็จ",
+              "ส่งเรื่องเบิกค่าใช้จ่ายเรียบร้อย",
+              "success",
+            ).then(() => updateData());
+          } else {
+            Swal.fire("เกิดข้อผิดพลาด", response.message, "error");
+          }
+        },
+        error: function () {
+          Swal.fire("Error", "ไม่สามารถติดต่อเซิร์ฟเวอร์ได้", "error");
+        },
+      });
+    }
+  });
+}

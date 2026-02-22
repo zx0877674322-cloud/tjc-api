@@ -1108,7 +1108,7 @@ function getAvatar()
 
                     <?php if (canSeeMenu('work_plan_add.php')): ?>
                         <li><a href="work_plan_add.php" class="<?php echo isActive('work_plan_add.php', $current_page); ?>">
-                                <i class="fas fa-tasks"></i> สมุดลงแพลนงานการตลาด</a>
+                                <i class="fas fa-edit"></i> สมุดลงแพลนงานการตลาด</a>
                         </li>
                     <?php endif; ?>
                     <?php if (canSeeMenu('StatusManager.php')): ?>
