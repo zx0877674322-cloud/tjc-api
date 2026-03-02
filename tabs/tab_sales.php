@@ -42,6 +42,7 @@ if (!empty($search_keyword)) {
 $status_counts = [];
 $total_expense = 0;
 $total_reports = 0;
+$total_project_value = 0;
 $rows_buffer = [];
 
 $sql_list = "SELECT * FROM $table_name $where_sql ORDER BY report_date DESC, id DESC";
@@ -73,6 +74,15 @@ if ($result_list) {
 
         $total_expense += $row['total_expense_calc'];
         $total_reports++;
+
+        // 💰 ถอดรหัสมูลค่าโครงการออกมาบวกยอดรวม (จับจากคำว่า "มูลค่า: XXX บาท")
+        $p_names = $row['project_name'] ?? '';
+        if (preg_match_all('/มูลค่า:\s*([\d,.]+)\s*บาท/u', $p_names, $matches)) {
+            foreach ($matches[1] as $val_str) {
+                $total_project_value += floatval(str_replace(',', '', $val_str));
+            }
+        }
+
         $rows_buffer[] = $row;
     }
 }
@@ -123,7 +133,15 @@ function hexToRgba($hex, $alpha = 0.1)
         <i class="fa-solid fa-file-signature kpi-icon"></i>
     </div>
 
+    <div class="kpi-card" style="border-left: 5px solid #8b5cf6;">
+        <div class="kpi-label" style="color:#8b5cf6;">มูลค่าโครงการรวม</div>
+        <div class="kpi-value">฿ <?= number_format($total_project_value, 2) ?></div>
+        <i class="fa-solid fa-hand-holding-usd kpi-icon"></i>
+    </div>
+
     <?php foreach ($status_counts as $st => $cnt):
+        if (trim($st) == '' || stripos($st, 'Plan') !== false || strpos($st, 'วางแผน') !== false)
+            continue;
         $cfg = getCardConfig($st); ?>
         <div class="kpi-card" onclick="filterByStatus('<?= $st ?>')" style="border-left: 5px solid <?= $cfg['color'] ?>;">
             <div class="kpi-label" style="color:<?= $cfg['color'] ?>;"><?= $st ?></div>
@@ -185,7 +203,8 @@ function hexToRgba($hex, $alpha = 0.1)
                     <th style="width:140px;">วันที่/เวลา</th>
                     <th>ลูกค้า / หน่วยงาน</th>
                     <th>โครงการ</th>
-                    <th style="width:160px;">สถานะ</th>
+                    <th style="width:130px; text-align:right;">มูลค่าโครงการ</th>
+                    <th style="width:140px;">สถานะ</th>
                     <th style="width:120px; text-align:right;">ค่าเบิก</th>
                     <th style="width:140px; text-align:center;">หลักฐาน</th>
                     <th style="width:80px; text-align:center;">ดู</th>
@@ -195,7 +214,7 @@ function hexToRgba($hex, $alpha = 0.1)
                 <?php if (!empty($rows_buffer)):
                     foreach ($rows_buffer as $row):
                         $customers = explode(',', $row['work_result']);
-                        $projects = explode(',', $row['project_name']);
+                        $projects = preg_split('/,(?!\d)/', $row['project_name']);
                         $st_list = explode(',', $row['job_status']);
                         $max_rows = max(count($customers), count($projects), count($st_list));
                         $row_json = htmlspecialchars(json_encode($row), ENT_QUOTES, 'UTF-8');
@@ -224,9 +243,30 @@ function hexToRgba($hex, $alpha = 0.1)
 
                             <td style="padding:0; vertical-align:top;">
                                 <?php for ($i = 0; $i < $max_rows; $i++):
+                                    $raw_pj = trim($projects[$i] ?? '-');
+                                    // 🟢 ตัดข้อความ "มูลค่า: xxx บาท" ออกจากชื่อโครงการ (ปรับ Regex ให้ยืดหยุ่นครอบคลุมช่องว่างที่ผิดปกติ)
+                                    $pj_name = preg_replace('/(?:\(|\[)?\s*มูลค่า[:\s]*[\d,.]+\s*บาท\s*(?:\)|\])?/ui', '', $raw_pj);
+
                                     $border = ($i < $max_rows - 1) ? 'border-bottom: 1px dashed var(--border-color);' : ''; ?>
                                     <div style="padding:12px 15px; <?= $border ?> color:var(--text-sub); font-size:13px;">
-                                        <?= trim($projects[$i] ?? '-') ?>
+                                        <?= trim($pj_name) ?: '-' ?>
+                                    </div>
+                                <?php endfor; ?>
+                            </td>
+
+                            <td style="padding:0; vertical-align:top;">
+                                <?php for ($i = 0; $i < $max_rows; $i++):
+                                    $raw_pj = trim($projects[$i] ?? '-');
+                                    $pj_value = '-';
+                                    // 🟢 ดึงเฉพาะตัวเลขมูลค่าโครงการมาโชว์ในช่องนี้ (ปรับ Regex ให้ยืดหยุ่น)
+                                    if (preg_match('/มูลค่า[:\s]*([\d,.]+)\s*บาท/ui', $raw_pj, $m)) {
+                                        // ใส่คอมม่าให้ตัวเลขสวยขึ้น (ไม่มีทศนิยม)
+                                        $pj_value = number_format(floatval(str_replace(',', '', $m[1])));
+                                    }
+                                    $border = ($i < $max_rows - 1) ? 'border-bottom: 1px dashed var(--border-color);' : ''; ?>
+                                    <div
+                                        style="padding:12px 15px; <?= $border ?> text-align:right; font-weight:600; color:#059669; font-size:13px;">
+                                        <?= $pj_value ?>
                                     </div>
                                 <?php endfor; ?>
                             </td>
@@ -315,7 +355,7 @@ function hexToRgba($hex, $alpha = 0.1)
 <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/th.js"></script>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         flatpickr(".datepicker", {
             locale: "th",              // ภาษาไทย
             dateFormat: "Y-m-d",       // ส่งค่าเข้า Database (2026-02-01)

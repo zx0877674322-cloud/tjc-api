@@ -689,7 +689,20 @@ if ($result && $result->num_rows > 0) {
                                 style="border-color: <?php echo $color; ?>">
                             <div class="job-info">
                                 <div class="job-name"><?php echo $loc['reporter_name']; ?></div>
-                                <div class="job-project"><?php echo $loc['project_name'] ? $loc['project_name'] : '-'; ?></div>
+                                <?php
+                                $raw_pj_sidebar = $loc['project_name'] ? $loc['project_name'] : '-';
+                                $pj_name_sidebar = preg_replace('/(?!\\(|\\[)?\\s*มูลค่า[:\\s]*[\\d,.]+\\s*บาท\\s*(?!\\)|\\])?/ui', '', $raw_pj_sidebar);
+
+                                $pj_value_sidebar = '';
+                                if (preg_match_all('/มูลค่า[:\\s]*([\\d,.]+)\\s*บาท/ui', $raw_pj_sidebar, $matches)) {
+                                    $values_arr = [];
+                                    foreach ($matches[1] as $v) {
+                                        $values_arr[] = "฿" . number_format(floatval(str_replace(',', '', $v)));
+                                    }
+                                    $pj_value_sidebar = ' <span style="color:#10b981; font-weight:600;">(' . implode(', ', $values_arr) . ')</span>';
+                                }
+                                ?>
+                                <div class="job-project"><?php echo $pj_name_sidebar . $pj_value_sidebar; ?></div>
                                 <div class="job-meta">
                                     <span style="color: #666;">
                                         <i class="far fa-calendar-alt"></i> <?php echo date('d/m/Y', $timestamp); ?>
@@ -719,23 +732,23 @@ if ($result && $result->num_rows > 0) {
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         // Map Setup
-        var googleStreets = L.tileLayer('http://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { 
-            maxZoom: 20, 
-            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'] 
+        var googleStreets = L.tileLayer('http://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+            maxZoom: 20,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
         });
 
         // 🟢 2. Layer ภาพดาวเทียม (Google Hybrid) - เพิ่มส่วนนี้
-        var googleHybrid = L.tileLayer('http://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { 
-            maxZoom: 20, 
-            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'] 
+        var googleHybrid = L.tileLayer('http://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            maxZoom: 20,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
         });
 
         // 3. สร้างแผนที่ (เริ่มด้วยแบบถนน)
-        var map = L.map('map', { 
-            center: [13.7563, 100.5018], 
-            zoom: 6, 
+        var map = L.map('map', {
+            center: [13.7563, 100.5018],
+            zoom: 6,
             layers: [googleStreets], // Layer เริ่มต้น
-            zoomControl: false 
+            zoomControl: false
         });
 
         // 🟢 4. เพิ่มปุ่มควบคุมการสลับ Layer (มุมขวาล่าง)
@@ -745,7 +758,7 @@ if ($result && $result->num_rows > 0) {
         };
 
         L.control.layers(baseMaps, null, { position: 'bottomright' }).addTo(map);
-        
+
         // ปุ่ม Zoom (มุมขวาบน)
         L.control.zoom({ position: 'topright' }).addTo(map);
 
@@ -767,9 +780,9 @@ if ($result && $result->num_rows > 0) {
 
         var bounds = [];
         locations.forEach((loc, index) => {
-            // 🟢 ระเบิดข้อมูล Multi-Job (แยกคอมม่า)
-            var projects = (loc.project_name || '').split(',');
-            var works = (loc.work_result || '').split(',');
+            // 🟢 ระเบิดข้อมูล Multi-Job (แยกคอมม่า แต่ไม่แยกคอมม่าในตัวเลข)
+            var projects = (loc.project_name || '').split(/,(?!\d)/);
+            var works = (loc.work_result || '').split(/,(?!\d)/);
             var statuses = (loc.job_status || '').split(',');
 
             // สีหลักของ Pin (เอางานแรกเป็นเกณฑ์)
@@ -785,7 +798,17 @@ if ($result && $result->num_rows > 0) {
             var maxItems = Math.max(projects.length, works.length);
 
             for (var i = 0; i < maxItems; i++) {
-                var pName = (projects[i] || '').trim() || '-';
+                var rawPName = (projects[i] || '').trim() || '-';
+
+                // ดึงมูลค่าโครงการออกมา
+                var pValueDisplay = '';
+                var match = rawPName.match(/มูลค่า[:\s]*([\d,.]+)\s*บาท/i);
+                if (match) {
+                    pValueDisplay = ` <span style="color:#10b981; font-weight:600; font-size:12px;">(มูลค่า: ${match[1]} บาท)</span>`;
+                    rawPName = rawPName.replace(/(?!\(|\[)?\s*มูลค่า[:\s]*[\d,.]+\s*บาท\s*(?!\)|\])?/gi, '').trim();
+                }
+                var pName = rawPName.replace(/^[-\s]+|[-\s]+$/g, '') || '-'; // clean up trailing dashes or spaces
+
                 var wRes = (works[i] || '').trim() || '-';
                 var st = (statuses[i] || '').trim() || 'ทั่วไป';
                 var stColor = statusColors[st] || '#95a5a6'; // สีตามสถานะงานย่อย
@@ -798,7 +821,7 @@ if ($result && $result->num_rows > 0) {
                         
                         <div class="detail-row">
                             <span class="detail-label">โครงการ / ลูกค้า</span>
-                            <div class="detail-value" style="color:#4e54c8; font-weight:500;">${pName}</div>
+                            <div class="detail-value" style="color:#4e54c8; font-weight:500;">${pName}${pValueDisplay}</div>
                         </div>
                         
                         <div style="border-top:1px dashed #ddd; margin:6px 0;"></div>

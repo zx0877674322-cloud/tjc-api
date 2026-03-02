@@ -2648,7 +2648,7 @@ $total_votes = $rate_data['total_votes'] ?? 0;
                     </div>
 
                     <div class="form-group">
-                        <label>ช่างผู้รับผิดชอบ</label>
+                        <label>ผู้รับผิดชอบ</label>
                         <div class="input-box">
                             <select name="technician" class="modern-input cursor-pointer" onchange="updateData()">
                                 <option value="">-- ทั้งหมด --</option>
@@ -2693,6 +2693,11 @@ $total_votes = $rate_data['total_votes'] ?? 0;
                             <a href="service_dashboard.php" class="btn-clear-solid">
                                 <i class="fas fa-redo"></i> รีเซ็ต
                             </a>
+
+                            <button type="button" class="btn-clear-solid" onclick="openExportModal()"
+                                style="background: #10b981; color: white; border: none;">
+                                <i class="fas fa-file-excel"></i> Export
+                            </button>
                         </div>
                     </div>
 
@@ -2784,7 +2789,7 @@ $total_votes = $rate_data['total_votes'] ?? 0;
                     <thead>
                         <tr>
                             <th width="8%">หน้างาน</th>
-                            <th width="10%">ผู้รับเรื่อง / วันที่แจ้ง</th>
+                            <th width="10%">ผู้ลงข้อมูล /ผู้รับเรื่อง / วันที่แจ้ง</th>
                             <th width="12%">ผู้แจ้ง / ติดต่อ</th>
                             <th width="15%">ลูกค้า</th>
                             <th width="8%" class="text-center">ความเร่งด่วน</th>
@@ -2824,18 +2829,18 @@ $total_votes = $rate_data['total_votes'] ?? 0;
                                     <td>
                                         <div style="font-weight:600; color:var(--primary); white-space:nowrap;">
                                             <i class="fas fa-user-shield" style="font-size:0.75rem; color:#94a3b8;"></i>
-                                            <?php echo htmlspecialchars($row['receiver_by']); ?>
+                                            ผู้รับเรื่อง:
+                                            <?php echo htmlspecialchars($row['receiver_by'] ?: '-'); ?>
+                                        </div>
+                                        <div style="font-size:0.75rem; color:#64748b; margin-top:2px; white-space:nowrap;">
+                                            <i class="fas fa-keyboard" style="font-size:0.75rem; color:#94a3b8;"></i>
+                                            ผู้ลงข้อมูล:
+                                            <?php echo htmlspecialchars($row['updated_by'] ?: '-'); ?>
                                         </div>
                                         <div style="font-size:0.75rem; color:#64748b; margin-top:2px; white-space:nowrap;">
                                             <i class="far fa-clock"></i>
                                             <?php echo date('d/m/y H:i', strtotime($row['request_date'])); ?>
                                         </div>
-                                        <?php if (!empty($row['updated_by']) && $row['updated_by'] != $row['receiver_by']): ?>
-                                            <div style="font-size:0.7rem; color:#94a3b8; font-style:italic; white-space:nowrap;">
-                                                <i class="fas fa-pencil-alt"></i> แก้ไข:
-                                                <?= htmlspecialchars($row['updated_by']) ?>
-                                            </div>
-                                        <?php endif; ?>
                                     </td>
 
                                     <td class="contact-cell">
@@ -3501,6 +3506,185 @@ $total_votes = $rate_data['total_votes'] ?? 0;
             </div>
         </div>
     </div>
+
+    <!-- Modal Export Excel (Premium Animated) -->
+    <style>
+        /* Animations for Modal */
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+                backdrop-filter: blur(0px);
+            }
+
+            to {
+                opacity: 1;
+                backdrop-filter: blur(4px);
+            }
+        }
+
+        @keyframes modalSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px) scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .modal-overlay.active {
+            display: flex !important;
+            animation: modalFadeIn 0.3s ease-out forwards;
+        }
+
+        .modal-overlay.active .modal-content {
+            animation: modalSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* Form Controls Styling */
+        .export-form-group {
+            margin-bottom: 16px;
+        }
+
+        .export-form-group label {
+            font-size: 0.85rem;
+            color: #334155;
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        .export-input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            color: #1e293b;
+            background: #f8fafc;
+            transition: all 0.2s ease;
+            box-sizing: border-box;
+        }
+
+        .export-input:focus {
+            outline: none;
+            border-color: #10b981;
+            background: #ffffff;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+        }
+
+        .export-btn-cancel {
+            padding: 10px 18px;
+            border-radius: 8px;
+            background: #f1f5f9;
+            color: #475569;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .export-btn-cancel:hover {
+            background: #e2e8f0;
+            color: #1e293b;
+        }
+
+        .export-btn-submit {
+            padding: 10px 24px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff;
+            border: none;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.3);
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .export-btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px -2px rgba(16, 185, 129, 0.4);
+            filter: brightness(1.05);
+        }
+    </style>
+
+    <div id="exportExcelModal" class="modal-overlay"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.6); z-index:9999; justify-content:center; align-items:center;">
+        <div class="modal-content"
+            style="background:#ffffff; border-radius:16px; width:450px; padding:25px; box-shadow:0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); border:1px solid #e2e8f0; opacity:0;">
+
+            <div
+                style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #f1f5f9; padding-bottom:15px; margin-bottom:20px;">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div
+                        style="width:40px; height:40px; background:#d1fae5; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#059669; font-size:1.4rem;">
+                        <i class="fas fa-file-excel"></i>
+                    </div>
+                    <div>
+                        <h3 style="margin:0; font-size:1.15rem; color:#0f172a; font-weight:800; letter-spacing:-0.5px;">
+                            Export to Excel</h3>
+                        <div style="font-size:0.8rem; color:#64748b;">ดาวน์โหลดรายงานการซ่อมเป็นไฟล์ Excel</div>
+                    </div>
+                </div>
+                <button type="button" onclick="closeExportModal()"
+                    style="border:none; background:#f8fafc; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1rem; color:#94a3b8; cursor:pointer; transition:all 0.2s;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <form id="exportForm" action="export_service_excel.php" method="GET" target="_blank">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:10px;">
+                    <div class="export-form-group">
+                        <label><i class="far fa-calendar-alt" style="color:#64748b; margin-right:4px;"></i>
+                            ตั้งแต่วันที่</label>
+                        <input type="text" name="export_start" id="export_start" class="export-input date-picker-alt"
+                            placeholder="เลือกวันที่..." value="<?php echo htmlspecialchars($start_date); ?>">
+                    </div>
+                    <div class="export-form-group">
+                        <label><i class="far fa-calendar-check" style="color:#64748b; margin-right:4px;"></i>
+                            ถึงวันที่</label>
+                        <input type="text" name="export_end" id="export_end" class="export-input date-picker-alt"
+                            placeholder="เลือกวันที่..." value="<?php echo htmlspecialchars($end_date); ?>">
+                    </div>
+                </div>
+
+                <div class="export-form-group">
+                    <label><i class="fas fa-headset" style="color:#3b82f6; margin-right:4px;"></i> ผู้รับเรื่อง</label>
+                    <select name="export_receiver" id="export_receiver" class="export-input">
+                        <option value="">-- รวมทุกผู้รับเรื่อง --</option>
+                        <?php foreach ($all_employees as $emp): ?>
+                            <option value="<?php echo htmlspecialchars($emp); ?>"><?php echo htmlspecialchars($emp); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div class="export-form-group" style="margin-bottom:25px;">
+                    <label><i class="fas fa-tools" style="color:#f59e0b; margin-right:4px;"></i>
+                        ผู้รับผิดชอบ</label>
+                    <select name="export_tech" id="export_tech" class="export-input">
+                        <option value="">-- รวมช่างทุกคน --</option>
+                        <?php foreach ($technicians as $tech): ?>
+                            <option value="<?php echo htmlspecialchars($tech); ?>"><?php echo htmlspecialchars($tech); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div
+                    style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #f1f5f9; padding-top:20px;">
+                    <button type="button" onclick="closeExportModal()" class="export-btn-cancel">ยกเลิก</button>
+                    <button type="submit" onclick="setTimeout(closeExportModal, 500)" class="export-btn-submit">
+                        <i class="fas fa-download"></i> ดาวน์โหลดไฟล์
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <script>

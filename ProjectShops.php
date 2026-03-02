@@ -58,11 +58,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // ปรับ zoom เป็น 14 เพื่อให้ระบบมองหา "เขตการปกครอง (ตำบล)" แทนการหา "บ้านเลขที่"
         $url = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=$lat&lon=$lon&zoom=14&addressdetails=1&accept-language=th";
-        
-        $options = [ "http" => [ "header" => "User-Agent: TJCLocalSystem/1.0\r\n" ] ];
+
+        $options = ["http" => ["header" => "User-Agent: TJCLocalSystem/1.0\r\n"]];
         $context = stream_context_create($options);
         $result = @file_get_contents($url, false, $context);
-        
+
         if ($result) {
             $data = json_decode($result, true);
             $addr = $data['address'] ?? [];
@@ -72,13 +72,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // 1. ตำบล / แขวง (กวาดหาทุก key ที่เป็นไปได้)
             $tambon = $addr['suburb'] ?? $addr['quarter'] ?? $addr['neighbourhood'] ?? $addr['town'] ?? $addr['municipality'] ?? $addr['village'] ?? ''; // เพิ่ม village เป็นตัวกันเหนียว (แต่จะกรองชื่อ "บ้าน..." ออกทีหลังถ้าไม่ต้องการ)
-            
+
             // คลีนคำนำหน้าทิ้งให้หมดก่อน
             $tambon = str_replace(['เทศบาลตำบล', 'เทศบาลเมือง', 'เทศบาลนคร', 'องค์การบริหารส่วนตำบล'], '', $tambon);
-            
+
             // กรองกรณีที่ village ติดชื่อ "บ้าน..." มา แต่เราอยากได้ตำบล (อันนี้แก้ยากถ้า OSM ไม่มีข้อมูลจริง)
             // แต่ปกติ zoom=14 จะได้ชื่อตำบลที่ถูกต้องกว่า zoom=18
-            
+
             if (!empty($tambon) && trim($tambon) !== '') {
                 $prefix = $is_bkk ? "แขวง" : "ต.";
                 $clean_name = str_replace(['ตำบล', 'แขวง'], '', $tambon);
@@ -86,9 +86,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             // 2. อำเภอ / เขต
-            $amphoe = $addr['city_district'] ?? $addr['district'] ?? $addr['county'] ?? $addr['city'] ?? ''; 
+            $amphoe = $addr['city_district'] ?? $addr['district'] ?? $addr['county'] ?? $addr['city'] ?? '';
             // บางที อำเภอเมือง ไปอยู่ใน key 'city'
-            
+
             if (!empty($amphoe)) {
                 $prefix = $is_bkk ? "เขต" : "อ.";
                 $clean_name = str_replace(['อำเภอ', 'เขต'], '', $amphoe);
@@ -110,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $full_text = implode(" ", $parts);
-            
+
             if (empty(trim($full_text))) {
                 $full_text = $data['display_name'] ?? "ไม่พบข้อมูล";
             }
@@ -154,7 +154,7 @@ if ($site_id > 0) {
 }
 
 $cust_name = isset($cust_info['customer_name']) ? $cust_info['customer_name'] : 'ไม่ระบุชื่อลูกค้า';
-$province  = isset($cust_info['province']) ? $cust_info['province'] : 'ไม่ระบุจังหวัด';
+$province = isset($cust_info['province']) ? $cust_info['province'] : 'ไม่ระบุจังหวัด';
 $shops = [];
 
 if ($has_location) {
@@ -163,7 +163,9 @@ if ($has_location) {
         $row['distance'] = getDistance($site_coords['latitude'], $site_coords['longitude'], $row['latitude'], $row['longitude']);
         $shops[] = $row;
     }
-    usort($shops, function ($a, $b) { return $a['distance'] <=> $b['distance']; });
+    usort($shops, function ($a, $b) {
+        return $a['distance'] <=> $b['distance'];
+    });
 }
 ?>
 
@@ -196,11 +198,12 @@ if ($has_location) {
                 </div>
 
                 <div class="header-search-wrapper">
-                    <select class="form-control select2-search" onchange="window.location.href='ProjectShops.php?site_id='+this.value">
+                    <select class="form-control select2-search"
+                        onchange="window.location.href='ProjectShops.php?site_id='+this.value">
                         <option value="">-- ค้นหารายชื่อลูกค้า --</option>
                         <?php while ($c = $all_customers->fetch_assoc()): ?>
                             <option value="<?= $c['customer_id'] ?>" <?= ($site_id == $c['customer_id']) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($c['customer_name']) ?> 
+                                <?= htmlspecialchars($c['customer_name']) ?>
                                 (<?= htmlspecialchars($c['province']) ?>)
                             </option>
                         <?php endwhile; ?>
@@ -213,8 +216,9 @@ if ($has_location) {
                     <div class="info-content">
                         <h3><?= htmlspecialchars($cust_name) ?></h3>
                         <p>
-                            <span class="info-badge"><i class="fas fa-map-marker-alt"></i> <?= htmlspecialchars($province) ?></span>
-                            <?php if(!empty($cust_info['district'])): ?>
+                            <span class="info-badge"><i class="fas fa-map-marker-alt"></i>
+                                <?= htmlspecialchars($province) ?></span>
+                            <?php if (!empty($cust_info['district'])): ?>
                                 <span style="font-size:0.9rem; color:#64748b; margin-left:10px;">
                                     <i class="fas fa-home"></i> อ.<?= htmlspecialchars($cust_info['district']) ?>
                                 </span>
@@ -223,14 +227,16 @@ if ($has_location) {
                     </div>
                     <div>
                         <?php if (!$has_location): ?>
-                            <button class="btn-3d-primary" onclick="openSiteLocModal()" style="background: linear-gradient(to bottom, #ef4444, #dc2626); box-shadow: 0 4px 0 #b91c1c;">
+                            <button class="btn-3d-primary" onclick="openSiteLocModal()"
+                                style="background: linear-gradient(to bottom, #ef4444, #dc2626); box-shadow: 0 4px 0 #b91c1c;">
                                 <i class="fas fa-map-pin"></i> ระบุพิกัดลูกค้า
                             </button>
                         <?php else: ?>
                             <button class="btn-3d-primary" onclick="openFullscreenMap()">
                                 <i class="fas fa-map"></i> ดูแผนที่เต็มจอ
                             </button>
-                            <button class="btn-3d-danger" onclick="openSiteLocModal()" style="border:1px solid #cbd5e1; color:#64748b; background:#fff;">
+                            <button class="btn-3d-danger" onclick="openSiteLocModal()"
+                                style="border:1px solid #cbd5e1; color:#64748b; background:#fff;">
                                 <i class="fas fa-edit"></i> แก้ไขพิกัด
                             </button>
                         <?php endif; ?>
@@ -249,7 +255,8 @@ if ($has_location) {
                             <div class="scroll-area">
                                 <?php if (count($shops) > 0): ?>
                                     <?php foreach ($shops as $shop): ?>
-                                        <div class="shop-card-3d" onclick="focusOnMap(<?= $shop['latitude'] ?>, <?= $shop['longitude'] ?>, '<?= htmlspecialchars($shop['shop_name']) ?>')">
+                                        <div class="shop-card-3d"
+                                            onclick="focusOnMap(<?= $shop['latitude'] ?>, <?= $shop['longitude'] ?>, '<?= htmlspecialchars($shop['shop_name']) ?>')">
                                             <div class="card-top">
                                                 <div class="shop-name"><?= htmlspecialchars($shop['shop_name']) ?></div>
                                                 <div class="dist-badge" id="dist-badge-<?= $shop['id'] ?>">
@@ -258,18 +265,19 @@ if ($has_location) {
                                             </div>
                                             <div class="shop-detail">
                                                 <i class="fas fa-phone-alt"></i> <?= htmlspecialchars($shop['phone']) ?> <br>
-                                                <?php if(!empty($shop['contact_name'])): ?>
+                                                <?php if (!empty($shop['contact_name'])): ?>
                                                     <i class="fas fa-user"></i> <?= htmlspecialchars($shop['contact_name']) ?>
                                                 <?php endif; ?>
                                             </div>
                                             <?php if (!empty($shop['remark'])): ?>
                                                 <div class="shop-remark">
-                                                    <i class="fas fa-map-marker-alt" style="margin-right:5px; color:#ef4444;"></i> 
+                                                    <i class="fas fa-map-marker-alt" style="margin-right:5px; color:#ef4444;"></i>
                                                     <?= htmlspecialchars($shop['remark']) ?>
                                                 </div>
                                             <?php endif; ?>
                                             <div class="card-actions">
-                                                <a href="https://www.google.com/maps/dir/?api=1&origin=<?= $site_coords['latitude'] ?>,<?= $site_coords['longitude'] ?>&destination=<?= $shop['latitude'] ?>,<?= $shop['longitude'] ?>" target="_blank" class="btn-nav-link" onclick="event.stopPropagation();">
+                                                <a href="https://www.google.com/maps/dir/?api=1&origin=<?= $site_coords['latitude'] ?>,<?= $site_coords['longitude'] ?>&destination=<?= $shop['latitude'] ?>,<?= $shop['longitude'] ?>"
+                                                    target="_blank" class="btn-nav-link" onclick="event.stopPropagation();">
                                                     <i class="fas fa-directions"></i> นำทาง
                                                 </a>
                                                 <button class="btn-3d-danger" onclick="deleteShop(<?= $shop['id'] ?>, event)">
@@ -291,7 +299,8 @@ if ($has_location) {
                         </div>
                     </div>
                 <?php else: ?>
-                    <div style="text-align:center; padding:80px; background:#fff; border-radius:20px; border:2px dashed #cbd5e1;">
+                    <div
+                        style="text-align:center; padding:80px; background:#fff; border-radius:20px; border:2px dashed #cbd5e1;">
                         <i class="fas fa-map-marked-alt" style="font-size:5rem; color:#cbd5e1; margin-bottom:20px;"></i>
                         <h3 style="color:#475569;">กรุณาระบุพิกัดลูกค้าก่อน</h3>
                         <p style="color:#94a3b8;">ระบบจะคำนวณระยะทางและแสดงแผนที่ให้คุณ</p>
@@ -310,58 +319,62 @@ if ($has_location) {
 
     <div id="map-overlay">
         <div class="map-sidebar">
-    
-    <div class="map-sidebar-header">
-        <div class="map-sidebar-title">
-            <i class="fas fa-list-ul" style="color:#64748b;"></i> รายการร้านค้า
-        </div>
-        <span class="shop-count-badge">
-            <?= count($shops) ?> ร้าน
-        </span>
-    </div>
 
-    <div class="map-sidebar-content" style="padding: 15px;">
-        <?php if (count($shops) > 0): ?>
-            <?php foreach ($shops as $shop): ?>
-                
-                <div class="sidebar-shop-item" onclick="focusOnMap(<?= $shop['latitude'] ?>, <?= $shop['longitude'] ?>, '<?= htmlspecialchars($shop['shop_name']) ?>')">
-                    
-                    <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
-                        <h5 style="margin:0; font-weight:700; color:#1e293b; font-size:1rem;">
-                            <?= htmlspecialchars($shop['shop_name']) ?>
-                        </h5>
-                    </div>
-
-                    <div style="font-size:0.85rem; color:#64748b; margin-bottom:4px;">
-                        <i class="fas fa-phone-alt" style="width:16px; text-align:center;"></i> 
-                        <?= htmlspecialchars($shop['phone']) ?>
-                    </div>
-
-                    <?php if (!empty($shop['remark'])): ?>
-                        <div class="shop-address">
-                            <i class="fas fa-map-marker-alt text-danger" style="margin-top:2px;"></i>
-                            <span><?= htmlspecialchars($shop['remark']) ?></span>
-                        </div>
-                    <?php endif; ?>
-
-                    <div class="shop-item-dist-badge" id="sidebar-dist-<?= $shop['id'] ?>">
-                        <i class="fas fa-route"></i> ~<?= $shop['distance'] ?> km
-                    </div>
+            <div class="map-sidebar-header">
+                <div class="map-sidebar-title">
+                    <i class="fas fa-list-ul" style="color:#64748b;"></i> รายการร้านค้า
                 </div>
-
-            <?php endforeach; ?>
-        <?php else: ?>
-            <div style="text-align:center; padding:40px 20px; color:#94a3b8;">
-                <i class="fas fa-store-slash" style="font-size:2.5rem; margin-bottom:15px; opacity:0.3;"></i><br>
-                ยังไม่มีข้อมูลร้านค้าในบริเวณนี้
+                <span class="shop-count-badge">
+                    <?= count($shops) ?> ร้าน
+                </span>
             </div>
-        <?php endif; ?>
-    </div>
-</div>
+
+            <div class="map-sidebar-content" style="padding: 15px;">
+                <?php if (count($shops) > 0): ?>
+                    <?php foreach ($shops as $shop): ?>
+
+                        <div class="sidebar-shop-item"
+                            onclick="focusOnMap(<?= $shop['latitude'] ?>, <?= $shop['longitude'] ?>, '<?= htmlspecialchars($shop['shop_name']) ?>')">
+
+                            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                                <h5 style="margin:0; font-weight:700; color:#1e293b; font-size:1rem;">
+                                    <?= htmlspecialchars($shop['shop_name']) ?>
+                                </h5>
+                            </div>
+
+                            <div style="font-size:0.85rem; color:#64748b; margin-bottom:4px;">
+                                <i class="fas fa-phone-alt" style="width:16px; text-align:center;"></i>
+                                <?= htmlspecialchars($shop['phone']) ?>
+                            </div>
+
+                            <?php if (!empty($shop['remark'])): ?>
+                                <div class="shop-address">
+                                    <i class="fas fa-map-marker-alt text-danger" style="margin-top:2px;"></i>
+                                    <span><?= htmlspecialchars($shop['remark']) ?></span>
+                                </div>
+                            <?php endif; ?>
+
+                            <div class="shop-item-dist-badge" id="sidebar-dist-<?= $shop['id'] ?>">
+                                <i class="fas fa-route"></i> ~<?= $shop['distance'] ?> km
+                            </div>
+                        </div>
+
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div style="text-align:center; padding:40px 20px; color:#94a3b8;">
+                        <i class="fas fa-store-slash" style="font-size:2.5rem; margin-bottom:15px; opacity:0.3;"></i><br>
+                        ยังไม่มีข้อมูลร้านค้าในบริเวณนี้
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
         <div class="map-wrapper-full">
             <div class="map-overlay-header">
-                <div style="font-size:1.1rem; font-weight:700; color:#1e293b;"><i class="fas fa-map-marked-alt text-danger"></i> แผนที่เส้นทาง</div>
-                <button class="close-btn" onclick="closeFullscreenMap()" style="background:#ef4444; color:#fff; border:none; padding:5px 15px; border-radius:20px; cursor:pointer;"><i class="fas fa-times"></i> ปิด</button>
+                <div style="font-size:1.1rem; font-weight:700; color:#1e293b;"><i
+                        class="fas fa-map-marked-alt text-danger"></i> แผนที่เส้นทาง</div>
+                <button class="close-btn" onclick="closeFullscreenMap()"
+                    style="background:#ef4444; color:#fff; border:none; padding:5px 15px; border-radius:20px; cursor:pointer;"><i
+                        class="fas fa-times"></i> ปิด</button>
             </div>
             <div id="map" style="width:100%; height:100%;"></div>
         </div>
@@ -408,13 +421,13 @@ if ($has_location) {
         let routingControl = null;
 
         $(document).ready(function () {
-        $('.select2-search').select2();
+            $('.select2-search').select2();
 
-        if (siteLat && siteLon) {
-            initMiniMap();
-            calculateRealDistances();
-        }
-    });
+            if (siteLat && siteLon) {
+                initMiniMap();
+                calculateRealDistances();
+            }
+        });
 
         // --- 1. คำนวณระยะทางจริง ---
         async function calculateRealDistances() {
@@ -477,29 +490,29 @@ if ($has_location) {
         }
 
         function focusOnMap(shopLat, shopLon, title) {
-        openFullscreenMap();
-        
-        // 1. ค้นหาข้อมูลร้านค้าตัวเต็มจากตัวแปร shops (เพื่อให้ได้เบอร์, ที่อยู่, ผู้ติดต่อ)
-        // (ใช้การเปรียบเทียบ Lat/Lon เพื่อหา Object ที่ถูกต้อง)
-        const shop = shops.find(s => s.latitude == shopLat && s.longitude == shopLon) || { shop_name: title };
+            openFullscreenMap();
 
-        setTimeout(() => {
-            if (routingControl) map.removeControl(routingControl);
+            // 1. ค้นหาข้อมูลร้านค้าตัวเต็มจากตัวแปร shops (เพื่อให้ได้เบอร์, ที่อยู่, ผู้ติดต่อ)
+            // (ใช้การเปรียบเทียบ Lat/Lon เพื่อหา Object ที่ถูกต้อง)
+            const shop = shops.find(s => s.latitude == shopLat && s.longitude == shopLon) || { shop_name: title };
 
-            routingControl = L.Routing.control({
-                waypoints: [L.latLng(siteLat, siteLon), L.latLng(shopLat, shopLon)],
-                lineOptions: { styles: [{ color: '#2563eb', opacity: 0.8, weight: 6 }] },
-                createMarker: function () { return null; },
-                addWaypoints: false, draggableWaypoints: false, fitSelectedRoutes: true, show: false
-            })
-            .on('routesfound', function (e) {
-                // ดึงข้อมูลการเดินทาง
-                var summary = e.routes[0].summary;
-                var realDist = (summary.totalDistance / 1000).toFixed(2);
-                var realTime = Math.round(summary.totalTime / 60);
+            setTimeout(() => {
+                if (routingControl) map.removeControl(routingControl);
 
-                // 2. สร้าง HTML สำหรับ Popup (จัดหน้าตาให้เหมือน Sidebar + Routing Info)
-                let popupContent = `
+                routingControl = L.Routing.control({
+                    waypoints: [L.latLng(siteLat, siteLon), L.latLng(shopLat, shopLon)],
+                    lineOptions: { styles: [{ color: '#2563eb', opacity: 0.8, weight: 6 }] },
+                    createMarker: function () { return null; },
+                    addWaypoints: false, draggableWaypoints: false, fitSelectedRoutes: true, show: false
+                })
+                    .on('routesfound', function (e) {
+                        // ดึงข้อมูลการเดินทาง
+                        var summary = e.routes[0].summary;
+                        var realDist = (summary.totalDistance / 1000).toFixed(2);
+                        var realTime = Math.round(summary.totalTime / 60);
+
+                        // 2. สร้าง HTML สำหรับ Popup (จัดหน้าตาให้เหมือน Sidebar + Routing Info)
+                        let popupContent = `
                     <div style="text-align:left; min-width:240px; font-family:'Prompt',sans-serif;">
                         
                         <h6 style="margin:0 0 8px 0; color:#1e293b; font-weight:700; font-size:1.05rem; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">
@@ -528,15 +541,15 @@ if ($has_location) {
                     </div>
                 `;
 
-                L.popup()
-                    .setLatLng([shopLat, shopLon])
-                    .setContent(popupContent)
-                    .openOn(map);
-            })
-            .addTo(map);
+                        L.popup()
+                            .setLatLng([shopLat, shopLon])
+                            .setContent(popupContent)
+                            .openOn(map);
+                    })
+                    .addTo(map);
 
-        }, 300);
-    }
+            }, 300);
+        }
 
         function initMap() {
             map = L.map('map').setView([siteLat, siteLon], 13);

@@ -6,6 +6,21 @@ flatpickr(".date-picker-alt", {
   allowInput: true,
 });
 
+function openExportModal() {
+  const modal = document.getElementById('exportExcelModal');
+  modal.style.display = 'flex';
+  // Force reflow
+  void modal.offsetWidth;
+  modal.classList.add('active');
+}
+function closeExportModal() {
+  const modal = document.getElementById('exportExcelModal');
+  modal.classList.remove('active');
+  setTimeout(() => {
+    modal.style.display = 'none';
+  }, 300);
+}
+
 // 3. ฟังก์ชันกรองสถานะ (เมื่อคลิกการ์ด)
 function filterStatus(value, type) {
   let inputId = "";
@@ -156,89 +171,6 @@ function viewDetails(itemsData) {
 
   // 2. สร้าง HTML พร้อม CSS Animation สุดล้ำ
   let htmlContent = `
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&display=swap');
-        
-        /* 🌟 Animations */
-        @keyframes bounceInUpCard {
-            0% { opacity: 0; transform: translateY(40px) scale(0.9); }
-            60% { opacity: 1; transform: translateY(-5px) scale(1.02); }
-            100% { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @keyframes slideInRightBox {
-            0% { opacity: 0; transform: translateX(20px); }
-            100% { opacity: 1; transform: translateX(0); }
-        }
-        @keyframes pulseIconGlow {
-            0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.5); }
-            70% { box-shadow: 0 0 0 12px rgba(139, 92, 246, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
-        }
-        @keyframes floatUpDown {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-3px); }
-        }
-
-        /* 🌟 Scrollbar */
-        .detail-scroll-area { text-align: left; font-family: 'Prompt', sans-serif; max-height: 72vh; overflow-y: auto; padding: 10px; overflow-x: hidden; }
-        .detail-scroll-area::-webkit-scrollbar { width: 6px; }
-        .detail-scroll-area::-webkit-scrollbar-track { background: transparent; }
-        .detail-scroll-area::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .detail-scroll-area::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        
-        /* 🌟 Main Card */
-        .vib-card {
-            background: #ffffff; border-radius: 20px; padding: 20px; margin-bottom: 20px;
-            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.01);
-            border: 1px solid rgba(226, 232, 240, 0.8);
-            opacity: 0; animation: bounceInUpCard 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-            transition: all 0.3s ease; position: relative; overflow: hidden;
-        }
-        .vib-card:hover { transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgba(99, 102, 241, 0.15); border-color: #c7d2fe; }
-        
-        /* 🌟 Card Header */
-        .vib-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; border-bottom: 2px dashed #f1f5f9; padding-bottom: 12px; }
-        .vib-idx { 
-            width: 36px; height: 36px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
-            background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; font-weight: 800; font-size: 1rem;
-            box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3); flex-shrink: 0;
-        }
-        .vib-name { font-weight: 800; color: #1e293b; font-size: 1.1rem; flex-grow: 1; line-height: 1.3; }
-        .vib-job-badge { 
-            font-size: 0.7rem; color: #fff; background: linear-gradient(135deg, #3b82f6, #0ea5e9); 
-            padding: 4px 12px; border-radius: 50px; font-weight: 700; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3); white-space: nowrap;
-        }
-
-        /* 🌟 Inner Info Boxes (Modern Flex Layout) */
-        .info-box { 
-            display: flex; gap: 12px; padding: 12px 15px; border-radius: 14px; margin-bottom: 10px;
-            opacity: 0; animation: slideInRightBox 0.5s ease forwards;
-        }
-        .info-icon-wrap { 
-            width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; 
-            font-size: 0.9rem; color: #fff; flex-shrink: 0; box-shadow: 0 3px 8px rgba(0,0,0,0.15);
-        }
-        .info-content { flex-grow: 1; }
-        .info-title { font-size: 0.75rem; font-weight: 800; text-transform: uppercase; margin-bottom: 2px; letter-spacing: 0.5px; }
-        .info-desc { font-size: 0.9rem; font-weight: 500; line-height: 1.5; }
-
-        /* Box Variants (Vibrant Colors) */
-        .box-issue { background: linear-gradient(to right, #fff1f2, #ffffff); border: 1px solid #ffe4e6; }
-        .box-issue .info-icon-wrap { background: linear-gradient(135deg, #f43f5e, #e11d48); }
-        .box-issue .info-title { color: #e11d48; }
-        .box-issue .info-desc { color: #881337; }
-
-        .box-advice { background: linear-gradient(to right, #ecfdf5, #ffffff); border: 1px solid #d1fae5; }
-        .box-advice .info-icon-wrap { background: linear-gradient(135deg, #10b981, #059669); }
-        .box-advice .info-title { color: #059669; }
-        .box-advice .info-desc { color: #064e3b; }
-
-        .box-assess { background: linear-gradient(to right, #fffbeb, #ffffff); border: 1px solid #fef3c7; }
-        .box-assess .info-icon-wrap { background: linear-gradient(135deg, #f59e0b, #d97706); }
-        .box-assess .info-title { color: #d97706; }
-        .box-assess .info-desc { color: #78350f; }
-        
-    </style>
     <div class="detail-scroll-area">
   `;
 
@@ -312,6 +244,36 @@ function viewDetails(itemsData) {
                 <div class="info-content">
                     <div class="info-title">การประเมินงาน</div>
                     <div class="info-desc">${assessment}</div>
+                </div>
+            </div>`
+                : ""
+            }
+
+            ${
+              (item.attached_files && Array.isArray(item.attached_files) && item.attached_files.length > 0)
+                ? `
+            <div class="info-box box-files" style="animation-delay: ${delayBox3 + 0.1}s;">
+                <div class="info-icon-wrap" style="color:#0ea5e9; background:#e0f2fe;"><i class="fas fa-paperclip"></i></div>
+                <div class="info-content">
+                    <div class="info-title">ไฟล์แนบ</div>
+                    <div class="info-desc" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:5px;">
+                        ${item.attached_files.map(file => {
+                            let ext = file.split('.').pop().toLowerCase();
+                            let icon = "fa-file";
+                            let isImg = false;
+                            if (['jpg','jpeg','png','gif','webp'].includes(ext)) { icon = "fa-file-image"; isImg = true; }
+                            else if (['pdf'].includes(ext)) icon = "fa-file-pdf";
+                            else if (['doc','docx'].includes(ext)) icon = "fa-file-word";
+                            else if (['xls','xlsx'].includes(ext)) icon = "fa-file-excel";
+                            
+                            let fileUrl = 'uploads/service_requests/' + encodeURIComponent(file);
+                            
+                            return `<a href="${fileUrl}" target="_blank" class="file-badge" style="display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:15px; background:#f1f5f9; border:1px solid #e2e8f0; color:#334155; font-size:0.8rem; text-decoration:none; transition:0.2s;" onmouseover="this.style.background='#e2e8f0';" onmouseout="this.style.background='#f1f5f9';">
+                                <i class="fas ${icon}" style="${isImg ? 'color:#0ea5e9;' : 'color:#64748b;'}"></i>
+                                ${file}
+                            </a>`;
+                        }).join('')}
+                    </div>
                 </div>
             </div>`
                 : ""
@@ -492,71 +454,6 @@ function receiveItem(reqId) {
       });
 
       let htmlForm = `
-            <style>
-                @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
-                
-                /* 🔥 เวทมนตร์กันขอบทะลุ: บังคับให้ทุกกล่องคำนวณขนาดพอดีขอบเสมอ */
-                #swal2-html-container { overflow-x: hidden !important; }
-                #modal_scroll_container { font-family: 'Prompt', sans-serif; box-sizing: border-box; width: 100%; max-width: 100%; overflow-x: hidden; }
-                #modal_scroll_container *:not(i) { font-family: 'Prompt', sans-serif; box-sizing: border-box !important; max-width: 100%; }
-                
-                @keyframes fadeInUpCard { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
-                @keyframes pulseShadow { 0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(249, 115, 22, 0); } 100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); } }
-                
-                .item-scroll-area { display: flex; flex-direction: column; gap: 12px; text-align: left; padding: 5px; max-height: 65vh; overflow-y: auto; overflow-x: hidden; }
-                .item-scroll-area::-webkit-scrollbar { width: 6px; }
-                .item-scroll-area::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
-                .item-scroll-area::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-
-                /* 🌟 การ์ดสินค้า */
-                .item-card-3d { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); transition: all 0.3s ease; opacity: 0; animation: fadeInUpCard 0.4s ease forwards; display: flex; flex-direction: column; margin: 0; }
-                .item-card-3d:hover { box-shadow: 0 6px 12px -2px rgba(0,0,0,0.05); border-color:#cbd5e1; }
-                
-                /* สีสถานะ */
-                .item-card-3d.finished { background: #f0fdf4 !important; border-color: #86efac !important; opacity: 0.8; }
-                .item-card-3d.received { background: #eff6ff !important; border-color: #93c5fd !important; opacity: 0.8; }
-                .item-card-3d.at-external { background: #fff7ed !important; border-color: #fdba74 !important; opacity: 0.8; }
-                .item-card-3d.active { border-color: #ea580c; box-shadow: 0 8px 20px -4px rgba(249, 115, 22, 0.15); border-width: 2px; }
-
-                /* ส่วนหัวของการ์ด */
-                .card-header-clickable { padding: 14px 15px; display: flex; align-items: center; cursor: pointer; user-select: none; transition: background 0.2s; }
-                .item-card-3d.active .card-header-clickable { background: #fffaf5; border-bottom: 1px dashed #fdba74; }
-                
-                /* กล่อง Checkbox สุดเท่ */
-                .chk-3d-box { width: 24px; height: 24px; border: 2px solid #cbd5e1; border-radius: 6px; margin-right: 12px; display: flex; align-items: center; justify-content: center; background: #f8fafc; flex-shrink: 0; color: transparent; transition: all 0.2s; }
-                input[type="checkbox"]:checked:not(:disabled) + .chk-3d-box { background: linear-gradient(135deg, #f97316, #ea580c); border-color: #ea580c; color: #fff; box-shadow: 0 2px 8px rgba(234, 88, 12, 0.3); animation: pulseShadow 1.5s infinite; }
-                input[type="checkbox"]:disabled + .chk-3d-box { background: #e2e8f0; border-color: #cbd5e1; color: #94a3b8; cursor: not-allowed; }
-                
-                .item-card-3d.finished .chk-3d-box { background: #10b981 !important; border-color: #10b981 !important; color:#fff;}
-                .item-card-3d.received .chk-3d-box { background: #3b82f6 !important; border-color: #3b82f6 !important; color:#fff;}
-                .item-card-3d.at-external .chk-3d-box { background: #f97316 !important; border-color: #f97316 !important; color:#fff;}
-
-                /* ⬇️ เนื้อหาด้านในที่ถูกซ่อนไว้ (ตั้ง Padding พอดีๆ ไม่กว้างเกิน) */
-                .card-content-reveal { display: none; padding: 15px; background: #fff; }
-                
-                .label-title { font-size: 0.8rem; font-weight: 800; color: #475569; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
-                
-                /* 📍 ปุ่มเลือกปลายทาง (ใช้ Grid แบ่ง 50/50 ป้องกันการเบียดกัน) */
-                .dest-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
-                .dest-selector label { margin: 0; cursor: pointer; }
-                .dest-ui { border: 1px solid #cbd5e1; background: #f8fafc; border-radius: 8px; padding: 10px 5px; text-align: center; color: #64748b; font-weight: 600; font-size: 0.85rem; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
-                input[type="radio"]:checked + .dest-ui { border-color: #ea580c; background: #fff7ed; color: #ea580c; box-shadow: 0 2px 8px rgba(234, 88, 12, 0.15); font-weight: 700; transform: translateY(-1px); }
-
-                /* 🏬 ข้อมูลร้านซ่อม */
-                .shop-fields-grid { display: none; background: #fdfaf5; padding: 15px; border-radius: 10px; border: 1px solid #fde68a; margin-bottom: 15px; }
-                .inner-grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-                
-                /* 📝 Inputs (ล็อก resize แนวตั้งเท่านั้น) */
-                .form-input-3d { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; font-size: 0.85rem; background: #fff; transition: 0.2s; outline: none; margin: 0; resize: vertical; }
-                .form-input-3d:focus { border-color: #ea580c; box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.1); }
-                .form-input-3d:read-only { background: #f1f5f9; color: #94a3b8; border-color: #e2e8f0; cursor: default; }
-                
-                /* 📎 อัปโหลดไฟล์ */
-                .upload-area-3d { background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 10px; padding: 15px; text-align: center; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; }
-                .upload-area-3d:hover { background: #fff7ed; border-color: #ea580c; }
-                .upload-area-3d i { font-size: 1.5rem; color: #94a3b8; transition: 0.2s; }
-                .upload-area-3d:hover i { color: #ea580c; transform: scale(1.1); }
-            </style>
             <div id="modal_scroll_container" class="item-scroll-area">`;
 
       if (displayItems.length === 0) {

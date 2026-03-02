@@ -9,9 +9,21 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
 require_once 'db_connect.php';
 $count_sql = "SELECT COUNT(*) as total FROM winspeed_deletion_requests WHERE status = 'pending'";
-$count_res = $conn->query($count_sql);
-$count_row = $count_res->fetch_assoc();
-$pending_count = $count_row['total'] ?? 0;
+$count_res = @$conn->query($count_sql);
+$pending_count = 0;
+if ($count_res && $count_res->num_rows > 0) {
+    $count_row = $count_res->fetch_assoc();
+    $pending_count = $count_row['total'] ?? 0;
+}
+
+// เช็คงานแจ้ง Service ใหม่ (เฉพาะสถานะ SLA ปกติ คือเวลาคงเหลือมากกว่า 24 ชั่วโมง)
+$service_sql = "SELECT COUNT(*) as total FROM service_requests WHERE status = 'pending' AND expected_finish_date > DATE_ADD(NOW(), INTERVAL 1 DAY)";
+$service_res = @$conn->query($service_sql);
+$service_pending_count = 0;
+if ($service_res && $service_res->num_rows > 0) {
+    $service_row = $service_res->fetch_assoc();
+    $service_pending_count = $service_row['total'] ?? 0;
+}
 $user_company = 'TJC GROUP';
 if (isset($fullname) && isset($conn)) {
     // ดึงชื่อย่อ (company_shortname) หรือชื่อเต็ม (company_name) จากตาราง users เชื่อม companies
@@ -42,9 +54,11 @@ if ($role != 'admin') {
     $sql_perm = "SELECT mp.file_name FROM permissions p 
                  JOIN master_pages mp ON p.page_id = mp.id 
                  WHERE p.role_name = '$role'";
-    $res_perm = $conn->query($sql_perm);
-    while ($row = $res_perm->fetch_assoc()) {
-        $allowed_pages[] = $row['file_name'];
+    $res_perm = @$conn->query($sql_perm);
+    if ($res_perm) {
+        while ($row = $res_perm->fetch_assoc()) {
+            $allowed_pages[] = $row['file_name'];
+        }
     }
 }
 
@@ -114,23 +128,6 @@ if (!empty($fullname) && $fullname !== 'Guest' && isset($conn)) {
         }
     }
 }
-
-// =========================================================
-// 🔥 [ส่วนที่ 2] Logic แจ้งเตือน: ข่าวใหม่ (News) ของเดียร์
-// =========================================================
-$show_news_badge = false;
-if (isset($conn)) {
-    $sql_news_chk = "SELECT id FROM announcements ORDER BY created_at DESC LIMIT 1";
-    $res_news_chk = @$conn->query($sql_news_chk);
-    if ($res_news_chk && $res_news_chk->num_rows > 0) {
-        $row_news = $res_news_chk->fetch_assoc();
-        $latest_id = $row_news['id'];
-        $read_id = isset($_COOKIE['tjc_read_news_id']) ? intval($_COOKIE['tjc_read_news_id']) : 0;
-        if ($latest_id > $read_id)
-            $show_news_badge = true;
-    }
-}
-
 
 function canSeeMenu($file)
 {
@@ -1308,7 +1305,7 @@ function getAvatar()
         <?php endif; ?>
 
 
-        <?php if (canSeeMenu('project_dashboard.php') || canSeeMenu('project_details.php') || canSeeMenu('ServiceRequest.php') || canSeeMenu('service_dashboard.php') || canSeeMenu('ProjectShops.php') || canSeeMenu('manage_job_types.php')):
+        <?php if (canSeeMenu('project_dashboard.php') || canSeeMenu('project_details.php') || canSeeMenu('ServiceRequest.php') || canSeeMenu('service_dashboard.php') || canSeeMenu('ProjectShops.php') || canSeeMenu('manage_job_types.php') || canSeeMenu('manage_customers.php') || canSeeMenu('create_project.php') || canSeeMenu('project_dashboard.php') || canSeeMenu('project_job_types.php')):
             $proj_pages = ['project_dashboard.php', 'project_details.php'];
             $proj_open = in_array($current_page, $proj_pages) ? 'open' : '';
             $proj_show = in_array($current_page, $proj_pages) ? 'show' : '';
@@ -1318,28 +1315,38 @@ function getAvatar()
                     style="display:flex; align-items:center; justify-content:space-between;">
                     <div style="display:flex; align-items:center;">
                         <i class="fas fa-project-diagram"></i> <span class="menu-text">โครงการในเครือ TJC GROUP </span>
+                        <?php if (isset($service_pending_count) && $service_pending_count > 0): ?>
+                            <span class="sidebar-badge pulse-animation"
+                                style="margin-left: 8px; background-color: #ff4757; color: white; padding: 2px 6px; font-size: 12px;">
+                                <?php echo $service_pending_count; ?>
+                            </span>
+                        <?php endif; ?>
                     </div>
                     <i class="fas fa-chevron-down dropdown-icon"></i>
                 </a>
                 <ul class="submenu <?php echo $proj_show; ?>">
-                    <?php if (canSeeMenu('project_dashboard.php')): ?>
-                        <li><a href="project_dashboard.php"
-                                class="<?php echo isActive('project_dashboard.php', $current_page); ?>"><i
-                                    class="fas fa-chart-bar"></i> Dashboard โครงการ</a></li>
-                    <?php endif; ?>
                     <?php if (canSeeMenu('project_details.php')): ?>
                         <li><a href="project_details.php"
                                 class="<?php echo isActive('project_details.php', $current_page); ?>"><i
-                                    class="fas fa-book-open"></i> สมุดลงงานโครงการ</a></li>
+                                    class="fas fa-book-open"></i> สมุดลงงานโครงการ(เก่า)</a></li>
+                    <?php endif; ?>
+                    <?php if (canSeeMenu('service_dashboard.php')): ?>
+                        <li>
+                            <a href="service_dashboard.php"
+                                class="<?php echo isActive('service_dashboard.php', $current_page); ?>"
+                                style="display: flex; justify-content: space-between; align-items: center;">
+                                <span><i class="fas fa-chart-pie"></i> Dashboard Service</span>
+                                <?php if (isset($service_pending_count) && $service_pending_count > 0): ?>
+                                    <span class="sidebar-badge pulse-animation">
+                                        <?php echo $service_pending_count; ?>
+                                    </span>
+                                <?php endif; ?>
+                            </a>
+                        </li>
                     <?php endif; ?>
                     <?php if (canSeeMenu('ServiceRequest.php')): ?>
                         <li><a href="ServiceRequest.php" class="<?php echo isActive('ServiceRequest.php', $current_page); ?>"><i
-                                    class="fas fa-chart-bar"></i> บริการหลักการขาย</a></li>
-                    <?php endif; ?>
-                    <?php if (canSeeMenu('service_dashboard.php')): ?>
-                        <li><a href="service_dashboard.php"
-                                class="<?php echo isActive('service_dashboard.php', $current_page); ?>"><i
-                                    class="fas fa-chart-bar"></i> dashboardservice</a></li>
+                                    class="fa-brands fa-rocketchat"></i> สมุดแจ้ง Service</a></li>
                     <?php endif; ?>
                     <?php if (canSeeMenu('ProjectShops.php')): ?>
                         <li><a href="ProjectShops.php" class="<?php echo isActive('ProjectShops.php', $current_page); ?>"><i
@@ -1348,7 +1355,26 @@ function getAvatar()
                     <?php if (canSeeMenu('manage_job_types.php')): ?>
                         <li><a href="manage_job_types.php"
                                 class="<?php echo isActive('manage_job_types.php', $current_page); ?>"><i
-                                    class="fas fa-tools"></i> ประเภทงานเเละติดต่อ</a></li>
+                                    class="fa-solid fa-address-book"></i> ประเภทงานเเละติดต่อ</a></li>
+                    <?php endif; ?>
+                    <?php if (canSeeMenu('manage_customers.php')): ?>
+                        <li><a href="manage_customers.php"
+                                class="<?php echo isActive('manage_customers.php', $current_page); ?>"><i
+                                    class="fa-solid fa-people-group"></i> จัดการลูกค้าหน่วยงาน</a></li>
+                    <?php endif; ?>
+                    <?php if (canSeeMenu('create_project.php')): ?>
+                        <li><a href="create_project.php" class="<?php echo isActive('create_project.php', $current_page); ?>"><i
+                                    class="fa-solid fa-people-group"></i> บันทึกโครงการ</a></li>
+                    <?php endif; ?>
+                    <?php if (canSeeMenu('project_dashboard.php')): ?>
+                        <li><a href="project_dashboard.php"
+                                class="<?php echo isActive('project_dashboard.php', $current_page); ?>"><i
+                                    class="fa-solid fa-people-group"></i> Dashboard Project</a></li>
+                    <?php endif; ?>
+                    <?php if (canSeeMenu('project_job_types.php')): ?>
+                        <li><a href="project_job_types.php"
+                                class="<?php echo isActive('project_job_types.php', $current_page); ?>"><i
+                                    class="fa-solid fa-people-group"></i> ประเภทงาน</a></li>
                     <?php endif; ?>
                 </ul>
             </li>
@@ -1654,6 +1680,14 @@ function getAvatar()
             const currentMonth = `${year}-${month}`;
 
             const response = await fetch(`api_fm.php?action=fetch_dashboard&month=${currentMonth}`);
+
+            // ตรวจสอบว่า Response เป็น JSON หรือไม่
+            const contentType = response.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+                console.warn("[Sidebar] api_fm.php did not return JSON. Skipping badge update.");
+                return;
+            }
+
             const data = await response.json();
 
             if (data && data.jobs && data.jobs.length > 0) {
@@ -1752,9 +1786,15 @@ function getAvatar()
     }
 
     // เรียกใช้เมื่อโหลดหน้า
-    document.addEventListener('DOMContentLoaded', updateSidebarAlerts);
+    document.addEventListener('DOMContentLoaded', () => {
+        updateSidebarAlerts();
+        updateTransportBadge();
+    });
     // ตั้งเวลาอัปเดตทุก 1 นาที เพื่อให้ข้อมูลสดใหม่ทุกหน้า
-    setInterval(updateSidebarAlerts, 60000);
+    setInterval(() => {
+        updateSidebarAlerts();
+        updateTransportBadge();
+    }, 60000);
 
     document.addEventListener('DOMContentLoaded', async () => {
         // 1. เช็คว่าเคยเด้งแจ้งเตือนไปหรือยังในรอบการใช้งานนี้ (Session)
@@ -1815,23 +1855,7 @@ function getAvatar()
         }
     });
 
-    async function processAlertData(response, badgeElement) {
-        const resp = await response.json();
-        if (resp.success && resp.data && resp.data.length > 0) {
-            badgeElement.innerText = resp.data.length;
 
-            // บังคับแสดงผลและใส่สี (สู้กับ CSS ของธีม)
-            badgeElement.classList.remove('d-none');
-            badgeElement.style.setProperty('display', 'inline-flex', 'important');
-            badgeElement.style.setProperty('background-color', '#dc3545', 'important'); // สีแดง
-            badgeElement.style.setProperty('color', '#ffffff', 'important');            // สีขาว
-            badgeElement.style.setProperty('opacity', '1', 'important');
-            badgeElement.style.setProperty('visibility', 'visible', 'important');
-        } else {
-            badgeElement.classList.add('d-none');
-            badgeElement.style.display = 'none';
-        }
-    }
     // ฟังก์ชันสำหรับเปิด/ปิด Dropdown (ไม่เด้ง)
     // 🔥 [แก้จุดที่ 2] ฟังก์ชันคำนวณตำแหน่งเมนูใหม่
     function toggleDropdown(event, element) {
@@ -1920,4 +1944,95 @@ function getAvatar()
             }
         }
     });
+
+    // 🔥 [STATE SAVER] : จดจำตำแหน่ง Scroll และสถานะเมนูที่กำลังเปิดอยู่
+    document.addEventListener('DOMContentLoaded', () => {
+        const sidebarMenu = document.querySelector('.sidebar-menu');
+        if (!sidebarMenu) return;
+
+        // 1. ฟื้นฟูตำแหน่ง Scroll ของ Sidebar
+        const savedScrollPos = sessionStorage.getItem('tjc_sidebar_scroll');
+        if (savedScrollPos) {
+            sidebarMenu.scrollTop = parseInt(savedScrollPos, 10);
+        }
+
+        // 2. ตั้ง ID ให้เมนู Dropdown (เพื่อให้จำได้ว่าอันไหน) และดักจับการคลิก
+        const dropdownLinks = document.querySelectorAll('.sidebar-menu > li > a[onclick^="toggleDropdown"]');
+        dropdownLinks.forEach((link, index) => {
+            const parentLi = link.parentElement;
+            // ตั้ง ID ชั่วคราวให้ li ถ้าไม่มี
+            if (!parentLi.id) {
+                parentLi.id = 'sidebar_menu_item_' + index;
+            }
+
+            // บันทึกสถานะตอนเปิดปิดเมนู
+            link.addEventListener('click', () => {
+                // รอให้ class 'open' ถูกเพิ่ม/ลบ ก่อนถึงค่อยเช็ค
+                setTimeout(() => {
+                    if (parentLi.classList.contains('open')) {
+                        // เพิ่ม class เพื่อให้กางออก
+                        parentLi.classList.add('open');
+                        const submenu = parentLi.querySelector('.submenu');
+                        if (submenu) submenu.classList.add('show');
+
+                        sessionStorage.setItem('tjc_active_submenu', parentLi.id);
+                    } else {
+                        // ถ้ากดปิด ก็ล้างค่า
+                        if (sessionStorage.getItem('tjc_active_submenu') === parentLi.id) {
+                            sessionStorage.removeItem('tjc_active_submenu');
+                        }
+                    }
+                }, 10);
+            });
+        });
+
+        // 3. ฟื้นฟูเมนูย่อย (Submenu) ที่เปิดค้างไว้ (ต้องทำหลังจากให้ ID ลิ้งก์แล้ว)
+        // ** ป้องกัน PHP ปิดเมนูออโต้ **
+        const activeSubmenuId = sessionStorage.getItem('tjc_active_submenu');
+        if (activeSubmenuId) {
+            // ปิดทุกเมนูก่อน (เผื่อ PHP เปิดอันที่ผิดค้างไว้)
+            document.querySelectorAll('.sidebar-menu > li.has-dropdown').forEach(li => {
+                if (li.id !== activeSubmenuId && !li.querySelector('a.active')) {
+                    li.classList.remove('open');
+                    const sub = li.querySelector('.submenu');
+                    if (sub) sub.classList.remove('show');
+                }
+            });
+
+            // กางเฉพาะอันที่กดค้างไว้ทันทีโดยไม่ใช้วิธีหน่วงเวลา
+            requestAnimationFrame(() => {
+                const parentLi = document.getElementById(activeSubmenuId);
+                if (parentLi) {
+                    parentLi.classList.add('open');
+                    // ปิด Transition ชั่วคราวไม่ให้เห็นจังหวะกาง
+                    const submenu = parentLi.querySelector('.submenu');
+                    if (submenu) {
+                        submenu.style.transition = 'none';
+                        submenu.classList.add('show');
+                        // คืนค่าออริจินอลหลังจากเรนเดอร์เฟรมถัดไป
+                        requestAnimationFrame(() => {
+                            submenu.style.transition = '';
+                        });
+                    }
+                }
+            });
+        }
+
+        // 4. บันทึกตำแหน่ง Scroll
+        sidebarMenu.addEventListener('scroll', () => {
+            sessionStorage.setItem('tjc_sidebar_scroll', sidebarMenu.scrollTop);
+        });
+
+        // 5. บันทึก ID เมื่อคลิกลิงก์เมนูย่อย ให้พ่อมันกางเสมอเมื่อย้ายหน้า
+        const subLinks = document.querySelectorAll('.sidebar-menu .submenu a');
+        subLinks.forEach(subLink => {
+            subLink.addEventListener('click', () => {
+                const parentLi = subLink.closest('.has-dropdown');
+                if (parentLi && parentLi.id) {
+                    sessionStorage.setItem('tjc_active_submenu', parentLi.id);
+                }
+            });
+        });
+    });
+
 </script>

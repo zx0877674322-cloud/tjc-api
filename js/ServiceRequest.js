@@ -118,6 +118,11 @@ flatpickr(".date-picker", { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr
                         <textarea name="items[${itemIndex}][assessment]" class="form-control" rows="1" placeholder="การประเมิน..." style="min-height: 40px; font-size:0.9rem;"></textarea>
                     </div>
                 </div>
+                
+                <div class="form-group" style="margin-top: 15px; border-top: 1px dashed #e2e8f0; padding-top: 15px;">
+                    <label class="form-label" style="font-size:0.85rem;"><i class="fas fa-paperclip"></i> แนบไฟล์ (รูปภาพ/เอกสาร) <small style="color:#64748b;">(ถ้ามี)</small></label>
+                    <input type="file" name="items[${itemIndex}][attached_files][]" class="form-control" style="font-size: 0.85rem; padding: 5px;" multiple accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx">
+                </div>
             </div>
         `;
 

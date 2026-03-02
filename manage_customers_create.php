@@ -11,10 +11,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
     $name = trim($_POST['customer_name']);
     $affiliation = trim($_POST['affiliation'] ?? '');
     $address = trim($_POST['address'] ?? '');
+    $sub_district = trim($_POST['sub_district'] ?? '');
     $district = trim($_POST['district'] ?? '');
-    $amphoe = trim($_POST['amphoe'] ?? '');
     $province = trim($_POST['province'] ?? '');
-    $zipcode = trim($_POST['zipcode'] ?? '');
+    $zip_code = trim($_POST['zip_code'] ?? '');
     $phone_number = trim($_POST['phone_number'] ?? '');
     $remark = $_POST['remark'] ?? '';
 
@@ -41,10 +41,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['customer_name'])) {
                 $name,
                 $affiliation,
                 $address,
+                $sub_district,
                 $district,
-                $amphoe,
                 $province,
-                $zipcode,
+                $zip_code,
                 $phone_number,
                 $user_id,
                 $remark

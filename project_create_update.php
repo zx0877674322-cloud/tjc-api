@@ -1,30 +1,28 @@
 <?php
 include 'auth.php';
 include 'db_connect.php';
-include 'api_project.php';
+
+// --- ดึงข้อมูลหน่วยงาน --
+$action = 'get_customer';
+include 'project_api.php';
+
+$action = 'get_companys';
+include 'project_api.php';
 
 $userID = $_SESSION['user_id'];
 // ดึงข้อมูล id ตามที่แนบลิ้งค์มา
 $id = $_GET['id'] ?? '';
 
+$project_data = [];
 if (!empty($id)) {
-    $sql = "SELECT * FROM project_contracts WHERE site_id = '$id'";
+    $sql = "SELECT a.*, b.customer_name , c.company_name FROM project_contracts a 
+    LEFT JOIN customers b ON a.customer_id = b.customer_id
+    LEFT JOIN companies c ON a.company_id = c.id
+    WHERE site_id = '$id'";
     $result = $conn->query($sql);
 
     if ($result->num_rows > 0) {
         $project_data = $result->fetch_assoc();
-    }
-}
-
-// ดึงข้อมูลประเภทงาน
-$type = [];
-$res_type = $conn->query("SELECT work_type_id , work_type_name ,	is_active FROM project_work_type WHERE is_active = 1 ORDER BY work_type_id ASC");
-if ($res_type && $res_type->num_rows > 0) {
-    while ($row = $res_type->fetch_assoc()) {
-        $type[] = [
-            'work_type_id' => $row['work_type_id'],
-            'work_type_name' => $row['work_type_name'],
-        ];
     }
 }
 
@@ -37,13 +35,13 @@ if ($res_type && $res_type->num_rows > 0) {
 <head>
     <?php include 'Logowab.php'; ?>
     <title>บันทึกข้อมูลโครงการ</title>
+    <link rel="stylesheet" href="style.css?v=<?php echo filemtime('style.css'); ?>">
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/parsley.js/2.9.2/parsley.min.js"></script>
-    <link rel="stylesheet" href="style.css">
     <script src="load_scripts.js"></script>
 
 </head>
@@ -53,7 +51,7 @@ if ($res_type && $res_type->num_rows > 0) {
 
     <div class='main-content'>
         <a href="javascript:history.back()">
-            <i class="fas fa-angle-double-left" style="color: red;"> ย้อนกลับ</i>
+            <i class="fas fa-angle-double-left" style="color: red;"> หน้าหลัก</i>
         </a>
         <div class="content mt-1">
             <?php if (!empty($id)) {
@@ -68,37 +66,63 @@ if ($res_type && $res_type->num_rows > 0) {
                 <input type="hidden" name="id" id="project_id" value="<?php echo $id; ?>">
                 <div class="row">
                     <div class="col-4">
-                        <span class="label-text"><i class="	fas fa-home"></i> บริษัท</span>
-                        <select class="form-select select-search" name="company_id" id="company_id" required
-                            data-placeholder="-- เลือกบริษัท --"
+                        <span class="label-text"><i class="	fas fa-home"></i> บริษัท </span>
+                        <select class="form-select select-search" name="company_id" id="company_id_modal" required
+                            data-placeholder="-- เลือกบริษัท --" style="width: 100%;"
                             data-parsley-required-message="* กรุณาเลือกบริษัทจากรายการ"
                             data-parsley-errors-container="#validate-company">
                             <option value="">-- เลือกบริษัท --</option>
-                            <?php foreach ($companys as $company): ?>
-                                <?php
+                            <?php  foreach ($companys as $company): ?>
+                            <?php 
+                                $attr_status = (isset($project_data['company_id']) && $project_data['company_id'] != '') ? 'disabled' : '';
                                 $is_selected = (isset($project_data['company_id']) && $project_data['company_id'] == $company['id']) ? 'selected' : '';
-                                ?>
-                                <option value="<?= $company['id'] ?>" <?= $is_selected ?>>
-                                    <?= $company['company_name'] ?>
-                                </option>
+                            ?>
+                            <option value="<?= $company['id'] ?>" <?= $is_selected ?> <?= $attr_status ?>>
+                                <?= $company['company_name'] ?>
+                            </option>
                             <?php endforeach; ?>
                         </select>
                         <div class="error-validate" id="validate-company"></div>
                     </div>
                     <div class="col-4">
                         <label class="label-text">เลขที่สัญญา</label>
-                        <input type="text" name="contract_number" id="contract_number" class="form-input"
+                        <?php 
+                            $attr_status = (isset($project_data['contract_number']) && $project_data['contract_number'] != '') ? 'disabled' : '';
+                        ?>
+                        <input type="text" name="contract_number" id="contract_number" class="form-input" <?= $attr_status ?>
                             placeholder="ระบุเลขที่สัญญา" value="<?= $project_data['contract_number'] ?? '' ?>">
                     </div>
+
                     <div class="col-2">
                         <label class="label-text">วันที่เริ่มสัญญา</label>
+                        <?php 
+                            $attr_status = (isset($project_data['contract_start_date']) && $project_data['contract_start_date'] != '') ? 'disabled' : '';
+                        ?>
                         <input type="date" name="contract_start_date" id="contract_start_date" class="form-input"
-                            value="<?= $project_data['contract_start_date'] ?? '' ?>">
+                            value="<?= $project_data['contract_start_date'] ?? '' ?>" required
+                            data-parsley-required-message="* กรุณาเลือกวันที่เริ่มสัญญา" <?= $attr_status ?>
+                            data-parsley-errors-container="#validate-contract_start_date">
+                        <div class="error-validate" id="validate-contract_start_date"></div>
                     </div>
                     <div class="col-2">
                         <label class="label-text">วันที่สิ้นสุดสัญญา</label>
+                        <?php 
+                            $attr_status = (isset($project_data['contract_end_date']) && $project_data['contract_end_date'] != '') ? 'disabled' : '';
+                        ?>
                         <input type="date" name="contract_end_date" id="contract_end_date" class="form-input"
-                            value="<?= $project_data['contract_end_date'] ?? '' ?>">
+                            value="<?= $project_data['contract_end_date'] ?? '' ?>" required
+                            data-parsley-required-message="* กรุณาเลือกวันที่สิ้นสุดสัญญา" <?= $attr_status ?>
+                            data-parsley-errors-container="#validate-contract_end_date">
+                        <div class="error-validate" id="validate-contract_end_date"></div>
+                    </div>
+                </div>
+                <div class="row mt-1" style="justify-items: end;">
+                    <div class="col-8"></div>
+                    <div class="col-4">
+                        <span style="font-size: 10px;color: red;">
+                            * หากไม่ทราบวันที่เริ่มสัญญา และวันที่สิ้นสุดสัญญา
+                            ให้ระบุเป็นวันที่ปัจจุบัน และนับไปวันสิ้นสุดอีก 30 วัน
+                        </span>
                     </div>
                 </div>
 
@@ -108,97 +132,124 @@ if ($res_type && $res_type->num_rows > 0) {
                         <div class="row mt-2">
                             <div class="col-6">
                                 <input class="form-check-input" type="radio" name="has_warranty" id="has_warranty_no"
-                                    value="0" onchange="checkWarrantyStatus()" <?= (!isset($project_data['has_warranty']) || $project_data['has_warranty'] == 0) ? 'checked' : '' ?>>
+                                    value="0" onchange="checkWarrantyStatus()"
+                                    <?= (!isset($project_data['has_warranty']) || $project_data['has_warranty'] == 0) ? 'checked' : '' ?>>
                                 <label class="form-check-label" for="has_warranty_no">ไม่มี</label>
                             </div>
 
                             <div class="col-6">
                                 <input class="form-check-input" type="radio" name="has_warranty" id="has_warranty_yes"
-                                    value="1" onchange="checkWarrantyStatus()" <?= (isset($project_data['has_warranty']) && $project_data['has_warranty'] == 1) ? 'checked' : '' ?>>
+                                    value="1" onchange="checkWarrantyStatus()"
+                                    <?= (isset($project_data['has_warranty']) && $project_data['has_warranty'] == 1) ? 'checked' : '' ?>>
                                 <label class="form-check-label" for="has_warranty_yes">มี</label>
                             </div>
                         </div>
                     </div>
                     <div class="col-2" id="warranty_period_yes_div">
                         <label class="label-text">ระยะเวลารับประกัน</label>
+                        <?php if ($project_data['has_warranty'] == 1) {
+                            echo '<br> <span>' . $project_data['warranty_period'] . '</span>';
+                        } else { ?>
                         <input type="text" name="warranty_period" id="warranty_period" class="form-input"
                             placeholder="Ex. 1 ปี" data-parsley-required-message="* กรุณาระบุระยะเวลารับประกัน"
                             data-parsley-errors-container="#validate_warranty_period"
                             value="<?= $project_data['warranty_period'] ?? '' ?>">
                         <div class="error-validate" id="validate_warranty_period"></div>
+                        <?php } ?>
                     </div>
                     <div class="col-2" id="warranty_period_no_div"></div>
                     <div class="col-3">
                         <span class="label-text">ประเภทงาน</span>
                         <select class="form-select select-search" name="work_type_id" id="work_type_id"
-                            data-placeholder="-- เลือกประเภทงาน --">
+                            data-placeholder="-- เลือกประเภทงาน --" required
+                            data-parsley-required-message="* กรุณาเลือกประเภทงาน"
+                            data-parsley-errors-container="#validate-work_type_id">
                             <option value="">...เลือกประเภทงาน...</option>
-                            <?php foreach ($type as $data): ?>
-                                <?php
+                            <?php $action = 'get_work_type';
+                                        include 'project_api.php';
+                                        foreach ($type as $data): ?>
+                            <?php
+                                $attr_status = (isset($project_data['work_type_id']) && $project_data['work_type_id'] != '') ? 'disabled' : '';
                                 $is_selected = (isset($project_data['work_type_id']) && $project_data['work_type_id'] == $data['work_type_id']) ? 'selected' : '';
-                                ?>
-                                <option value="<?= $data['work_type_id'] ?>" <?= $is_selected ?>>
-                                    <?= $data['work_type_name'] ?>
-                                </option>
+                            ?>
+                            <option value="<?= $data['work_type_id'] ?>" <?= $is_selected ?> <?= $attr_status ?>>
+                                <?= $data['work_type_name'] ?>
+                            </option>
                             <?php endforeach; ?>
                         </select>
+                        <div class="error-validate" id="validate-work_type_id"></div>
+
                     </div>
                     <div class="col-4">
                         <label class="label-text">เซลล์ที่รับผิดชอบ</label>
-                        <select class="form-select select-search" name="sale_user_id" id="sale_user_id">
+                        <select class="form-select select-search" name="sale_user_id" id="sale_user_id" required
+                            data-parsley-required-message="* กรุณาเลือกเซลล์ที่รับผิดชอบ"
+                            data-parsley-errors-container="#validate-sale-user-id">
                             <option value="">...กรุณาเลือก...</option>
                             <?php foreach ($salse as $data): ?>
-                                <?php
-                                $is_selected = (isset($project_data['sale_user_id']) && $project_data['sale_user_id'] == $data['id']) ? 'selected' : '';
-                                ?>
-                                <option value="<?= $data['id'] ?>" <?= $is_selected ?>>
-                                    <?= $data['fullname'] ?>
-                                </option>
+                            <?php
+                                $attr_status = (isset($project_data['sale_user_id']) && $project_data['sale_user_id'] != '') ? 'disabled' : '';
+                                $selected = (isset($project_data['sale_user_id']) && $project_data['sale_user_id'] == $data['id']) ? 'selected' : '';
+                            ?>
+                            <option value="<?= $data['id'] ?>" <?= $selected ?> <?= $attr_status ?>>
+                                <?= htmlspecialchars($data['fullname']) ?>
+                            </option>
                             <?php endforeach; ?>
                         </select>
-                        <div class="error-validate" id="validate-sale"></div>
+                        <div class="error-validate" id="validate-sale-user-id"></div>
                     </div>
-
                 </div>
 
                 <div class="row mt-2">
                     <div class="col-8">
                         <label class="label-text">ชื่องบ/โครงการ</label>
+                        <?php
+                            $attr_status = (isset($project_data['project_name']) && $project_data['project_name'] != '') ? 'disabled' : '';   
+                        ?>
                         <input type="text" class="form-input" name="project_name" id="project_name"
-                            placeholder="ระบุชื่องบ/โครงการ" autocomplete="off"
-                            value="<?= $project_data['project_name'] ?? '' ?>">
+                            placeholder="ระบุชื่องบ/โครงการ" autocomplete="off" required
+                            value="<?= $project_data['project_name'] ?? '' ?>" <?= $attr_status ?>
+                            data-parsley-required-message="* กรุณาระบุชื่องบ/โครงการ"
+                            data-parsley-errors-container="#validate-project-name">
+                        <div class="error-validate" id="validate-project-name"></div>
                     </div>
                     <div class="col-3">
                         <label class="label-text"><i class="fas fa-money-check-alt"></i> ยอดงบ/โครงการ</label>
+                        <?php 
+                            $attr_status = (isset($project_data['project_budget']) && $project_data['project_budget'] != '') ? 'disabled' : '';
+                        ?>
                         <input type="text" class="form-input form-control" name="project_budget" id="project_budget"
-                            placeholder="ระบุจำนวนเงิน (บาท)" autocomplete="off"
-                            value="<?= !empty($project_data['project_budget']) ? number_format($project_data['project_budget'], 2) : '' ?>">
+                            placeholder="ระบุจำนวนเงิน (บาท)" autocomplete="off" required
+                            value="<?= !empty($project_data['project_budget']) ? number_format($project_data['project_budget'], 2) : '' ?>"
+                            data-parsley-required-message="* กรุณาระบุยอดงบ/โครงการ" <?= $attr_status ?>
+                            data-parsley-errors-container="#validate-project-budget">
+                        <div class="error-validate" id="validate-project-budget"></div>
                     </div>
                     <span style="margin-top: 35px !important;"> บาท </span>
                 </div>
 
 
                 <div class="row mt-2">
-                    <div class="col-4" id="customer_wrapper">
+                    <div class="col-8" id="customer_wrapper">
                         <label class="label-text"><i class="fas fa-home"></i> ชื่อหน่วยงาน/ชื่อลูกค้า</label>
                         <select class="form-select select-search" name="customer_id" id="customer_id" required
                             data-placeholder="-- เลือกชื่อหน่วยงาน/ชื่อลูกค้า --"
                             data-parsley-required-message="* กรุณาเลือกชื่อหน่วยงาน/ชื่อลูกค้า"
                             data-parsley-errors-container="#validate_customer">
                             <option value="">-- เลือกชื่อหน่วยงาน/ชื่อลูกค้า --</option>
-                            <?php include 'api_url/api_customer.php';
-                            foreach ($customers as $data): ?>
-                                <?php
+                            <?php foreach ($customers as $data): ?>
+                            <?php
+                                $attr_status = (isset($project_data['customer_id']) && $project_data['customer_id'] != '') ? 'disabled' : '';
                                 $is_selected = (isset($project_data['customer_id']) && $project_data['customer_id'] == $data['customer_id']) ? 'selected' : '';
                                 ?>
-                                <option value="<?= $data['customer_id'] ?>" <?= $is_selected ?>>
-                                    <?= $data['customer_name'] ?>
-                                </option>
+                            <option value="<?= $data['customer_id'] ?>" <?= $is_selected ?><?= $attr_status ?>>
+                                <?= $data['customer_name'] ?>
+                            </option>
                             <?php endforeach; ?>
                         </select>
                         <div class="error-validate" id="validate_customer"></div>
                     </div>
-                    <div class="col-2">
+                    <div class="col-4">
                         <label class="label-text">เพิ่มข้อมูลหน่วยงาน/ลูกค้า</label>
                         <button class="sub-btn openModalBtn" type="button" id="openModalBtn"> <i
                                 class="fas fa-plus"></i>&nbsp;คลิก</button>
@@ -238,23 +289,29 @@ if ($res_type && $res_type->num_rows > 0) {
 
                     <div class="col-4">
                         <label class="label-text">เลขที่ใบเสนอราคา</label>
-                        <input type="text" class="form-input" name="quotation_number" id="quotation_number"
-                            placeholder="ระบุเลขที่ใบเสนอราคา" value="<?= $project_data['quotation_number'] ?? '' ?>">
+                        <input type="text" class="form-input" name="quotation_number" id="quotation_number" required
+                            placeholder="ระบุเลขที่ใบเสนอราคา" value="<?= $project_data['quotation_number'] ?? '' ?>"
+                            data-parsley-required-message="* กรุณาระบุเลขที่ใบเสนอราคา"
+                            data-parsley-errors-container="#validate-quotation-number">
+                        <div class="error-validate" id="validate-quotation-number"></div>
                     </div>
                     <div class="col-3">
                         <label class="label-text">ผู้เปิดใบเสนอราคา</label>
                         <select class="form-select select-search" name="quotation_user_id" id="quotation_user_id"
-                            data-placeholder="-- เลือกผู้เปิดใบเสนอราคา --">
+                            data-placeholder="-- เลือกผู้เปิดใบเสนอราคา --" required
+                            data-parsley-required-message="* กรุณาเลือกผู้เปิดใบเสนอราคา"
+                            data-parsley-errors-container="#validate-quotation-user">
                             <option value="">...กรุณาเลือก...</option>
                             <?php foreach ($purchase as $data): ?>
-                                <?php
+                            <?php
                                 $is_selected = (isset($project_data['quotation_user_id']) && $project_data['quotation_user_id'] == $data['id']) ? 'selected' : '';
                                 ?>
-                                <option value="<?= $data['id'] ?>" <?= $is_selected ?>>
-                                    <?= $data['fullname'] ?>
-                                </option>
+                            <option value="<?= $data['id'] ?>" <?= $is_selected ?>>
+                                <?= $data['fullname'] ?>
+                            </option>
                             <?php endforeach; ?>
                         </select>
+                        <div class="error-validate" id="validate-quotation-user"></div>
                     </div>
 
                 </div>
@@ -332,17 +389,12 @@ if ($res_type && $res_type->num_rows > 0) {
                             // แปลงเป็นตัวเลข (int) เพื่อให้เปรียบเทียบ มากกว่า/น้อยกว่า ได้แม่นยำ
                             $current = isset($project_data['project_status']) ? (int) $project_data['project_status'] : '';
                             ?>
-                            <option value="0" <?= ($current == 0) ? 'selected' : '' ?> <?= ($current > 0) ? 'disabled style="color:#ccc; background-color:#f9f9f9;"' : '' ?>>
-                                ยังไม่เซ็นสัญญา
+                            <option value="1" <?= ($current == 1) ? 'selected' : '' ?>
+                                <?= ($current > 1) ? 'disabled style="color:#ccc; background-color:#f9f9f9;"' : '' ?>>
+                                ไม่มีสัญญา
                             </option>
-                            <option value="1" <?= ($current == 1) ? 'selected' : '' ?> <?= ($current > 1) ? 'disabled style="color:#ccc; background-color:#f9f9f9;"' : '' ?>>
+                            <option value="2" <?= ($current == 2) ? 'selected' : '' ?>>
                                 เซ็นสัญญา
-                            </option>
-                            <option value="2" <?= ($current == 2) ? 'selected' : '' ?> <?= ($current > 2) ? 'disabled style="color:#ccc; background-color:#f9f9f9;"' : '' ?>>
-                                ระหว่างดำเนินการ
-                            </option>
-                            <option value="3" <?= ($current == 3) ? 'selected' : '' ?>>
-                                ดำเนินการเสร็จสิ้น
                             </option>
                         </select>
                         <div class="error-validate" id="validate_status"></div>
@@ -353,10 +405,10 @@ if ($res_type && $res_type->num_rows > 0) {
                     <?php if (!empty($id)): ?>
 
                     <?php else: ?>
-                        <button type="button" class="btn-clear" onclick="clearAllData()">
-                            <i class="fas fa-broom"></i>
-                            ล้างค่า
-                        </button>
+                    <button type="button" class="btn-clear" onclick="clearAllData()">
+                        <i class="fas fa-broom"></i>
+                        ล้างค่า
+                    </button>
                     <?php endif; ?>
                     <button type="submit" class="btn-save"><i class="far fa-save"></i>บันทึกข้อมูล</button>
                 </div>
@@ -376,219 +428,253 @@ if ($res_type && $res_type->num_rows > 0) {
 </html>
 
 <script>
-    // ฟังก์ชันจัดการส่วน "หลักประกันสัญญา" (Guarantee)
-    function toggleGuaranteeInputs() {
-        // 1. รับค่าสถานะ Radio
-        const isNo = document.getElementById('guarantee_no').checked;
-        const isBook = document.getElementById('guarantee_book').checked;
-        const isCash = document.getElementById('guarantee_cash').checked;
+// ฟังก์ชันจัดการส่วน "หลักประกันสัญญา" (Guarantee)
+function toggleGuaranteeInputs() {
+    // 1. รับค่าสถานะ Radio
+    const isNo = document.getElementById('guarantee_no').checked;
+    const isBook = document.getElementById('guarantee_book').checked;
+    const isCash = document.getElementById('guarantee_cash').checked;
 
-        // 2. รับค่า Div (Container)
-        const ref_number_div = document.getElementById('ref_number_div');
-        const issue_date_div = document.getElementById('issue_date_div');
-        const expire_date_div = document.getElementById('expire_date_div');
-        const cash_div = document.getElementById('cash_div'); // ผมแก้ชื่อตัวแปรให้สื่อความหมายขึ้น
+    // 2. รับค่า Div (Container)
+    const ref_number_div = document.getElementById('ref_number_div');
+    const issue_date_div = document.getElementById('issue_date_div');
+    const expire_date_div = document.getElementById('expire_date_div');
+    const cash_div = document.getElementById('cash_div'); // ผมแก้ชื่อตัวแปรให้สื่อความหมายขึ้น
 
-        // 3. รับค่า Input fields
-        const inputFieldRef = document.getElementById('guarantee_ref_number');
-        const inputFieldIssue = document.getElementById('guarantee_issue_date');
-        const inputFieldExpire = document.getElementById('guarantee_expire_date');
-        const inputFieldCash = document.getElementById('guarantee_amount'); // *ชื่อตัวแปรที่ถูกต้อง*
+    // 3. รับค่า Input fields
+    const inputFieldRef = document.getElementById('guarantee_ref_number');
+    const inputFieldIssue = document.getElementById('guarantee_issue_date');
+    const inputFieldExpire = document.getElementById('guarantee_expire_date');
+    const inputFieldCash = document.getElementById('guarantee_amount'); // *ชื่อตัวแปรที่ถูกต้อง*
 
-        // --- เริ่ม Logic ---
+    // --- เริ่ม Logic ---
 
-        if (isNo) {
-            // [กรณีไม่มี]
-            // 1. ซ่อนทุกอย่าง
-            ref_number_div.style.display = 'none';
-            issue_date_div.style.display = 'none';
-            expire_date_div.style.display = 'none';
-            cash_div.style.display = 'none';
+    if (isNo) {
+        // [กรณีไม่มี]
+        // 1. ซ่อนทุกอย่าง
+        ref_number_div.style.display = 'none';
+        issue_date_div.style.display = 'none';
+        expire_date_div.style.display = 'none';
+        cash_div.style.display = 'none';
 
-            // 2. เอา Required ออก และเคลียร์ค่าทิ้งทั้งหมด
-            if (inputFieldRef) { inputFieldRef.required = false; inputFieldRef.value = ''; }
-            if (inputFieldIssue) { inputFieldIssue.required = false; inputFieldIssue.value = ''; }
-            if (inputFieldExpire) { inputFieldExpire.required = false; inputFieldExpire.value = ''; }
-            if (inputFieldCash) { inputFieldCash.required = false; inputFieldCash.value = ''; }
+        // 2. เอา Required ออก และเคลียร์ค่าทิ้งทั้งหมด
+        if (inputFieldRef) {
+            inputFieldRef.required = false;
+            inputFieldRef.value = '';
+        }
+        if (inputFieldIssue) {
+            inputFieldIssue.required = false;
+            inputFieldIssue.value = '';
+        }
+        if (inputFieldExpire) {
+            inputFieldExpire.required = false;
+            inputFieldExpire.value = '';
+        }
+        if (inputFieldCash) {
+            inputFieldCash.required = false;
+            inputFieldCash.value = '';
+        }
 
-        } else if (isBook) {
-            // [กรณีหนังสือค้ำ]
-            // 1. แสดงส่วนหนังสือ ซ่อนส่วนเงินสด
-            ref_number_div.style.display = 'block';
-            issue_date_div.style.display = 'block';
-            expire_date_div.style.display = 'block';
-            cash_div.style.display = 'none';
+    } else if (isBook) {
+        // [กรณีหนังสือค้ำ]
+        // 1. แสดงส่วนหนังสือ ซ่อนส่วนเงินสด
+        ref_number_div.style.display = 'block';
+        issue_date_div.style.display = 'block';
+        expire_date_div.style.display = 'block';
+        cash_div.style.display = 'none';
 
-            // 2. Set Required ให้หนังสือ
-            if (inputFieldRef) inputFieldRef.required = true;
-            if (inputFieldIssue) inputFieldIssue.required = true;
-            if (inputFieldExpire) inputFieldExpire.required = true;
+        // 2. Set Required ให้หนังสือ
+        if (inputFieldRef) inputFieldRef.required = true;
+        if (inputFieldIssue) inputFieldIssue.required = true;
+        if (inputFieldExpire) inputFieldExpire.required = true;
 
-            // 3. ยกเลิก Required ของเงินสดและเคลียร์ค่า
-            if (inputFieldCash) {
-                inputFieldCash.required = false;
-                inputFieldCash.value = '';
-            }
+        // 3. ยกเลิก Required ของเงินสดและเคลียร์ค่า
+        if (inputFieldCash) {
+            inputFieldCash.required = false;
+            inputFieldCash.value = '';
+        }
 
-        } else if (isCash) {
-            // [กรณีเงินสด]
-            // 1. ซ่อนส่วนหนังสือ แสดงส่วนเงินสด
-            ref_number_div.style.display = 'none';
-            issue_date_div.style.display = 'none';
-            expire_date_div.style.display = 'none';
-            cash_div.style.display = 'block';
+    } else if (isCash) {
+        // [กรณีเงินสด]
+        // 1. ซ่อนส่วนหนังสือ แสดงส่วนเงินสด
+        ref_number_div.style.display = 'none';
+        issue_date_div.style.display = 'none';
+        expire_date_div.style.display = 'none';
+        cash_div.style.display = 'block';
 
-            // 2. Set Required ให้เงินสด (**สำคัญ: ของเดิมคุณลืมบรรทัดนี้**)
-            if (inputFieldCash) inputFieldCash.required = true;
+        // 2. Set Required ให้เงินสด (**สำคัญ: ของเดิมคุณลืมบรรทัดนี้**)
+        if (inputFieldCash) inputFieldCash.required = true;
 
-            // 3. ยกเลิก Required ของหนังสือและเคลียร์ค่า
-            if (inputFieldRef) { inputFieldRef.required = false; inputFieldRef.value = ''; }
-            if (inputFieldIssue) { inputFieldIssue.required = false; inputFieldIssue.value = ''; }
-            if (inputFieldExpire) { inputFieldExpire.required = false; inputFieldExpire.value = ''; }
+        // 3. ยกเลิก Required ของหนังสือและเคลียร์ค่า
+        if (inputFieldRef) {
+            inputFieldRef.required = false;
+            inputFieldRef.value = '';
+        }
+        if (inputFieldIssue) {
+            inputFieldIssue.required = false;
+            inputFieldIssue.value = '';
+        }
+        if (inputFieldExpire) {
+            inputFieldExpire.required = false;
+            inputFieldExpire.value = '';
         }
     }
+}
 
-    // การรับประกัน
-    function checkWarrantyStatus() {
-        const checkRadio1 = document.getElementById('has_warranty_no').checked;
-        const checkRadio2 = document.getElementById('has_warranty_yes').checked;
+// การรับประกัน
+function checkWarrantyStatus() {
+    const checkRadio1 = document.getElementById('has_warranty_no').checked;
+    const checkRadio2 = document.getElementById('has_warranty_yes').checked;
 
-        const checkOpen = document.getElementById('warranty_period_yes_div');
-        const checkclose = document.getElementById('warranty_period_no_div');
+    const checkOpen = document.getElementById('warranty_period_yes_div');
+    const checkclose = document.getElementById('warranty_period_no_div');
 
-        const inputField = document.getElementById('warranty_period');
+    const inputField = document.getElementById('warranty_period');
 
-        if (checkRadio1) {
-            checkOpen.style.display = 'none';
-            checkclose.style.display = 'block';
-            if (inputField) {
-                inputField.required = false;
-                inputField.value = '';
-            }
-        } else if (checkRadio2) {
-            checkOpen.style.display = 'block';
-            checkclose.style.display = 'none';
-            if (inputField) {
-                inputField.required = true;
-            }
+    if (checkRadio1) {
+        checkOpen.style.display = 'none';
+        checkclose.style.display = 'block';
+        if (inputField) {
+            inputField.required = false;
+            inputField.value = '';
+        }
+    } else if (checkRadio2) {
+        checkOpen.style.display = 'block';
+        checkclose.style.display = 'none';
+        if (inputField) {
+            inputField.required = true;
         }
     }
+}
 
-    // ประเภทการยื่นซอง
-    function checkIsSubmission() {
-        const checkRadio1 = document.getElementById('is_submission_required_no').checked;
-        const checkRadio2 = document.getElementById('is_submission_required_yes').checked;
+// ประเภทการยื่นซอง
+function checkIsSubmission() {
+    const checkRadio1 = document.getElementById('is_submission_required_no').checked;
+    const checkRadio2 = document.getElementById('is_submission_required_yes').checked;
 
-        const checkOpen = document.getElementById('submission_date_yes_div');
-        const checkclose = document.getElementById('submission_date_no_div');
+    const checkOpen = document.getElementById('submission_date_yes_div');
+    const checkclose = document.getElementById('submission_date_no_div');
 
-        const inputField = document.getElementById('submission_date');
+    const inputField = document.getElementById('submission_date');
 
-        if (checkRadio1) {
-            if (checkOpen) checkOpen.style.display = 'none';
-            if (checkclose) checkclose.style.display = 'block';
-            if (inputField) {
-                inputField.required = false;
-                inputField.value = '';
-            }
-        } else if (checkRadio2) {
-            if (checkOpen) checkOpen.style.display = 'block';
-            if (checkclose) checkclose.style.display = 'none';
-            if (inputField) {
-                inputField.required = true;
-            }
+    if (checkRadio1) {
+        if (checkOpen) checkOpen.style.display = 'none';
+        if (checkclose) checkclose.style.display = 'block';
+        if (inputField) {
+            inputField.required = false;
+            inputField.value = '';
+        }
+    } else if (checkRadio2) {
+        if (checkOpen) checkOpen.style.display = 'block';
+        if (checkclose) checkclose.style.display = 'none';
+        if (inputField) {
+            inputField.required = true;
         }
     }
+}
 
-    function clearAllData() {
-        document.querySelectorAll('input[type="text"], input[type="number"], input[type="date"]').forEach(input => input.value = '');
-        document.querySelectorAll('textarea').forEach(area => area.value = '');
-        $('.select-search').val(null).trigger('change');
-        const radioWarrantyNo = document.getElementById('has_warranty_no');
-        const radioGuaranteeNo = document.getElementById('guarantee_no');
-        if (radioWarrantyNo) radioWarrantyNo.checked = true;
-        if (radioGuaranteeNo) radioGuaranteeNo.checked = true;
+function clearAllData() {
+    document.querySelectorAll('input[type="text"], input[type="number"], input[type="date"]').forEach(input => input
+        .value = '');
+    document.querySelectorAll('textarea').forEach(area => area.value = '');
+    $('.select-search').val(null).trigger('change');
+    const radioWarrantyNo = document.getElementById('has_warranty_no');
+    const radioGuaranteeNo = document.getElementById('guarantee_no');
+    if (radioWarrantyNo) radioWarrantyNo.checked = true;
+    if (radioGuaranteeNo) radioGuaranteeNo.checked = true;
 
-        if (typeof checkWarrantyStatus === 'function') checkWarrantyStatus();
-        if (typeof toggleGuaranteeInputs === 'function') toggleGuaranteeInputs();
-    }
+    if (typeof checkWarrantyStatus === 'function') checkWarrantyStatus();
+    if (typeof toggleGuaranteeInputs === 'function') toggleGuaranteeInputs();
+}
 
-    $(document).ready(function () {
-        toggleGuaranteeInputs();
+$(document).ready(function() {
+    toggleGuaranteeInputs();
+    checkWarrantyStatus();
+    checkIsSubmission();
+
+    $('#form_project').parsley({
+        excluded: 'input[type=button], input[type=submit], input[type=reset]'
+    });
+    $('input[name="has_warranty"]').on('change', function() {
         checkWarrantyStatus();
-        checkIsSubmission();
-
-        $('#form_project').parsley({
-            excluded: 'input[type=button], input[type=submit], input[type=reset]'
-        });
-        $('input[name="has_warranty"]').on('change', function () {
-            checkWarrantyStatus();
-        });
-
-
-        var modal = $("#createCustomer");
-
-        $("#openModalBtn").on("click", function () {
-            var user_id = '<?php echo isset($_SESSION['user_id']) ? $_SESSION['user_id'] : ''; ?>';
-            $("#modalContent").load("manage_customers.php?user_id=" + user_id, function (response, status, xhr) {
-                if (status == "error") {
-                    $("#modalContent").html("<p>Sorry, there was an error loading the form.</p>");
-                }
-                modal.fadeIn(200);
-            });
-        });
-        // ปิด Modal (ใช้ Delegated Event เพราะปุ่มปิดถูกโหลดมาทีหลัง)
-        $(document).on("click", ".btn-close", function () {
-            modal.fadeOut(200);
-        });
-
     });
 
-    $(document).on('submit', '#form_project', function (e) {
-        e.preventDefault();
-        var formData = new FormData(this);
-        var id = $('#project_id').val();
 
-        var targetUrl = (id !== '') ? 'project_update_api.php' : 'project_create_api.php';
+    var modal = $("#createCustomer");
 
-        $.ajax({
-            url: targetUrl,
-            type: 'POST',
-            data: formData,
-            contentType: false,
-            processData: false,
-            success: function (response) {
-                Swal.fire({
-                    icon: 'success',
-                    title: 'บันทึกข้อมูลสำเร็จ',
-                    text: 'ระบบจะรีโหลดหน้าอัตโนมัติ',
-                    showCancelButton: false,
-                    showConfirmButton: false,
-                    timer: 800,
-                    timerProgressBar: true,
-                }).then(() => {
-                    if (id !== '') {
-                        window.location.href = 'project_details.php?id=' + id;
-                    } else {
-                        window.location.href = 'project_details.php';
-                    }
-                });
-            },
-            error: function (xhr, status, error) {
-                var errorMessage = xhr.responseText;
-                if (!errorMessage) {
-                    errorMessage = 'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง';
-                }
-
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'แจ้งเตือน',
-                    text: errorMessage,
-                    showCancelButton: false,
-                    confirmButtonColor: '#d33',
-                    confirmButtonText: 'ปิด'
-                });
+    $("#openModalBtn").on("click", function() {
+        var user_id = '<?php echo isset($_SESSION['user_id']) ? $_SESSION['user_id'] : ''; ?>';
+        $("#modalContent").load("manage_customers.php?user_id=" + user_id, function(response, status,
+            xhr) {
+            if (status == "error") {
+                $("#modalContent").html("<p>Sorry, there was an error loading the form.</p>");
             }
+            modal.fadeIn(200);
         });
     });
+    // ปิด Modal (ใช้ Delegated Event เพราะปุ่มปิดถูกโหลดมาทีหลัง)
+    $(document).on("click", ".btn-close", function() {
+        modal.fadeOut(200);
+    });
+
+    $('#project_status').on('change', function() {
+        const isNoContract = $(this).val() == "1";
+        $('#contract_start_date, #contract_end_date').prop('required', !isNoContract);
+
+        if (isNoContract) {
+            $('.text-danger').hide();
+        } else {
+            $('.text-danger').show();
+        }
+    });
+
+});
+
+$(document).on('submit', '#form_project', function(e) {
+    e.preventDefault();
+    var formData = new FormData(this);
+    var id = $('#project_id').val();
+
+    var targetUrl = (id !== '') ? 'project_update_api.php' : 'project_create_api.php';
+
+    $.ajax({
+        url: targetUrl,
+        type: 'POST',
+        data: formData,
+        contentType: false,
+        processData: false,
+        success: function(response) {
+            Swal.fire({
+                icon: 'success',
+                title: 'บันทึกข้อมูลสำเร็จ',
+                text: 'ระบบจะรีโหลดหน้าอัตโนมัติ',
+                showCancelButton: false,
+                showConfirmButton: false,
+                timer: 800,
+                timerProgressBar: true,
+            }).then(() => {
+                if (id !== '') {
+                    window.location.href = 'project_details.php?id=' + id;
+                } else {
+                    window.location.href = 'project_details.php';
+                }
+            });
+        },
+        error: function(xhr, status, error) {
+            var errorMessage = xhr.responseText;
+            if (!errorMessage) {
+                errorMessage = 'ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง';
+            }
+
+            Swal.fire({
+                icon: 'warning',
+                title: 'แจ้งเตือน',
+                text: errorMessage,
+                showCancelButton: false,
+                confirmButtonColor: '#d33',
+                confirmButtonText: 'ปิด'
+            });
+        }
+    });
+});
 </script>

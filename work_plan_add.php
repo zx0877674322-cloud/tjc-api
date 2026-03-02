@@ -55,60 +55,78 @@ if (isset($_GET['edit_id'])) {
     $stmt_edit->close();
 }
 
-// --- 4. ส่วนบันทึกข้อมูล (ปรับปรุงการแปลงวันที่ d/m/Y -> Y-m-d) ---
+// --- 4. ส่วนบันทึกข้อมูล (ฉบับแก้ไขสมบูรณ์) ---
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_plan'])) {
 
-    $plan_type = $_POST['plan_type'];
+    $plan_type = $_POST['plan_type'] ?? 'individual';
 
-    // 🟢 1. แปลงวันที่บันทึกข้อมูล (record_date)
+    // 1. แปลงวันที่บันทึก (Record Date)
     $record_date_raw = $_POST['record_date'] ?? '';
     if (!empty($record_date_raw)) {
-        // แปลงจาก 17/02/2026 เป็น 2026-02-17
         $record_date = DateTime::createFromFormat('d/m/Y', $record_date_raw)->format('Y-m-d');
     } else {
         $record_date = date('Y-m-d');
     }
     $final_created_at = $record_date . " " . date("H:i:s");
-    $status = 'Plan';
 
-    // กรณีแก้ไข (Update) หรือ เพิ่มแบบเดี่ยว (Individual)
-    if ($edit_mode || $plan_type == 'individual') {
+    $status = 'Plan'; // Default status
 
-        // 🟢 2. แปลงวันที่แพลนงาน (plan_date)
+    // ====================================================
+    // กรณีที่ 1: แก้ไขข้อมูล (Edit Mode) - ทำทีละรายการ
+    // ====================================================
+    if ($edit_mode) {
         $plan_date_raw = $_POST['plan_date'] ?? '';
         $plan_date = !empty($plan_date_raw) ? DateTime::createFromFormat('d/m/Y', $plan_date_raw)->format('Y-m-d') : '';
-
         $contact_person = trim($_POST['contact_person']);
         $work_detail = trim($_POST['work_detail']);
+        $status = $_POST['status'];
 
-        // Logic การดึงค่าเดิมกรณีแก้ไข
-        $team_type = $edit_mode ? $row_edit['team_type'] : 'Marketing';
-        $company_to_save = $edit_mode ? $row_edit['company'] : $user_company_fullname;
-        $team_member_save = ($edit_mode && !empty($row_edit['team_member'])) ? $row_edit['team_member'] : null;
+        $team_member_save = (!empty($row_edit['team_member'])) ? $row_edit['team_member'] : null;
 
-        if ($edit_mode) {
-            $status = $_POST['status'];
-            // อัปเดตข้อมูล
-            $sql = "UPDATE work_plans SET plan_date=?, contact_person=?, work_detail=?, status=?, created_at=?, team_member=? WHERE id=?";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("ssssssi", $plan_date, $contact_person, $work_detail, $status, $final_created_at, $team_member_save, $edit_id);
-        } else {
-            // เพิ่มใหม่แบบเดี่ยว
-            $sql = "INSERT INTO work_plans (reporter_name, created_at, plan_date, contact_person, work_detail, status, company, team_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("ssssssss", $current_user, $final_created_at, $plan_date, $contact_person, $work_detail, $status, $company_to_save, $team_type);
-        }
+        $sql = "UPDATE work_plans SET plan_date=?, contact_person=?, work_detail=?, status=?, created_at=?, team_member=? WHERE id=?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("ssssssi", $plan_date, $contact_person, $work_detail, $status, $final_created_at, $team_member_save, $edit_id);
         $stmt->execute();
         $stmt->close();
+    }
+    // ====================================================
+    // กรณีที่ 2: เพิ่มใหม่ - แผนงานเดี่ยว (Individual Loop)
+    // ====================================================
+    elseif ($plan_type == 'individual') {
+        $ind_dates = $_POST['ind_plan_date'] ?? [];
+        $ind_contacts = $_POST['ind_contact_person'] ?? [];
+        $ind_details = $_POST['ind_work_detail'] ?? [];
 
-    } elseif ($plan_type == 'team' && !$edit_mode) {
-        // --- เพิ่มใหม่แบบทีม (Auction) Loop Insert ---
+        $team_type = 'Marketing';
+        $company_to_save = $user_company_fullname;
+
+        $sql = "INSERT INTO work_plans (reporter_name, created_at, plan_date, contact_person, work_detail, status, company, team_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $conn->prepare($sql);
+
+        for ($i = 0; $i < count($ind_dates); $i++) {
+            $p_date_raw = $ind_dates[$i];
+            $p_contact = trim($ind_contacts[$i]);
+            $p_detail = trim($ind_details[$i]);
+
+            $p_date = !empty($p_date_raw) ? DateTime::createFromFormat('d/m/Y', $p_date_raw)->format('Y-m-d') : '';
+
+            if (!empty($p_date) && !empty($p_contact)) {
+                $stmt->bind_param("ssssssss", $current_user, $final_created_at, $p_date, $p_contact, $p_detail, $status, $company_to_save, $team_type);
+                $stmt->execute();
+            }
+        }
+        $stmt->close();
+    }
+    // ====================================================
+    // กรณีที่ 3: เพิ่มใหม่ - แผนงานทีม (Team Loop)
+    // ====================================================
+    elseif ($plan_type == 'team') {
         $team_type = 'Auction';
-        $emp_names = $_POST['emp_name'];
-        $emp_comps = $_POST['emp_comp'];
-        $team_dates = $_POST['team_plan_date'];
-        $contacts = $_POST['team_contact'];
-        $details = $_POST['team_detail'];
+        $emp_names = $_POST['emp_name'] ?? [];
+        $emp_comps = $_POST['emp_comp'] ?? [];
+        $team_dates = $_POST['team_plan_date'] ?? [];
+        $contacts = $_POST['team_contact'] ?? [];
+        $details = $_POST['team_detail'] ?? [];
 
         $sql = "INSERT INTO work_plans (reporter_name, team_member, created_at, plan_date, contact_person, work_detail, status, company, team_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $conn->prepare($sql);
@@ -116,11 +134,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_plan'])) {
         for ($i = 0; $i < count($emp_names); $i++) {
             $r_member = $emp_names[$i];
             $r_comp = $emp_comps[$i];
-
-            // 🟢 3. แปลงวันที่แพลนงานใน Loop (งานทีม)
             $r_date_raw = $team_dates[$i];
             $r_date = !empty($r_date_raw) ? DateTime::createFromFormat('d/m/Y', $r_date_raw)->format('Y-m-d') : '';
-
             $r_contact = $contacts[$i];
             $r_detail = $details[$i];
 
@@ -302,37 +317,37 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_plan'])) {
 
                     <div id="form-individual">
 
-                        <?php if ($edit_mode && !empty($row_edit['team_member'])): ?>
-                            <div class="mb-3">
-                                <label class="form-label text-warning fw-bold">พนักงานผู้ปฏิบัติงาน (ลูกทีม)</label>
-                                <input type="text" class="form-control bg-readonly fw-bold text-dark"
-                                    value="<?php echo htmlspecialchars($row_edit['team_member']); ?>" readonly>
-                            </div>
-                        <?php endif; ?>
-
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-6">
-                                <label class="form-label">วันที่แพลนงาน</label>
-                                <input type="text" name="plan_date" class="form-control datepicker"
-                                    placeholder="วว/ดด/ปปปป"
-                                    value="<?php echo isset($row_edit['plan_date']) ? date('d/m/Y', strtotime($row_edit['plan_date'])) : ''; ?>"
-                                    readonly required>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold">บุคคล / หน่วยงาน <span
-                                        class="text-danger">*</span></label>
-                                <input type="text" name="contact_person" class="form-control"
-                                    value="<?php echo $edit_mode ? htmlspecialchars($row_edit['contact_person']) : ''; ?>"
-                                    placeholder="ระบุชื่อลูกค้า...">
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">รายละเอียดงาน</label>
-                            <textarea name="work_detail" class="form-control" rows="4"
-                                placeholder="ระบุรายละเอียด..."><?php echo $edit_mode ? htmlspecialchars($row_edit['work_detail']) : ''; ?></textarea>
-                        </div>
-
                         <?php if ($edit_mode): ?>
+                            <?php if (!empty($row_edit['team_member'])): ?>
+                                <div class="mb-3">
+                                    <label class="form-label text-warning fw-bold">พนักงานผู้ปฏิบัติงาน (ลูกทีม)</label>
+                                    <input type="text" class="form-control bg-readonly fw-bold text-dark"
+                                        value="<?php echo htmlspecialchars($row_edit['team_member']); ?>" readonly>
+                                </div>
+                            <?php endif; ?>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">วันที่แพลนงาน</label>
+                                    <input type="text" name="plan_date" class="form-control datepicker"
+                                        placeholder="วว/ดด/ปปปป"
+                                        value="<?php echo isset($row_edit['plan_date']) ? date('d/m/Y', strtotime($row_edit['plan_date'])) : ''; ?>"
+                                        readonly required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">บุคคล / หน่วยงาน <span
+                                            class="text-danger">*</span></label>
+                                    <input type="text" name="contact_person" class="form-control"
+                                        value="<?php echo htmlspecialchars($row_edit['contact_person']); ?>"
+                                        placeholder="ระบุชื่อลูกค้า...">
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">รายละเอียดงาน</label>
+                                <textarea name="work_detail" class="form-control" rows="4"
+                                    placeholder="ระบุรายละเอียด..."><?php echo htmlspecialchars($row_edit['work_detail']); ?></textarea>
+                            </div>
+
                             <div class="mb-3">
                                 <label class="form-label">สถานะ</label>
                                 <select name="status" class="form-select">
@@ -343,7 +358,40 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_plan'])) {
                                     ?>
                                 </select>
                             </div>
+
+                        <?php else: ?>
+                            <div class="alert alert-info border-0 bg-info-subtle text-info-emphasis mb-4">
+                                <i class="fas fa-info-circle me-1"></i> สามารถเพิ่มแผนงานของคุณได้หลายรายการในครั้งเดียว
+                            </div>
+
+                            <div id="individual-container">
+                                <div class="team-box">
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label sm text-primary fw-bold">วันที่แพลนงาน</label>
+                                            <input type="text" name="ind_plan_date[]" class="form-control datepicker"
+                                                placeholder="วว/ดด/ปปปป" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label sm fw-bold">บุคคล / หน่วยงาน <span
+                                                    class="text-danger">*</span></label>
+                                            <input type="text" name="ind_contact_person[]" class="form-control"
+                                                placeholder="ระบุชื่อลูกค้า..." required>
+                                        </div>
+                                        <div class="col-md-12">
+                                            <label class="form-label sm text-muted">รายละเอียดงาน</label>
+                                            <textarea name="ind_work_detail[]" class="form-control" rows="2"
+                                                placeholder="รายละเอียด..."></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button type="button" class="btn-add-box mb-3" onclick="addIndividualBox()">
+                                <i class="fas fa-plus-circle me-1"></i> เพิ่มแผนงานอีก
+                            </button>
                         <?php endif; ?>
+
                     </div>
 
                     <div id="form-team" style="display: none;">
@@ -351,45 +399,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_plan'])) {
                             <i class="fas fa-info-circle me-1"></i> เลือกพนักงานและ<b>วันที่แพลนงาน</b>ของแต่ละคนได้เลย
                         </div>
 
-                        <div id="team-container">
-                            <div class="team-box">
-                                <div class="row g-3">
-                                    <div class="col-md-6">
-                                        <label class="form-label sm text-muted">พนักงาน (ลูกทีม)</label>
-                                        <select name="emp_name[]" class="form-select emp-select"
-                                            onchange="updateCompany(this)">
-                                            <option value="">-- เลือกพนักงาน --</option>
-                                            <?php foreach ($employees as $emp): ?>
-                                                <option value="<?php echo htmlspecialchars($emp['fullname']); ?>"
-                                                    data-comp="<?php echo htmlspecialchars($emp['company_name']); ?>">
-                                                    <?php echo htmlspecialchars($emp['fullname']); ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label sm text-muted">สังกัด (Auto)</label>
-                                        <input type="text" name="emp_comp[]" class="form-control bg-readonly comp-input"
-                                            readonly>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label sm text-primary fw-bold">วันที่แพลนงาน</label>
-                                        <input type="date" name="team_plan_date[]" class="form-control border-primary"
-                                            value="<?php echo date('Y-m-d', strtotime('+1 day')); ?>">
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label sm text-muted">บุคคล / หน่วยงาน</label>
-                                        <input type="text" name="team_contact[]" class="form-control"
-                                            placeholder="ระบุหน่วยงาน...">
-                                    </div>
-                                    <div class="col-md-12">
-                                        <label class="form-label sm text-muted">รายละเอียดงาน</label>
-                                        <textarea name="team_detail[]" class="form-control" rows="2"
-                                            placeholder="รายละเอียด..."></textarea>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        <div id="team-container"></div>
 
                         <button type="button" class="btn-add-box mb-3" onclick="addTeamBox()">
                             <i class="fas fa-plus-circle me-1"></i> เพิ่มพนักงานอีก
@@ -406,6 +416,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_plan'])) {
     </div>
 
     <script>
+        $(document).ready(function () {
+            // เช็คว่าเป็นโหมดสร้างใหม่ และเป็นแบบทีม (Auction)
+            <?php if (!$edit_mode): ?>
+                // ถ้าเลือก individual เป็นค่าเริ่มต้น -> ไม่ต้องทำอะไร
+                // แต่ถ้าเลือก team (หรือเปลี่ยน dropdown) -> เราจะใช้ switchType จัดการ
+
+                // กรณี default เป็น team หรือมีการ switch มา
+                // เราจะดักจับ event ตอน switchType แทน หรือสร้างไว้เลยถ้าจำเป็น
+            <?php endif; ?>
+        });
         // ถ้าอยู่ใน Edit Mode เราจะไม่ให้ Switch ไปมา
         <?php if (!$edit_mode): ?>
             function switchType(type) {
@@ -416,16 +436,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_plan'])) {
                     $('.plan-option:first-child').addClass('active');
                     $('#form-individual').slideDown();
                     $('#form-team').slideUp();
-                    // Required Logic for Individual
-                    $('input[name="plan_date"]').prop('required', true);
-                    $('input[name="contact_person"]').prop('required', true);
+
+                    // ปิด Required ของทีม
+                    $('#team-container input, #team-container select').prop('required', false);
+
+                    // เปิด Required ของเดี่ยว (เฉพาะอันที่มีอยู่)
+                    $('#individual-container input[name="ind_plan_date[]"]').prop('required', true);
+                    $('#individual-container input[name="ind_contact_person[]"]').prop('required', true);
+
                 } else {
                     $('.plan-option:last-child').addClass('active');
                     $('#form-individual').slideUp();
                     $('#form-team').slideDown();
-                    // Remove Required for Individual
-                    $('input[name="plan_date"]').prop('required', false);
-                    $('input[name="contact_person"]').prop('required', false);
+
+                    // ปิด Required ของเดี่ยว
+                    $('#individual-container input').prop('required', false);
+
+                    // เปิด Required ของทีม
+                    $('#team-container select[name="emp_name[]"]').prop('required', true);
+                    $('#team-container input[name="team_plan_date[]"]').prop('required', true);
+                    $('#team-container input[name="team_contact[]"]').prop('required', true);
                 }
             }
         <?php endif; ?>
@@ -435,42 +465,156 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_plan'])) {
             $(selectObj).closest('.row').find('.comp-input').val(compName || '');
         }
 
-        function addTeamBox() {
+        function addIndividualBox() {
             let boxHtml = `
             <div class="team-box">
                 <i class="fas fa-times btn-remove-box" onclick="$(this).parent().remove()"></i>
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label sm text-muted">พนักงาน (ลูกทีม)</label>
-                        <select name="emp_name[]" class="form-select emp-select" onchange="updateCompany(this)" required>
-                            <option value="">-- เลือกพนักงาน --</option>
-                            <?php foreach ($employees as $emp): ?>
-                                <option value="<?php echo htmlspecialchars($emp['fullname']); ?>" 
-                                        data-comp="<?php echo htmlspecialchars($emp['company_name']); ?>">
-                                    <?php echo htmlspecialchars($emp['fullname']); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label sm text-muted">สังกัด (Auto)</label>
-                        <input type="text" name="emp_comp[]" class="form-control bg-readonly comp-input" readonly>
-                    </div>
-                    <div class="col-md-6">
                         <label class="form-label sm text-primary fw-bold">วันที่แพลนงาน</label>
-                        <input type="date" name="team_plan_date[]" class="form-control border-primary" value="<?php echo date('Y-m-d', strtotime('+1 day')); ?>" required>
+                        <input type="text" name="ind_plan_date[]" class="form-control datepicker-dynamic"
+                            placeholder="วว/ดด/ปปปป" required>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label sm text-muted">บุคคล / หน่วยงาน</label>
-                        <input type="text" name="team_contact[]" class="form-control" placeholder="ระบุหน่วยงาน..." required>
+                        <label class="form-label sm fw-bold">บุคคล / หน่วยงาน <span class="text-danger">*</span></label>
+                        <input type="text" name="ind_contact_person[]" class="form-control"
+                            placeholder="ระบุชื่อลูกค้า..." required>
                     </div>
                     <div class="col-md-12">
                         <label class="form-label sm text-muted">รายละเอียดงาน</label>
-                        <textarea name="team_detail[]" class="form-control" rows="2" placeholder="รายละเอียด..."></textarea>
+                        <textarea name="ind_work_detail[]" class="form-control" rows="2"
+                            placeholder="รายละเอียด..."></textarea>
                     </div>
                 </div>
             </div>`;
+
+            $('#individual-container').append(boxHtml);
+
+            // Re-initialize Flatpickr สำหรับกล่องใหม่
+            flatpickr(".datepicker-dynamic", {
+                dateFormat: "d/m/Y",
+                locale: "th",
+                allowInput: true
+            });
+            // ลบคลาส dynamic ออกเพื่อไม่ให้ init ซ้ำซ้อน (optional)
+            $(".datepicker-dynamic").removeClass("datepicker-dynamic").addClass("datepicker");
+        }
+
+        const employeeOptions = `
+            <option value="">-- เลือกพนักงาน --</option>
+            <?php foreach ($employees as $emp): ?>
+                <option value="<?php echo htmlspecialchars($emp['fullname']); ?>" 
+                        data-comp="<?php echo htmlspecialchars($emp['company_name']); ?>">
+                    <?php echo htmlspecialchars($emp['fullname']); ?>
+                </option>
+            <?php endforeach; ?>
+        `;
+
+        function addTeamBox() {
+            const boxId = 'team_box_' + Date.now();
+
+            let boxHtml = `
+            <div class="team-box" id="${boxId}" style="position: relative; animation: fadeIn 0.3s ease; border: 2px solid #e0e7ff; background: #fff;">
+                <div style="background: #eef2ff; padding: 10px 15px; border-radius: 10px 10px 0 0; border-bottom: 1px solid #e0e7ff; margin: -20px -20px 20px -20px;">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 text-primary fw-bold"><i class="fas fa-user-tag me-2"></i>ข้อมูลพนักงาน</h6>
+                        <button type="button" class="btn btn-sm btn-outline-danger border-0" onclick="$(this).closest('.team-box').remove()">
+                            <i class="fas fa-times"></i> ลบคนนี้
+                        </button>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label sm text-muted">เลือกพนักงาน (ลูกทีม)</label>
+                        <select class="form-select master-emp-select" onchange="syncEmployeeData('${boxId}')">
+                            ${employeeOptions}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label sm text-muted">สังกัด</label>
+                        <input type="text" class="form-control bg-readonly master-comp-input" readonly>
+                    </div>
+                </div>
+
+                <hr class="text-muted opacity-25">
+                
+                <div class="team-plans-container"></div>
+
+                <button type="button" class="btn btn-sm btn-light text-primary w-100 mt-2 border-dashed" 
+                        onclick="addTeamPlanRow('${boxId}')" style="border: 1px dashed #4f46e5;">
+                    <i class="fas fa-plus me-1"></i> เพิ่มวันทำงาน/รายละเอียดให้คนนี้
+                </button>
+            </div>`;
+
             $('#team-container').append(boxHtml);
+
+            // เพิ่มแถวงานย่อยแถวแรกให้อัตโนมัติ
+            addTeamPlanRow(boxId);
+        }
+        function addTeamPlanRow(boxId) {
+            const container = $(`#${boxId} .team-plans-container`);
+
+            // ดึงค่าปัจจุบันจาก Master Select ของกล่องนี้
+            const currentName = $(`#${boxId} .master-emp-select`).val() || '';
+            const currentComp = $(`#${boxId} .master-comp-input`).val() || '';
+
+            let rowHtml = `
+            <div class="plan-row mb-3 pb-3 border-bottom position-relative">
+                <i class="fas fa-minus-circle text-danger position-absolute" 
+                   style="right: 0; top: 0; cursor: pointer;" 
+                   onclick="removePlanRow(this)" title="ลบรายการนี้"></i>
+                
+                <input type="hidden" name="emp_name[]" class="hidden-emp-name" value="${currentName}">
+                <input type="hidden" name="emp_comp[]" class="hidden-emp-comp" value="${currentComp}">
+
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label sm text-primary fw-bold" style="font-size: 0.85rem;">วันที่แพลนงาน</label>
+                        <input type="text" name="team_plan_date[]" class="form-control datepicker-dynamic form-control-sm" 
+                               value="<?php echo date('d/m/Y', strtotime('+1 day')); ?>" required>
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label sm text-muted" style="font-size: 0.85rem;">บุคคล / หน่วยงาน</label>
+                        <input type="text" name="team_contact[]" class="form-control form-control-sm" placeholder="ระบุหน่วยงาน..." required>
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label sm text-muted" style="font-size: 0.85rem;">รายละเอียดงาน</label>
+                        <textarea name="team_detail[]" class="form-control form-control-sm" rows="1" placeholder="รายละเอียด..."></textarea>
+                    </div>
+                </div>
+            </div>`;
+
+            container.append(rowHtml);
+
+            // Re-init Datepicker
+            flatpickr(".datepicker-dynamic", { dateFormat: "d/m/Y", locale: "th", allowInput: true });
+            $(".datepicker-dynamic").removeClass("datepicker-dynamic").addClass("datepicker");
+        }
+
+        // 🟢 4. ลบแถวงานย่อย (แต่ห้ามลบหมด ถ้าเหลือ 1 ให้เคลียร์ค่าแทน หรือลบได้ตามใจชอบ)
+        function removePlanRow(btn) {
+            const container = $(btn).closest('.team-plans-container');
+            if (container.children().length > 1) {
+                $(btn).closest('.plan-row').remove();
+            } else {
+                // ถ้าเหลืออันสุดท้าย ให้แค่เคลียร์ค่า (เพื่อไม่ให้กล่องว่างเปล่า)
+                $(btn).closest('.plan-row').find('input:not([type=hidden]), textarea').val('');
+            }
+        }
+
+        // 🟢 5. Sync ข้อมูลพนักงานลง Hidden Inputs ทุกแถว เมื่อมีการเลือก Dropdown
+        function syncEmployeeData(boxId) {
+            const selectObj = $(`#${boxId} .master-emp-select`);
+            const name = selectObj.val();
+            const comp = selectObj.find(':selected').data('comp') || '';
+
+            // อัปเดตช่องสังกัด (UI)
+            $(`#${boxId} .master-comp-input`).val(comp);
+
+            // วิ่งอัปเดต hidden inputs ในทุกแถวย่อยของกล่องนี้
+            $(`#${boxId} .hidden-emp-name`).val(name);
+            $(`#${boxId} .hidden-emp-comp`).val(comp);
         }
     </script>
     <script>
@@ -478,7 +622,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_plan'])) {
             flatpickr(".datepicker", {
                 dateFormat: "d/m/Y", // รูปแบบวันที่เหมือนหน้า Dashboard
                 locale: "th",       // ภาษาไทย
-                allowInput: true    // ยอมให้พิมพ์เองได้
+                allowInput: false   // ยอมให้พิมพ์เองได้
             });
         });
     </script>

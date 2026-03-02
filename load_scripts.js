@@ -8,6 +8,7 @@
   ];
 
   const jsScripts = [
+    "https://code.jquery.com/jquery-3.6.4.min.js",
     "https://earthchie.github.io/jquery.Thailand.js/jquery.Thailand.js/dependencies/JQL.min.js",
     "https://earthchie.github.io/jquery.Thailand.js/jquery.Thailand.js/dependencies/typeahead.bundle.js",
     "https://earthchie.github.io/jquery.Thailand.js/jquery.Thailand.js/dist/jquery.Thailand.min.js",

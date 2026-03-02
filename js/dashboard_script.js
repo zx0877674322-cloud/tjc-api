@@ -1,13 +1,10 @@
 function filterByStatus(status) {
     console.log("กำลังสั่งกรองสถานะ: " + status);
 
-    // 1. ล็อคเป้าไปที่ ID ของช่อง Input โดยตรง
-    let input = document.getElementById('hiddenStatusInput');
+    let input = document.getElementById('filter_status');
     let form = document.getElementById('filterForm');
 
-    // ถ้าหาฟอร์มหรือ Input ไม่เจอ ให้ลองสร้างใหม่ (กันเหนียวสุดๆ)
     if (!form) {
-        // ลองหา form แรกในหน้า
         form = document.querySelector('form');
         if (!form) { alert("หาฟอร์มไม่เจอครับ!"); return; }
     }
@@ -16,15 +13,17 @@ function filterByStatus(status) {
         input = document.createElement('input');
         input.type = 'hidden';
         input.name = 'filter_status';
-        input.id = 'hiddenStatusInput'; // ตั้งชื่อ ID ให้ด้วย
+        input.id = 'filter_status'; 
         form.appendChild(input);
     }
 
-    // 2. ใส่ค่าลงไป
     input.value = status;
 
-    // 3. ส่งฟอร์ม
-    form.submit();
+    if (typeof fetchDashboardData === 'function') {
+        fetchDashboardData();
+    } else {
+        form.submit();
+    }
 }
 
 // ✅ 1. ฟังก์ชันแสดงรายละเอียด (ฉบับแก้บั๊กยอดรวมน้ำมัน)
@@ -39,10 +38,29 @@ function showDetail(data) {
     }
     
     // --- 1. ระเบิดข้อมูล Array ---
-    const customers = data.work_result ? data.work_result.split(/,\s*/) : [];
-    const projects = data.project_name ? data.project_name.split(/,\s*/) : [];
-    const jobStatuses = data.job_status ? data.job_status.split(/,\s*/) : []; 
-    const nextAppts = data.next_appointment ? data.next_appointment.split(/,\s*/) : []; 
+    // 🟢 แก้ไข: ใช้ .split(', ') แบบเป๊ะๆ เพื่อไม่ให้ไปตัดโดนลูกน้ำในตัวเลข (เช่น 200,000)
+    const customers = data.work_result ? data.work_result.split(', ') : [];
+    
+    // 🟢 แกะมูลค่าออกจากชื่อโครงการ
+    const rawProjects = data.project_name ? data.project_name.split(', ') : [];
+    const projects = [];
+    const projectValues = [];
+    
+    rawProjects.forEach(p => {
+        let text = p.trim();
+        // ถอดรหัส (มูลค่า: XXX บาท)
+        let match = text.match(/^(.*?)\s*\(มูลค่า:\s*([\d,.]+)\s*บาท\)$/);
+        if (match) {
+            projects.push(match[1].trim()); // ชื่อเพียวๆ
+            projectValues.push(match[2]);   // ยอดเงินเพียวๆ
+        } else {
+            projects.push(text);
+            projectValues.push('-');
+        }
+    });
+
+    const jobStatuses = data.job_status ? data.job_status.split(', ') : []; 
+    const nextAppts = data.next_appointment ? data.next_appointment.split(', ') : []; 
     
     // สรุปกิจกรรม (แยกบรรทัด)
     const summaries = data.activity_detail ? data.activity_detail.split('\n') : [];
@@ -72,6 +90,8 @@ function showDetail(data) {
         
         let currentProject = projects[i] ? projects[i].trim() : (projects[0] || '-');
         if(currentProject === '' || currentProject === '-') currentProject = 'ไม่ระบุโครงการ';
+
+        let currentProjectValue = projectValues[i] || '-'; // ดึงมูลค่ามาแสดง
         
         let currentNote = '';
         if (notes.length > i) {
@@ -94,15 +114,21 @@ function showDetail(data) {
                     <div style="font-size: 1.1rem; font-weight: 700; color: #1e293b;">${customers[i]}</div>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+                <div style="display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 15px; margin-top: 15px;">
                     <div>
                         <label style="font-size: 12px; color: #64748b; font-weight: 600; display: block; margin-bottom: 4px;">ชื่อโครงการ</label>
                         <div style="font-weight: 500;">${currentProject}</div>
                     </div>
                     <div>
+                        <label style="font-size: 12px; color: #64748b; font-weight: 600; display: block; margin-bottom: 4px;">มูลค่าโครงการ</label>
+                        <div style="font-weight: 700; color: #10b981;">
+                            ${currentProjectValue !== '-' ? '฿ ' + currentProjectValue : '-'}
+                        </div>
+                    </div>
+                    <div>
                         <label style="font-size: 12px; color: #64748b; font-weight: 600; display: block; margin-bottom: 4px;">สถานะงาน</label>
                         <div>
-                            <span class="status-badge" style="font-size: 11px; background:${badgeStyle.bg}; color:${badgeStyle.text}; border: 1px solid ${badgeStyle.border}; padding: 3px 8px; border-radius: 4px;">
+                            <span class="status-badge" style="font-size: 11px; background:${badgeStyle.bg}; color:${badgeStyle.text}; border: 1px solid ${badgeStyle.border}; padding: 3px 8px; border-radius: 4px; display: inline-block;">
                                 <i class="fas ${badgeStyle.icon}"></i> ${currentStatus}
                             </span>
                         </div>
@@ -434,6 +460,16 @@ function renderNoData(container) {
         </div>`;
 }
 
+function openExportModal() {
+    const modal = document.getElementById('exportModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        setTimeout(() => { modal.classList.add('show'); }, 10);
+    } else {
+        console.error("ไม่พบ Modal ID: exportModal");
+    }
+}
+
 function closeModal(id) {
     // 1. ถ้าไม่ส่ง id มา ให้ลองหา 'detailModal' เป็นค่าเริ่มต้น
     const targetId = id || 'detailModal'; 
@@ -702,20 +738,50 @@ function saveEdit() {
         Swal.fire('Error', 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้', 'error');
     });
 }
-document.addEventListener('DOMContentLoaded', function() {
-        flatpickr(".datepicker", {
-            locale: "th",              // ภาษาไทย
-            
-            // 🟢 1. ตั้งค่าการส่งข้อมูลและการแสดงผล
-            dateFormat: "Y-m-d",       // ค่าจริงที่ส่งไป Database (เช่น 2026-02-16)
-            altInput: true,            // เปิดโหมด "แสดงผลต่างจากค่าจริง"
-            altFormat: "d/m/Y",        // รูปแบบที่โชว์ให้ตาเห็น (DD/MM/YYYY)
-            
-            // 🟢 2. อนุญาตให้พิมพ์เองได้
-            allowInput: true,          // 👈 บรรทัดนี้สำคัญ! ทำให้คลิกแล้วพิมพ์เลขได้เลย
-            
-            // 🟢 3. บังคับใช้ธีมนี้ทุกอุปกรณ์
-            disableMobile: "true"      // ถ้าไม่ใส่ ในมือถือจะพิมพ์ไม่ได้ (มันจะเด้งลูกกลิ้งวันที่ของมือถือขึ้นมาแทน)
+    function initDatePickers() {
+        const dateInputs = document.querySelectorAll(".datepicker");
+        
+        flatpickr(dateInputs, {
+            locale: "th",
+            dateFormat: "Y-m-d",
+            altInput: true,
+            altFormat: "d/m/Y",
+            allowInput: false, 
+            disableMobile: true,
+            onOpen: function(selectedDates, dateStr, instance) {
+                if (instance.calendarContainer) {
+                    instance.calendarContainer.style.zIndex = "99999";
+                }
+            },
+            onReady: function(selectedDates, dateStr, instance) {
+                // บังคับให้ช่องกรอก (ทั้งช่องจริงและช่องจำลอง) ห้ามพิมพ์เด็ดขาด
+                if(instance.input) instance.input.setAttribute('readonly', 'readonly');
+                if(instance.altInput) instance.altInput.setAttribute('readonly', 'readonly');
+            }
         });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        initDatePickers();
     });
+
+    function toggleSection(id, header) {
+    const content = document.getElementById(id);
+    const icon = header.querySelector('.toggle-icon');
     
+    if (content.classList.contains('open')) {
+        content.classList.remove('open');
+        icon.style.transform = 'rotate(-90deg)';
+    } else {
+        content.classList.add('open');
+        icon.style.transform = 'rotate(0deg)';
+    }
+}
+
+function filterByStatusAndUser(status, user) {
+    let userSelect = document.querySelector('select[name="filter_name"]');
+    if(userSelect) userSelect.value = user;
+    if(typeof filterByStatus === 'function') {
+        filterByStatus(status);
+    }
+}

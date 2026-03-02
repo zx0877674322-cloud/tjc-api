@@ -127,6 +127,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $work_results = $_POST['work_result'] ?? [];
     $project_names = $_POST['project_name'] ?? [];
     $visit_summaries = $_POST['visit_summary'] ?? [];
+    $project_values = $_POST['project_value'] ?? [];
     $job_statuses = $_POST['job_status'] ?? [];
     $next_appointments = $_POST['next_appointment'] ?? [];
     $additional_notes_arr = $_POST['additional_notes'] ?? [];
@@ -143,8 +144,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             continue;
 
         $combined_customers[] = $name;
-        if (!empty($project_names[$i]))
-            $combined_projects[] = $project_names[$i];
+        if (!empty($project_names[$i])) {
+            // 🟢 จัดการเพิ่มมูลค่าโครงการต่อท้ายชื่อโครงการ
+            $val_raw = isset($project_values[$i]) ? str_replace(',', '', $project_values[$i]) : 0;
+            $val_text = floatval($val_raw) > 0 ? " (มูลค่า: " . number_format((float) $val_raw, 2) . " บาท)" : "";
+            $combined_projects[] = $project_names[$i] . $val_text;
+        }
 
         // รวมสถานะของทุกคน (คั่นด้วยคอมม่าเพื่อให้ระเบิดออกใน Dashboard ได้)
         $combined_statuses[] = !empty($job_statuses[$i]) ? $job_statuses[$i] : '-';
@@ -342,13 +347,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                     <div class="autocomplete-items"></div>
                                 </div>
                             </div>
-                            <div class="form-grid-2">
-                                <div class="form-group">
+                            <div
+                                style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                                <div class="form-group" style="margin-bottom: 0;">
                                     <label>ชื่อโครงการ (ถ้ามี)</label>
                                     <input type="text" name="project_name[]" class="form-input"
                                         placeholder="ระบุชื่อโครงการ...">
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label>มูลค่าโครงการ (บาท)</label>
+                                    <input type="text" name="project_value[]" class="form-input" placeholder="0.00"
+                                        oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\..*?)\..*/g, '$1').replace(/\B(?=(\d{3})+(?!\d))/g, ',');">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
                                     <label>ประเภทลูกค้า</label>
                                     <div class="radio-select-group small-radio">
                                         <label class="radio-option">
@@ -483,7 +494,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         // 🟢 บรรทัดนี้สำคัญมาก! ถ้าไม่มี ข้อมูลจะไม่มา
         const customerList = <?php echo json_encode($customers_data, JSON_UNESCAPED_UNICODE); ?>;
         const masterCustomerList = <?php echo json_encode($master_customers_list, JSON_UNESCAPED_UNICODE); ?>;
-</script>
+    </script>
     </script>
 
     <script src="js/report_script.js"></script>

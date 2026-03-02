@@ -205,13 +205,15 @@ body.dark-mode ::-webkit-scrollbar-thumb {
    📊 KPI CARDS (3D Hover Effect)
    ========================================= */
 .kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 24px;
   margin-bottom: 40px;
 }
 
 .kpi-card {
+  flex: 1 1 220px; /* ให้มันยืดหดได้ตามเนื้อหา */
+  min-width: 0; /* ป้องกันการดันตารางพัง */
   background: var(--bg-card);
   padding: 24px 28px;
   border-radius: var(--radius-md);
@@ -265,11 +267,12 @@ body.dark-mode .kpi-card::before {
 }
 
 .kpi-value {
-  font-size: 36px;
+  font-size: clamp(20px, 2vw, 28px); /* ลดขนาดอักษรลงนิดนึงเวลาจอกว้าง */
   font-weight: 800;
   color: var(--text-main);
-  letter-spacing: -1px;
-  line-height: 1;
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+  white-space: nowrap; /* ห้ามตัดบรรทัด */
 }
 
 .kpi-icon {
@@ -303,14 +306,15 @@ body.dark-mode .kpi-card::before {
 }
 
 .filter-form {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 24px;
+  display: flex;
+  flex-wrap: wrap; /* ป้องกันหน้าจอเล็กมากแล้วพัง */
+  gap: 20px;
   align-items: end;
 }
 
 .form-group {
-  width: 100%;
+  flex: 1; /* ขยายแบ่งพื้นที่ให้เท่ากันในบรรทัดเดียว */
+  min-width: 150px; /* ขนาดเล็กสุดที่จะไม่ให้ฟอร์มพัง */
   margin-bottom: 0;
   position: relative;
 }
@@ -361,8 +365,9 @@ body.dark-mode .kpi-card::before {
 
 .button-group {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
-  height: 50px;
+  min-height: 50px;
 }
 
 /* Modern Buttons */
@@ -371,7 +376,9 @@ body.dark-mode .kpi-card::before {
   color: white;
   border: none;
   padding: 0 32px;
-  height: 100%;
+  height: 50px;
+  flex: 1;
+  white-space: nowrap;
   border-radius: 12px;
   cursor: pointer;
   font-weight: 700;
@@ -417,8 +424,9 @@ body.dark-mode .kpi-card::before {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100%;
+  height: 50px;
   padding: 0 18px;
+  white-space: nowrap;
   color: var(--text-sub);
   text-decoration: none;
   font-size: 16px;
@@ -1318,4 +1326,208 @@ body.dark-mode #histModalBody {
 .form-control.datepicker {
     background-color: #fff !important; /* ให้พื้นหลังขาว */
     cursor: pointer;
+}
+/* =========================================
+   👥 EMPLOYEE CARD GRID (BOX IN BOX)
+   ========================================= */
+.employee-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); /* ปรับขนาดอัตโนมัติ */
+    gap: 25px;
+    margin-top: 20px;
+}
+
+.emp-card {
+    background: var(--bg-card);
+    border-radius: 20px; /* มุมโค้งมนกว่าเดิม */
+    box-shadow: var(--shadow-card);
+    border: 1px solid var(--border-color);
+    padding: 0;
+    overflow: hidden;
+    transition: transform 0.3s var(--ease-spring), box-shadow 0.3s;
+    animation: slideUpFade 0.5s backwards;
+}
+
+.emp-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-hover);
+    border-color: var(--primary-light);
+}
+
+/* --- Header --- */
+.emp-header {
+    background: linear-gradient(to right, #f8fafc, #ffffff);
+    padding: 20px 25px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+body.dark-mode .emp-header {
+    background: linear-gradient(to right, #1e293b, #0f172a);
+}
+
+.emp-avatar {
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    color: white;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: 800;
+    box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3);
+}
+
+.emp-info h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--text-main);
+    font-weight: 700;
+}
+
+.emp-info span {
+    font-size: 0.85rem;
+    color: var(--text-sub);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* --- Money Grid --- */
+.emp-money-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    padding: 20px 25px 5px 25px;
+}
+
+.money-box {
+    padding: 15px;
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+}
+
+.money-box.project-val {
+    background: #f0fdf4; /* เขียวอ่อน */
+    color: #15803d;
+}
+.money-box.expense-val {
+    background: #fef2f2; /* แดงอ่อน */
+    color: #b91c1c;
+}
+body.dark-mode .money-box.project-val { background: rgba(22, 163, 74, 0.1); color: #4ade80; }
+body.dark-mode .money-box.expense-val { background: rgba(220, 38, 38, 0.1); color: #f87171; }
+
+.mb-label { font-size: 0.75rem; font-weight: 600; opacity: 0.8; margin-bottom: 5px; }
+.mb-value { font-size: 1.1rem; font-weight: 800; }
+.mb-icon { position: absolute; right: 10px; bottom: 10px; font-size: 2rem; opacity: 0.1; }
+
+/* --- Status Grid --- */
+.emp-status-container {
+    padding: 15px 25px 25px 25px;
+}
+
+.status-label-head {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-label);
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.emp-status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 10px;
+}
+
+.mini-status-card {
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.mini-status-card:hover {
+    background: var(--bg-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.mini-val { font-size: 1.2rem; font-weight: 800; line-height: 1.2; }
+.mini-lbl { font-size: 0.75rem; color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Responsive Mobile */
+@media (max-width: 640px) {
+    .employee-grid { grid-template-columns: 1fr; }
+    .emp-money-grid { grid-template-columns: 1fr; }
+}
+/* =========================================
+   📂 COLLAPSIBLE SECTION STYLES
+   ========================================= */
+.section-collapsible {
+    background: var(--bg-card);
+    border-radius: 16px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    margin-top: 30px;
+}
+
+.section-header {
+    padding: 15px 25px;
+    background: linear-gradient(to right, #f8fafc, #ffffff);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+body.dark-mode .section-header {
+    background: linear-gradient(to right, #1e293b, #0f172a);
+}
+
+.section-header:hover {
+    background: var(--bg-hover);
+}
+
+.toggle-icon {
+    color: var(--text-sub);
+    transition: transform 0.3s ease;
+    font-size: 1.1rem;
+}
+
+.badge-count {
+    background: var(--primary-soft);
+    color: var(--primary-dark);
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+/* Animation การเปิดปิด */
+.section-content {
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height 0.5s ease-in-out, opacity 0.4s ease-in-out, padding 0.3s;
+    background: var(--bg-inner);
+}
+
+.section-content.open {
+    max-height: 5000px; /* ค่าสูงๆ เพื่อให้ขยายสุด */
+    opacity: 1;
+    padding: 25px; /* ใส่ Padding เฉพาะตอนเปิด */
 }

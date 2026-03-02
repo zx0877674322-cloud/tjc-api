@@ -71,17 +71,18 @@ if (empty($val_items_data)) {
 // 2. เตรียมตัวแปรอื่นๆ (General Info)
 $val_remark = $row_edit['remark'] ?? '';
 $val_request_date = isset($row_edit['request_date']) ? date('Y-m-d H:i', strtotime($row_edit['request_date'])) : date('Y-m-d H:i');
-$val_receiver = $row_edit['receiver_by'] ?? ($_SESSION['fullname'] ?? '');
+$val_receiver = $row_edit['receiver_by'] ?? '';
+$val_recorder = $row_edit['updated_by'] ?? ($_SESSION['fullname'] ?? '');
 $val_reporter = $row_edit['reporter_name'] ?? '';
 $val_contact_json = $row_edit['contact_detail'] ?? '[]'; // JSON string
 $val_urgency = $row_edit['urgency'] ?? 'normal';
 
 // 3. เตรียมข้อมูลโครงการ (Project Info) - รองรับทั้ง Search และ Manual
-$site_code_show = "-";
-$project_name_show = "-";
-$customer_name_show = "-"; 
-$province_show = "-";      
-$contract_info = ['start' => '-', 'end' => '-', 'budget' => '-', 'no' => '-'];
+$site_code_show = "";
+$project_name_show = "";
+$customer_name_show = ""; 
+$province_show = "";      
+$contract_info = ['start' => '', 'end' => '', 'budget' => '', 'no' => ''];
 $is_expired = false;
 
 // กรณี A: ดึงจากฐานข้อมูลโครงการ (Site ID > 0)
@@ -100,11 +101,11 @@ if ($get_site_id > 0) {
         $site_code_show = $get_site_id;
         $project_name_show = $row_proj['project_name'];
         // ดึงแบบแยก
-        $customer_name_show = $row_proj['customer_name'] ?? '-';
-        $province_show      = $row_proj['province'] ?? '-';
+        $customer_name_show = $row_proj['customer_name'] ?? '';
+        $province_show      = $row_proj['province'] ?? '';
 
-        $contract_info['no'] = $row_proj['contract_number'] ?? '-';
-        $contract_info['budget'] = !empty($row_proj['project_budget']) ? number_format($row_proj['project_budget'], 2) : '-';
+        $contract_info['no'] = $row_proj['contract_number'] ?? '';
+        $contract_info['budget'] = !empty($row_proj['project_budget']) ? number_format($row_proj['project_budget'], 2) : '';
 
         if (!empty($row_proj['contract_start_date']))
             $contract_info['start'] = date('d/m/Y', strtotime($row_proj['contract_start_date']));
@@ -118,15 +119,15 @@ if ($get_site_id > 0) {
 // กรณี B: ดึงจากข้อมูลที่กรอกเอง (Manual) เมื่อแก้ไข (Edit Mode)
 else if ($edit_id > 0 && !empty($row_edit)) {
     // ดึงค่าจากคอลัมน์ manual_... ที่บันทึกไว้ใน service_requests
-    $site_code_show    = $row_edit['manual_site_code'] ?? '-';
-    $project_name_show = $row_edit['manual_project_name'] ?? '-';
+    $site_code_show    = $row_edit['manual_site_code'] ?? '';
+    $project_name_show = $row_edit['manual_project_name'] ?? '';
     
     // ดึงจาก column ใหม่
-    $customer_name_show = $row_edit['manual_customer_name'] ?? '-';
-    $province_show      = $row_edit['manual_province'] ?? '-';
+    $customer_name_show = $row_edit['manual_customer_name'] ?? '';
+    $province_show      = $row_edit['manual_province'] ?? '';
     
-    $contract_info['no']     = $row_edit['manual_contract_no'] ?? '-';
-    $contract_info['budget'] = $row_edit['manual_budget'] ?? '-';
+    $contract_info['no']     = $row_edit['manual_contract_no'] ?? '';
+    $contract_info['budget'] = $row_edit['manual_budget'] ?? '';
 
     // แปลงวันที่จาก DB (Y-m-d) เป็น d/m/Y
     if (!empty($row_edit['manual_start_date']))
@@ -187,6 +188,15 @@ if ($res_prov && $res_prov->num_rows > 0) {
         $provinces_list[] = $prov['province_name'];
     }
 }
+
+// 8. ดึงรายชื่อผู้ใช้งาน (Users)
+$users_list = [];
+$res_users = $conn->query("SELECT fullname FROM users ORDER BY fullname ASC");
+if ($res_users && $res_users->num_rows > 0) {
+    while ($u = $res_users->fetch_assoc()) {
+        $users_list[] = $u['fullname'];
+    }
+}
 // ==========================================================================
 //  PART 2: FORM SUBMISSION HANDLING
 // ==========================================================================
@@ -230,6 +240,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             if (!empty($final_products) && !empty($itm['issue'])) {
                 $this_advice = trim($itm['initial_advice'] ?? '');
                 $this_assess = trim($itm['assessment'] ?? '');
+                
+                // --- จัดการไฟล์แนบ (Attached Files) สำหรับแต่ละรายการ ---
+                $uploaded_files = [];
+                if (isset($_FILES['items']['name'][$index]['attached_files']) && is_array($_FILES['items']['name'][$index]['attached_files'])) {
+                    $file_count = count($_FILES['items']['name'][$index]['attached_files']);
+                    $upload_dir = 'uploads/service_requests/';
+                    
+                    if (!is_dir($upload_dir)) {
+                        mkdir($upload_dir, 0777, true);
+                    }
+
+                    for ($i = 0; $i < $file_count; $i++) {
+                        $tmp_name = $_FILES['items']['tmp_name'][$index]['attached_files'][$i];
+                        $orig_name = $_FILES['items']['name'][$index]['attached_files'][$i];
+                        $error = $_FILES['items']['error'][$index]['attached_files'][$i];
+
+                        if ($error === UPLOAD_ERR_OK && !empty($tmp_name)) {
+                            // Gen ชื่อไฟล์ใหม่เพื่อป้องกันชื่อซ้ำ/มีปัญหา
+                            $ext = strtolower(pathinfo($orig_name, PATHINFO_EXTENSION));
+                            $allowed_exts = ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'xls', 'xlsx'];
+                            
+                            if (in_array($ext, $allowed_exts)) {
+                                $new_filename = 'item_' . uniqid() . '_' . time() . '.' . $ext;
+                                $dest_path = $upload_dir . $new_filename;
+                                
+                                if (move_uploaded_file($tmp_name, $dest_path)) {
+                                    $uploaded_files[] = $new_filename;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // --- อ่านไฟล์เดิม (ถ้ามี) ---
+                $existing_files = [];
+                if (!empty($itm['existing_files'])) {
+                    $decoded = json_decode(html_entity_decode($itm['existing_files']), true);
+                    if (is_array($decoded)) {
+                        $existing_files = $decoded;
+                    }
+                }
+                
+                // รวมไฟล์เดิมกับไฟล์ใหม่
+                $all_files = array_merge($existing_files, $uploaded_files);
 
                 $items_data_to_save[] = [
                     'product' => $final_products,
@@ -237,7 +291,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     'job_other' => trim($itm['job_other'] ?? ''),
                     'issue' => trim($itm['issue']),
                     'initial_advice' => $this_advice,
-                    'assessment' => $this_assess
+                    'assessment' => $this_assess,
+                    'attached_files' => $all_files // <-- เก็บไฟล์รวมกันลง JSON
                 ];
 
                 $prod_names = implode(", ", $final_products);
@@ -266,8 +321,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $urgency = $_POST['urgency'];
     $status_to_save = 'pending';
 
-    // เงื่อนไข: ถ้า Manual (ID=0) ต้องมีชื่อโครงการและลูกค้า
-    $is_valid = ($site_id > 0) || ($site_id == 0 && !empty($man_name) && !empty($man_cust_name));
+    // เช็คข้อมูลช่องทางการติดต่อต้องมีอย่างน้อย 1 รายการ
+    $has_contact = (!empty($contact_json) && $contact_json !== '[]');
+
+    // เงื่อนไข: ถ้า Manual (ID=0) ต้องระบุชื่อลูกค้า (ชื่อโครงการไม่บังคับ)
+    $is_valid = (($site_id > 0) || ($site_id == 0 && !empty($man_cust_name))) && $has_contact;
 
     if ($is_valid) {
         $req_id_update = isset($_POST['req_id_for_update']) ? intval($_POST['req_id_for_update']) : 0;
@@ -342,7 +400,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $alert_script = "Swal.fire({icon:'error', title:'เกิดข้อผิดพลาด', text:'" . $conn->error . "'});";
         }
     } else {
-        $alert_script = "Swal.fire({icon:'warning', title:'ข้อมูลไม่ครบ', text:'กรุณาระบุชื่อโครงการและลูกค้าให้ครบถ้วน'});";
+        if (!$has_contact) {
+            $alert_script = "Swal.fire({icon:'warning', title:'ข้อมูลไม่ครบ', text:'กรุณาระบุช่องทางติดต่ออย่างน้อย 1 รายการ'});";
+        } else {
+            $alert_script = "Swal.fire({icon:'warning', title:'ข้อมูลไม่ครบ', text:'กรุณาระบุชื่อลูกค้าให้ครบถ้วน'});";
+        }
     }
 }
 ?>
@@ -374,7 +436,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     <div class="main-content">
         <div class="main-container">
 
-            <form method="POST" id="serviceForm">
+            <form method="POST" id="serviceForm" enctype="multipart/form-data">
                 <input type="hidden" name="action" value="submit_service">
                 <input type="hidden" name="req_id_for_update" value="<?php echo $edit_id; ?>">
 
@@ -396,7 +458,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
                     <div class="card-body-modern">
 
-                        <div class="form-group" style="margin-bottom: 20px; background: #f8fafc; padding: 15px; border-radius: 10px; border: 1px dashed #cbd5e1;">
+                        <div  class="form-group" style="margin-bottom: 20px; display:none; background: #f8fafc; padding: 15px; border-radius: 10px; border: 1px dashed #cbd5e1;">
                             <label class="form-label" style="font-size:1rem; color:var(--primary); margin-bottom:10px;">ระบุข้อมูลโครงการ</label>
                             <div style="display:flex; gap:30px;">
                                 <label style="cursor:pointer; display:flex; align-items:center; gap:8px;">
@@ -435,7 +497,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                             <?php endif; ?>
                         </div>
 
-                        <div class="project-info-card" id="project-form-card" 
+                        <div class="project-info-card" id="project-form-card"
                             style="position:relative; transition: all 0.3s; border: 1px solid #e2e8f0; padding: 20px; border-radius: 12px; background: #fff;">
                             
                             <input type="hidden" name="site_id" id="real_site_id" value="<?php echo $get_site_id; ?>">
@@ -465,8 +527,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                             </div>
 
                             <div class="form-group">
-                                <label class="form-label">ชื่อโครงการ <span style="color:red; display:<?php echo ($get_site_id == 0) ? 'inline' : 'none'; ?>;" id="req_proj_name">*</span></label>
-                                <input type="text" name="manual_project_name" id="inp_project_name" required
+                                <label class="form-label">ชื่อโครงการ</label>
+                                <input type="text" name="manual_project_name" id="inp_project_name"
                                     class="form-control <?php echo ($get_site_id > 0) ? 'readonly-field' : ''; ?>" 
                                     value="<?php echo $project_name_show; ?>"
                                     <?php echo ($get_site_id > 0) ? 'readonly' : ''; ?>>
@@ -519,15 +581,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         </div>
 
                         <div class="section-title"><i class="fas fa-info-circle"></i> ข้อมูลการแจ้ง (Request Info)</div>
-                        <div class="grid-2">
+                        <div class="grid-3">
                             <div class="form-group"><label class="form-label">วันที่แจ้งเรื่อง <span
                                         style="color:var(--danger-text)">*</span></label><input type="text"
                                     id="request_date" name="request_date" class="form-control date-picker"
                                     value="<?php echo $val_request_date; ?>" required onchange="calcDeadline()"></div>
-                            <div class="form-group"><label class="form-label">ผู้รับเรื่อง <i class="fas fa-lock"
-                                        style="font-size:0.7rem; color:#94a3b8;"></i></label><input type="text"
-                                    name="receiver_by" class="form-control readonly-field"
-                                    value="<?php echo htmlspecialchars($val_receiver); ?>" readonly></div>
+                            <div class="form-group">
+                                <label class="form-label">ผู้รับเรื่อง <span style="color:var(--danger-text)">*</span></label>
+                                <select name="receiver_by" class="form-control select2-search" style="width: 100%;" required>
+                                    <option value="">-- เลือกผู้รับเรื่อง --</option>
+                                    <?php foreach ($users_list as $user_name): ?>
+                                        <option value="<?php echo htmlspecialchars($user_name); ?>" <?php echo ($val_receiver == $user_name) ? 'selected' : ''; ?>>
+                                            <?php echo htmlspecialchars($user_name); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">ผู้ลงข้อมูล <i class="fas fa-lock" style="font-size:0.7rem; color:#94a3b8;"></i></label>
+                                <input type="text" name="recorder_name" class="form-control readonly-field"
+                                    value="<?php echo htmlspecialchars($val_recorder); ?>" readonly>
+                            </div>
                         </div>
 
                         <div class="section-title"><i class="fas fa-user-tag"></i> ผู้ติดต่อ (Contact Person)</div>
@@ -689,6 +763,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                                 rows="1" placeholder="การประเมิน..."
                                                 style="min-height: 40px; font-size:0.9rem;"><?php echo htmlspecialchars($current_assess); ?></textarea>
                                         </div>
+                                    </div>
+                                    
+                                        <?php 
+                                            $existing_files = isset($item_data['attached_files']) && is_array($item_data['attached_files']) ? $item_data['attached_files'] : [];
+                                            $existing_files_json = htmlspecialchars(json_encode($existing_files, JSON_UNESCAPED_UNICODE));
+                                        ?>
+                                        <input type="hidden" name="items[<?php echo $index; ?>][existing_files]" value="<?php echo $existing_files_json; ?>">
+                                        
+                                        <?php if (!empty($existing_files)): ?>
+                                            <div style="margin-bottom: 10px; padding: 10px; background: #f8fafc; border-radius: 8px; border: 1px dashed #cbd5e1;">
+                                                <div style="font-size: 0.8rem; color: #64748b; margin-bottom: 5px;"><i class="fas fa-history"></i> ไฟล์แนบเดิม:</div>
+                                                <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+                                                    <?php foreach ($existing_files as $efile): 
+                                                        $ext = strtolower(pathinfo($efile, PATHINFO_EXTENSION));
+                                                        $icon = 'fa-file';
+                                                        $isImg = false;
+                                                        if (in_array($ext, ['jpg','jpeg','png','gif','webp'])) { $icon = 'fa-file-image'; $isImg = true; }
+                                                        elseif ($ext == 'pdf') $icon = 'fa-file-pdf';
+                                                        elseif (in_array($ext, ['doc','docx'])) $icon = 'fa-file-word';
+                                                        elseif (in_array($ext, ['xls','xlsx'])) $icon = 'fa-file-excel';
+                                                    ?>
+                                                        <a href="uploads/service_requests/<?php echo urlencode($efile); ?>" target="_blank" 
+                                                           style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 12px; background: #e2e8f0; border: 1px solid #cbd5e1; color: #334155; font-size: 0.75rem; text-decoration: none;">
+                                                            <i class="fas <?php echo $icon; ?>" style="<?php echo $isImg ? 'color:#0ea5e9;' : 'color:#64748b;'; ?>"></i>
+                                                            <?php echo htmlspecialchars($efile); ?>
+                                                        </a>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                            </div>
+                                        <?php endif; ?>
+                                        <input type="file" name="items[<?php echo $index; ?>][attached_files][]" class="form-control" style="font-size: 0.85rem; padding: 5px;" multiple accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx">
                                     </div>
                                 </div>
                             <?php endforeach; ?>

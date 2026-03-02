@@ -1670,11 +1670,15 @@ while ($r = $q_u->fetch_assoc()) {
                                                     </button>
 
                                                     <div style="border-top:1px dashed #fca5a5; padding-top:6px;">
-                                                        <button type="button"
-                                                            onclick="toggleReturnDoc(<?php echo $row['id']; ?>, 0)"
-                                                            style="background:none; border:none; color:#991b1b; font-size:10px; cursor:pointer; text-decoration:underline;">
-                                                            ยกเลิกสถานะ (Reset)
-                                                        </button>
+                                                        <?php if (hasAction('return_doc')): ?>
+                                                            <button type="button"
+                                                                onclick="toggleReturnDoc(<?php echo $row['id']; ?>, 0)"
+                                                                style="background:none; border:none; color:#991b1b; font-size:10px; cursor:pointer; text-decoration:underline;">
+                                                                ยกเลิกสถานะ (Reset)
+                                                            </button>
+                                                        <?php else: ?>
+                                                            <span style="font-size:10px; color:#fca5a5;">รอแก้ไข</span>
+                                                        <?php endif; ?>
                                                     </div>
                                                 </div>
 
@@ -1689,11 +1693,15 @@ while ($r = $q_u->fetch_assoc()) {
                                                     </div>
                                                 <?php endif; ?>
 
-                                                <button type="button" onclick="toggleReturnDoc(<?php echo $row['id']; ?>, 1)"
-                                                    class="status-btn"
-                                                    style="background:#fff; border:1px solid #dc2626; color:#dc2626; width:100%; justify-content:center; padding:4px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:600; display:block;">
-                                                    <i class="fas fa-reply" style="margin-right:3px;"></i> ตีกลับ
-                                                </button>
+                                                <?php if (hasAction('return_doc')): ?>
+                                                    <button type="button" onclick="toggleReturnDoc(<?php echo $row['id']; ?>, 1)"
+                                                        class="status-btn"
+                                                        style="background:#fff; border:1px solid #dc2626; color:#dc2626; width:100%; justify-content:center; padding:4px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:600; display:block;">
+                                                        <i class="fas fa-reply" style="margin-right:3px;"></i> ตีกลับ
+                                                    </button>
+                                                <?php else: ?>
+                                                    <span style="color:var(--text-muted);">-</span>
+                                                <?php endif; ?>
 
                                             <?php endif; ?>
                                         </td>

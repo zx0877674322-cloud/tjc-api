@@ -40,6 +40,8 @@ async function saveSummaryData() {
     } catch (e) { Swal.fire('ผิดพลาด', 'บันทึกไม่สำเร็จ', 'error'); }
 }
 
+
+
 // ฟังก์ชันยืนยันการลบ (SweetAlert2)
 function confirmDelete(id) {
     Swal.fire({
@@ -78,7 +80,7 @@ function confirmDelete(id) {
 }
 async function updateDashboard() {
     const formData = new FormData(document.getElementById('filterForm'));
-    formData.append('ajax', '1'); // 🟢 สำคัญมาก
+    formData.append('ajax', '1');
     const params = new URLSearchParams(formData).toString();
     const tableCard = document.querySelector('.table-card');
 
@@ -86,14 +88,20 @@ async function updateDashboard() {
     try {
         const response = await fetch(`work_plan_dashboard.php?${params}`);
         const data = await response.json();
-        if (data && data.html_content) {
-            document.querySelector('tbody').innerHTML = data.html_content;
-            // อัปเดตตัวเลขการ์ด (ถ้ามีฟังก์ชัน)
+        
+        if (data) {
+            // อัปเดตตาราง
+            if (data.html_content) {
+                document.querySelector('tbody').innerHTML = data.html_content;
+            }
+            // 🟢 อัปเดตการ์ดสถานะ (จุดสำคัญที่ทำให้การ์ดเปลี่ยนตามจริง)
+            if (data.grid_html) {
+                document.querySelector('.status-grid').innerHTML = data.grid_html;
+            }
         }
     } catch (e) { console.error('Error:', e); }
-    finally { tableCard.style.opacity = '1'; } // 🟢 หายจางแน่นอน
+    finally { tableCard.style.opacity = '1'; }
 }
-
 // ฟังก์ชันช่วยอัปเดตตัวเลขบน Card (แถมให้ครับ)
 function updateStatusNumbers(counts, total) {
     const totalEl = document.querySelector('.status-card[onclick*="selectStatus(\'\')"] .sc-count');
