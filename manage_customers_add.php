@@ -16,7 +16,6 @@ require_once 'db_connect.php';
     <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
     <script src="load_scripts.js"></script>
     <link rel="stylesheet" href="style.css">
-    <!-- Animate.css for quick animations if not already included -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
     <link rel="stylesheet" href="css/service_dashboard.css">
 
@@ -70,6 +69,12 @@ require_once 'db_connect.php';
         .form-row-anim:nth-child(7) {
             animation-delay: 0.7s;
         }
+
+        .form-row-anim:nth-child(8) {
+            animation-delay: 0.8s;
+        }
+
+        /* เพิ่ม delay สำหรับแถวใหม่ */
 
         /* Modern Input Styles */
         .custom-input {
@@ -307,13 +312,29 @@ require_once 'db_connect.php';
 
                         <div class="row form-group-wrapper form-row-anim">
                             <div class="col-12">
-                                <label class="label-text">เบอร์ติดต่อ <span class="text-danger">*</span>
-                                    <span style="font-size: 0.75rem; color: #ef4444; font-weight: normal;"> (*ระบุ -
-                                        หากไม่มี)</span>
+                                <label class="label-text">
+                                    <i class="fas fa-phone-alt text-primary"></i> เบอร์โทรศัพท์หน่วยงาน (Office) / ต่อ
+                                    (Ext.)
+                                    <span class="text-danger">*</span>
                                 </label>
                                 <input type="text" class="form-input form-control custom-input" name="phone_number"
-                                    id="phone_number" placeholder="เบอร์โทรศัพท์ติดต่อ" required
-                                    data-parsley-required-message="<i class='fas fa-exclamation-circle'></i> กรุณาระบุเบอร์ติดต่อ">
+                                    id="phone_number" placeholder="เช่น 02-123-4567 ต่อ 101 หรือ 081-234-5678" required
+                                    data-parsley-required-message="<i class='fas fa-exclamation-circle'></i> กรุณาระบุเบอร์โทรศัพท์หน่วยงาน">
+                            </div>
+                        </div>
+
+                        <div class="row form-group-wrapper form-row-anim">
+                            <div class="col-md-6 mb-3 mb-md-0">
+                                <label class="label-text"><i class="fas fa-user-tie text-success"></i> ชื่อผู้ติดต่อ
+                                    (Contact Person)</label>
+                                <input type="text" class="form-input form-control custom-input" name="contact_person"
+                                    id="contact_person" placeholder="ชื่อ-นามสกุล ผู้ติดต่อประสานงาน">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="label-text"><i class="fas fa-mobile-alt text-success"></i>
+                                    เบอร์มือถือผู้ติดต่อ</label>
+                                <input type="text" class="form-input form-control custom-input" name="contact_phone"
+                                    id="contact_phone" placeholder="เช่น 0xx-xxx-xxxx">
                             </div>
                         </div>
 

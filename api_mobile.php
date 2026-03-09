@@ -46,20 +46,41 @@ function uploadMultipleFiles($fileKey, $targetDir = "uploads/")
         @mkdir($targetDir, 0777, true);
 
     if (isset($_FILES[$fileKey])) {
+        // กรณีเป็น Array (หลายไฟล์)
         if (is_array($_FILES[$fileKey]['name'])) {
             $count = count($_FILES[$fileKey]['name']);
             for ($i = 0; $i < $count; $i++) {
                 if ($_FILES[$fileKey]['error'][$i] == 0) {
                     $ext = pathinfo($_FILES[$fileKey]['name'][$i], PATHINFO_EXTENSION);
-                    $filename = "multi_" . time() . "_" . $i . "_" . rand(100, 999) . "." . $ext;
+                    $filename = "file_" . time() . "_" . $i . "_" . rand(100, 999) . "." . $ext;
                     if (move_uploaded_file($_FILES[$fileKey]['tmp_name'][$i], $targetDir . $filename)) {
                         $uploaded_files[] = $filename;
                     }
                 }
             }
         }
+        // กรณีไฟล์เดียว (แต่ React Native ส่งมาบางทีอาจไม่อยู่ในรูป Array ถ้าส่งรูปเดียว)
+        else if ($_FILES[$fileKey]['error'] == 0) {
+            $ext = pathinfo($_FILES[$fileKey]['name'], PATHINFO_EXTENSION);
+            $filename = "file_" . time() . "_" . rand(100, 999) . "." . $ext;
+            if (move_uploaded_file($_FILES[$fileKey]['tmp_name'], $targetDir . $filename)) {
+                $uploaded_files[] = $filename;
+            }
+        }
     }
     return $uploaded_files;
+}
+
+// Helper: ดึงข้อมูลเก่าจาก DB
+function getJsonField($conn, $id, $field)
+{
+    $sql = "SELECT $field FROM service_requests WHERE id = $id";
+    $res = $conn->query($sql);
+    if ($res && $row = $res->fetch_assoc()) {
+        $data = json_decode($row[$field], true);
+        return is_array($data) ? $data : [];
+    }
+    return [];
 }
 
 // ==========================================
@@ -152,16 +173,35 @@ else if ($action == 'get_companies') {
 // ==========================================
 // 2.2 GET CUSTOMERS (ดึงรายชื่อลูกค้า/หน่วยงาน)
 // ==========================================
+// ในไฟล์ api_mobile.php
 else if ($action == 'get_customers') {
-    $data = [];
-    $sql = "SELECT customer_name FROM master_customers ORDER BY customer_name ASC";
-    $result = $conn->query($sql);
-    if ($result) {
-        while ($row = $result->fetch_assoc()) {
-            $data[] = $row['customer_name'];
-        }
+    $my_name = $_GET['fullname'] ?? ''; // รับชื่อเต็มจากแอป
+    $safe_name = $conn->real_escape_string($my_name);
+
+    // 1. รายชื่อจากแผนงาน (สำหรับโชว์ในดรอปดาวน์)
+    $plan_customers = [];
+    $sql_plan = "SELECT DISTINCT contact_person FROM work_plans 
+                 WHERE reporter_name = '$safe_name' AND contact_person != '' 
+                 ORDER BY contact_person ASC";
+    $res_plan = $conn->query($sql_plan);
+    while ($row = $res_plan->fetch_assoc()) {
+        $plan_customers[] = $row['contact_person'];
     }
-    echo json_encode($data);
+
+    // 2. รายชื่อจากฐานลูกค้าหลัก (สำหรับเช็ค เก่า/ใหม่)
+    $master_customers = [];
+    $sql_master = "SELECT customer_name FROM master_customers";
+    $res_master = $conn->query($sql_master);
+    while ($row = $res_master->fetch_assoc()) {
+        $master_customers[] = $row['customer_name'];
+    }
+
+    echo json_encode([
+        "status" => "success",
+        "plan_customers" => $plan_customers,    // ส่งไปทำ Autocomplete
+        "master_customers" => $master_customers // ส่งไปเช็คประเภทลูกค้า
+    ], JSON_UNESCAPED_UNICODE);
+    exit();
 }
 
 // ==========================================
@@ -381,157 +421,516 @@ else if ($action == 'get_dashboard_stats') {
         "recent" => $recent
     ]);
 }
+// ==========================================================
+// 3.1 GET SERVICE DASHBOARD STATS (สำหรับแอปมือถือ)
+// ==========================================================
+else if ($action == 'get_service_stats') {
+    $now = date('Y-m-d H:i:s');
 
-// ==========================================
-// 4. SUBMIT REPORT (ฝ่ายขาย - เพิ่ม Auto Save ลูกค้า)
-// ==========================================
-if (isset($_GET['ajax_action']) && $_GET['ajax_action'] == 'get_customer_history') {
+    // ดึงยอดรวมทั้งหมดและสถานะหลัก
+    // Logic เดียวกับ service_dashboard.php
+    $sql = "SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN status != 'completed' AND (progress_logs IS NULL OR progress_logs = '[]' OR progress_logs = '') THEN 1 ELSE 0 END) as pending,
+        SUM(CASE WHEN status != 'completed' AND (progress_logs IS NOT NULL AND progress_logs != '[]' AND progress_logs != '') THEN 1 ELSE 0 END) as doing,
+        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
+    FROM service_requests";
 
-    // รับค่าชื่อลูกค้าที่ส่งมา
-    $customer_name = $conn->real_escape_string($_GET['customer_name']);
+    $result = $conn->query($sql);
+    $stats = $result->fetch_assoc();
 
-    // รับช่วงวันที่ (ถ้ามี)
-    $s_date = $_GET['start_date'] ?? '';
-    $e_date = $_GET['end_date'] ?? '';
+    echo json_encode([
+        "status" => "success",
+        "data" => [
+            "total" => intval($stats['total'] ?? 0),
+            "pending" => intval($stats['pending'] ?? 0),
+            "doing" => intval($stats['doing'] ?? 0),
+            "completed" => intval($stats['completed'] ?? 0)
+        ]
+    ]);
+    exit();
+}
+// ==========================================================
+// 3.2 GET SERVICE LIST (ส่วนที่ขาดหายไป)
+// ==========================================================
+else if ($action == 'get_service_list') {
+    $search = isset($_GET['search']) ? $conn->real_escape_string($_GET['search']) : '';
+    $status = isset($_GET['status']) ? $conn->real_escape_string($_GET['status']) : '';
 
-    // สร้าง SQL Query
-    $sql_where = "WHERE work_result = '$customer_name'";
+    $where = "WHERE 1=1";
 
-    if (!empty($s_date)) {
-        $sql_where .= " AND report_date >= '$s_date'";
+    // 1. กรองคำค้นหา
+    if ($search) {
+        $where .= " AND (
+            manual_project_name LIKE '%$search%' OR 
+            manual_site_code LIKE '%$search%' OR 
+            reporter_name LIKE '%$search%' OR
+            project_item_name LIKE '%$search%'
+        )";
     }
-    if (!empty($e_date)) {
-        $sql_where .= " AND report_date <= '$e_date'";
-    }
 
-    // ดึงข้อมูล: วันที่, คนทำ, สถานะ, ยอดเงิน, โครงการ, หมายเหตุ
-    $sql_hist = "SELECT report_date, reporter_name, job_status, total_expense, project_name, additional_notes 
-                 FROM reports $sql_where 
-                 ORDER BY report_date DESC";
-
-    $res_hist = $conn->query($sql_hist);
-    $history_data = [];
-
-    if ($res_hist) {
-        while ($row = $res_hist->fetch_assoc()) {
-            $history_data[] = $row;
+    // 2. กรองสถานะ
+    if ($status) {
+        if ($status == 'pending') {
+            $where .= " AND status != 'completed' AND (progress_logs IS NULL OR progress_logs = '[]' OR progress_logs = '')";
+        } else if ($status == 'in_progress') {
+            $where .= " AND status != 'completed' AND (progress_logs IS NOT NULL AND progress_logs != '[]' AND progress_logs != '')";
+        } else if ($status == 'completed') {
+            $where .= " AND status = 'completed'";
         }
     }
 
-    // ส่งค่ากลับเป็น JSON ให้แอป
-    header('Content-Type: application/json');
-    echo json_encode($history_data);
-    exit(); // จบการทำงานทันที (สำคัญมาก)
-} else if ($action == 'submit_report') {
-    // รับค่าจาก POST
-    $report_date = $_POST['report_date'] ?? date('Y-m-d H:i:s');
-    $reporter_name = $_POST['reporter_name'] ?? '';
+    // 3. ดึงข้อมูล 50 รายการล่าสุด
+    $sql = "SELECT * FROM service_requests $where ORDER BY request_date DESC LIMIT 50";
+    $result = $conn->query($sql);
 
+    $data = [];
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $data[] = $row;
+        }
+    }
+
+    echo json_encode(["status" => "success", "data" => $data], JSON_UNESCAPED_UNICODE);
+    exit();
+}
+// ==========================================================
+// 3.5 SERVICE ACTIONS (Smart Logic: เลียนแบบหน้าเว็บ 100%)
+// ==========================================================
+
+// 🛡️ ประกาศฟังก์ชัน Helper ไว้ตรงนี้ (เช็คกันซ้ำ)
+if (!function_exists('getJsonField')) {
+    function getJsonField($conn, $id, $field)
+    {
+        $id = intval($id);
+        $sql = "SELECT $field FROM service_requests WHERE id = $id";
+        $res = $conn->query($sql);
+        if ($res && $row = $res->fetch_assoc()) {
+            $data = json_decode($row[$field], true);
+            return is_array($data) ? $data : [];
+        }
+        return [];
+    }
+}
+
+// 🅰️ 1. อัปเดตความคืบหน้า
+else if ($action == 'update_progress') {
+    $id = intval($_POST['req_id']);
+    $msg = $_POST['update_msg'] ?? '';
+    $tech_name = $_POST['technician_name'] ?? '';
+    $action_type = $_POST['action_type'] ?? 'update';
+    $completed_items = json_decode($_POST['completed_items'] ?? '[]', true) ?: [];
+    $user_name = $_POST['updated_by'] ?? 'Mobile App';
+
+    $data = getJsonField($conn, $id, 'received_item_list');
+    $logs = getJsonField($conn, $id, 'progress_logs');
+
+    if ($action_type === 'finish' && !empty($completed_items)) {
+        if (!isset($data['finished_items']))
+            $data['finished_items'] = [];
+        $data['finished_items'] = array_unique(array_merge($data['finished_items'], $completed_items));
+    }
+
+    $theme_color = ($action_type === 'finish') ? '#10b981' : '#3b82f6';
+    $log_html = "<div style='font-family:Prompt; border-left:4px solid $theme_color; padding:10px;'>";
+    $log_html .= "<b>" . ($action_type === 'finish' ? '✅ เสร็จสิ้นรายการ' : '⚙️ อัปเดตความคืบหน้า') . "</b><br>";
+    if ($msg)
+        $log_html .= "โน้ต: " . htmlspecialchars($msg) . "<br>";
+    if ($tech_name)
+        $log_html .= "ช่าง: " . htmlspecialchars($tech_name) . "<br>";
+    if (!empty($completed_items))
+        $log_html .= "รายการ: " . implode(', ', $completed_items);
+    $log_html .= "</div>";
+
+    $logs[] = ['at' => date('d/m/Y H:i'), 'by' => $user_name, 'msg' => $log_html];
+
+    $sql = "UPDATE service_requests SET 
+            received_item_list = '" . $conn->real_escape_string(json_encode($data, JSON_UNESCAPED_UNICODE)) . "',
+            progress_logs = '" . $conn->real_escape_string(json_encode($logs, JSON_UNESCAPED_UNICODE)) . "',
+            technician_name = '" . $conn->real_escape_string($tech_name) . "',
+            status = 'processing' 
+            WHERE id = $id";
+
+    echo json_encode(["status" => $conn->query($sql) ? "success" : "error"]);
+    exit();
+}
+
+// 🅱️ 2. นำของออก / ส่งร้าน
+else if ($action == 'receive_item') {
+    $id = intval($_POST['req_id']);
+    $items_post = json_decode($_POST['items_json'] ?? '[]', true) ?: [];
+    $user_name = $_POST['updated_by'] ?? 'Mobile App';
+
+    $data = getJsonField($conn, $id, 'received_item_list');
+    $logs = getJsonField($conn, $id, 'progress_logs');
+
+    $acc_moved = $data['accumulated_moved'] ?? [];
+    $items_status = $data['items_status'] ?? [];
+    $moved_history = $data['items_moved'] ?? [];
+
+    foreach ($items_post as $it) {
+        $name = trim($it['name']);
+        $dest = $it['destination'];
+
+        $new_move = [
+            'name' => $name,
+            'destination' => $dest,
+            'remark' => $it['remark'],
+            'at' => date('d/m/Y H:i'),
+            'by' => $user_name,
+            'shop_info' => ($dest === 'external') ? ['name' => $it['shop_name'], 'phone' => $it['shop_phone']] : null
+        ];
+
+        $moved_history[] = $new_move;
+        if (!in_array($name, $acc_moved))
+            $acc_moved[] = $name;
+        $items_status[$name] = ($dest === 'external') ? 'at_external' : 'at_office_unconfirmed';
+    }
+
+    $log_html = "<div style='font-family:Prompt; color:#ea580c;'><b>🚚 นำของออก (" . count($items_post) . " รายการ)</b></div>";
+    $logs[] = ['at' => date('d/m/Y H:i'), 'by' => $user_name, 'msg' => $log_html];
+
+    $data['items_moved'] = $moved_history;
+    $data['accumulated_moved'] = $acc_moved;
+    $data['items_status'] = $items_status;
+
+    $sql = "UPDATE service_requests SET 
+            received_item_list = '" . $conn->real_escape_string(json_encode($data, JSON_UNESCAPED_UNICODE)) . "',
+            progress_logs = '" . $conn->real_escape_string(json_encode($logs, JSON_UNESCAPED_UNICODE)) . "'
+            WHERE id = $id";
+
+    echo json_encode(["status" => $conn->query($sql) ? "success" : "error"]);
+    exit();
+}
+
+// 🆎 3. รับของกลับจากร้าน
+else if ($action == 'receive_from_shop') {
+    $id = intval($_POST['req_id']);
+    $return_items = json_decode($_POST['return_items'] ?? '[]', true) ?: [];
+    $shop_name = $_POST['shop_name'] ?? 'ร้านภายนอก';
+    $user_name = $_POST['updated_by'] ?? 'Mobile App';
+
+    $data = getJsonField($conn, $id, 'received_item_list');
+    $logs = getJsonField($conn, $id, 'progress_logs');
+
+    foreach ($return_items as $name) {
+        $data['items_status'][$name] = 'at_office_unconfirmed';
+    }
+
+    if (!isset($data['details']['office_log']))
+        $data['details']['office_log'] = [];
+    $data['details']['office_log'][] = [
+        'status' => 'back_from_shop',
+        'at' => date('d/m/Y H:i'),
+        'by' => $user_name,
+        'shop' => $shop_name,
+        'items' => $return_items,
+        'approved' => true
+    ];
+
+    $log_html = "<div style='font-family:Prompt; color:#db2777;'><b>📦 รับของกลับจากร้าน: " . htmlspecialchars($shop_name) . "</b></div>";
+    $logs[] = ['at' => date('d/m/Y H:i'), 'by' => $user_name, 'msg' => $log_html];
+
+    $sql = "UPDATE service_requests SET 
+            received_item_list = '" . $conn->real_escape_string(json_encode($data, JSON_UNESCAPED_UNICODE)) . "',
+            progress_logs = '" . $conn->real_escape_string(json_encode($logs, JSON_UNESCAPED_UNICODE)) . "'
+            WHERE id = $id";
+
+    echo json_encode(["status" => $conn->query($sql) ? "success" : "error"]);
+    exit();
+}
+
+// 🅾️ 4. ส่งคืนลูกค้า / จบงาน
+else if ($action == 'return_to_customer') {
+    $id = intval($_POST['req_id']);
+    $rating = intval($_POST['rating'] ?? 0);
+    $items = json_decode($_POST['returned_items_json'] ?? '[]', true) ?: [];
+    $is_final = $_POST['is_final'] ?? '0';
+    $user_name = $_POST['updated_by'] ?? 'Mobile App';
+
+    $data = getJsonField($conn, $id, 'received_item_list');
+    $logs = getJsonField($conn, $id, 'progress_logs');
+
+    if (!isset($data['return_history']))
+        $data['return_history'] = [];
+    $data['return_history'][] = ['at' => date('d/m/Y H:i'), 'by' => $user_name, 'rating' => $rating, 'items' => $items];
+
+    if (!isset($data['finished_items']))
+        $data['finished_items'] = [];
+    $data['finished_items'] = array_unique(array_merge($data['finished_items'], $items));
+
+    $status = ($is_final == '1') ? 'completed' : 'processing';
+    $log_html = "<div style='font-family:Prompt; color:#10b981;'><b>🏁 ส่งคืนลูกค้า (Rating: $rating ดาว)</b></div>";
+    $logs[] = ['at' => date('d/m/Y H:i'), 'by' => $user_name, 'msg' => $log_html];
+
+    $sql = "UPDATE service_requests SET 
+            status = '$status',
+            received_item_list = '" . $conn->real_escape_string(json_encode($data, JSON_UNESCAPED_UNICODE)) . "',
+            progress_logs = '" . $conn->real_escape_string(json_encode($logs, JSON_UNESCAPED_UNICODE)) . "',
+            return_rating = $rating 
+            WHERE id = $id";
+
+    if ($conn->query($sql)) {
+        $conn->query("INSERT INTO service_ratings (req_id, rating, created_at) VALUES ($id, $rating, NOW())");
+        echo json_encode(["status" => "success"]);
+    } else {
+        echo json_encode(["status" => "error", "message" => $conn->error]);
+    }
+    exit();
+}
+// ==========================================
+// 4. SUBMIT REPORT (เวอร์ชันแก้ไข Error และรวมมูลค่าโครงการ)
+// ==========================================
+else if ($action == 'submit_report') {
+
+    // 1. รับค่า Header
+    $report_date = $_POST['report_date'] ?? date('Y-m-d');
+    $reporter_name = $_POST['reporter_name'] ?? 'Unknown';
     $work_type = $_POST['work_type'] ?? '';
-    $area = ($work_type == 'company') ? 'เข้าบริษัท (สำนักงาน)' : ($_POST['area_zone'] ?? '');
-    $province = ($work_type == 'company') ? 'กรุงเทพมหานคร' : ($_POST['province'] ?? '');
-    $gps = ($work_type == 'company') ? 'Office' : ($_POST['gps'] ?? '');
-    $gps_address = ($work_type == 'company') ? 'สำนักงานใหญ่' : ($_POST['gps_address'] ?? '');
 
-    $work_result = trim($_POST['work_result'] ?? ''); // ชื่อลูกค้า/หน่วยงาน
-    $customer_type = $_POST['customer_type'] ?? 'ลูกค้าเก่า';
-    $project_name = $_POST['project_name'] ?? '';
-    $additional_notes = $_POST['additional_notes'] ?? '';
-    $job_status = $_POST['job_status'] ?? '';
-    $next_appointment = (!empty($_POST['next_appointment']) && $_POST['next_appointment'] != 'null') ? $_POST['next_appointment'] : NULL;
-    $activity_type = $_POST['activity_type'] ?? '';
-    $activity_detail = $_POST['activity_detail'] ?? '';
-
-    // คำนวณค่าใช้จ่าย
-    $fuel = 0.00;
-    if (isset($_POST['fuel_cost'])) {
-        if (is_array($_POST['fuel_cost'])) {
-            foreach ($_POST['fuel_cost'] as $c)
-                $fuel += floatval($c);
-        } else {
-            $fuel = floatval($_POST['fuel_cost']);
-        }
+    // จัดการสถานที่
+    if ($work_type == 'company') {
+        $area = "เข้าบริษัท (สำนักงาน)";
+        $province = "กรุงเทพมหานคร";
+        $gps = "Office";
+        $gps_address = "สำนักงานใหญ่";
+    } else {
+        $area = $_POST['area_zone'] ?? '';
+        $province = $_POST['province'] ?? '';
+        $gps = $_POST['gps'] ?? '';
+        $gps_address = $_POST['gps_address'] ?? '';
     }
-    $acc = floatval($_POST['accommodation_cost'] ?? 0);
-    $other = floatval($_POST['other_cost'] ?? 0);
-    $total = $fuel + $acc + $other;
 
-    $other_cost_detail = $_POST['other_cost_detail'] ?? '';
-    $problem = $_POST['problem'] ?? '';
-    $suggestion = $_POST['suggestion'] ?? '';
+    // 2. รับค่า Work Details
+    $work_results = $_POST['work_result'] ?? [];
+    $project_names = $_POST['project_name'] ?? [];
+    $project_values = $_POST['project_value'] ?? [];
+    $job_statuses = $_POST['job_status'] ?? [];
+    $visit_summaries = $_POST['visit_summary'] ?? [];
+    $additional_notes_arr = $_POST['additional_notes'] ?? [];
+    $next_appointments = $_POST['next_appointment'] ?? [];
 
-    // อัปโหลดรูป
-    $fuel_files = uploadMultipleFiles('fuel_receipt_file', 'uploads/');
-    $fuel_receipt = implode(',', $fuel_files);
-    $acc_receipt = uploadSingleFile('accommodation_receipt_file', 'uploads/');
-    $other_receipt = uploadSingleFile('other_receipt_file', 'uploads/');
+    $combined_customers = [];
+    $combined_projects = [];
+    $combined_statuses = [];
+    $combined_summaries = [];
+    $combined_notes = [];
+    $combined_next_apps = [];
 
-    // ⭐ AUTO-SAVE: บันทึกชื่อลูกค้าลง Master ถ้าไม่มี
-    if (!empty($work_result)) {
-        // 1. เช็คก่อนว่ามีชื่อนี้หรือยัง
+    $count_items = is_array($work_results) ? count($work_results) : 0;
+
+    for ($i = 0; $i < $count_items; $i++) {
+        $cus_name = trim($work_results[$i]);
+        if (empty($cus_name))
+            continue;
+
+        // --- Auto Save Customer ---
         $check_sql = "SELECT id FROM master_customers WHERE customer_name = ?";
         if ($chk_stmt = $conn->prepare($check_sql)) {
-            $chk_stmt->bind_param("s", $work_result);
+            $chk_stmt->bind_param("s", $cus_name);
             $chk_stmt->execute();
             $chk_stmt->store_result();
-
-            // 2. ถ้ายังไม่มี (num_rows == 0) ให้เพิ่มเข้าไปใหม่
             if ($chk_stmt->num_rows == 0) {
                 $add_sql = "INSERT INTO master_customers (customer_name) VALUES (?)";
                 if ($add_stmt = $conn->prepare($add_sql)) {
-                    $add_stmt->bind_param("s", $work_result);
+                    $add_stmt->bind_param("s", $cus_name);
                     $add_stmt->execute();
                     $add_stmt->close();
                 }
             }
             $chk_stmt->close();
         }
+
+        $combined_customers[] = $cus_name;
+
+        // รวมชื่อโครงการและมูลค่า: "ชื่อโครงการ (มูลค่า: 1,000 บาท)"
+        $pj_name = !empty($project_names[$i]) ? $project_names[$i] : "-";
+        $pj_val = isset($project_values[$i]) ? $project_values[$i] : "";
+
+        if ($pj_val && $pj_val != "0" && $pj_val != "0.00") {
+            $pj_text = $pj_name . " (มูลค่า: " . $pj_val . " บาท)";
+        } else {
+            $pj_text = $pj_name;
+        }
+        $combined_projects[] = $pj_text;
+
+        $combined_statuses[] = isset($job_statuses[$i]) ? $job_statuses[$i] : '-';
+
+        $summary_text = isset($visit_summaries[$i]) ? $visit_summaries[$i] : '-';
+        $combined_summaries[] = "• $cus_name: $summary_text";
+
+        if (!empty($additional_notes_arr[$i])) {
+            $combined_notes[] = "($cus_name): " . $additional_notes_arr[$i];
+        }
+
+        if (!empty($next_appointments[$i])) {
+            $combined_next_apps[] = $next_appointments[$i];
+        }
     }
 
-    // บันทึกรายงานหลัก
+    // รวมข้อมูลเป็น String สำหรับเซฟลง DB
+    $final_work_result = implode(', ', $combined_customers);
+    $final_project_name = implode(', ', $combined_projects);
+    $final_job_status = implode(', ', $combined_statuses);
+    $final_activity_detail = implode("\n", $combined_summaries);
+    $final_additional_notes = implode("\n", $combined_notes);
+    $final_next_appointment = !empty($combined_next_apps) ? implode(', ', $combined_next_apps) : NULL;
+
+    $customer_type = $_POST['customer_type_1'] ?? 'ลูกค้าใหม่';
+
+    // 3. จัดการค่าใช้จ่าย
+    $fuel_costs = $_POST['fuel_cost'] ?? [];
+    $fuel_total = 0;
+    if (is_array($fuel_costs)) {
+        foreach ($fuel_costs as $c)
+            $fuel_total += floatval(str_replace(',', '', $c));
+    } else {
+        $fuel_total = floatval(str_replace(',', '', $fuel_costs));
+    }
+
+    $acc_cost = floatval(str_replace(',', '', $_POST['accommodation_cost'] ?? 0));
+    $other_cost = floatval(str_replace(',', '', $_POST['other_cost'] ?? 0));
+    $other_detail = $_POST['other_cost_detail'] ?? '';
+    $total_expense = $fuel_total + $acc_cost + $other_cost;
+
+    $fuel_files = uploadMultipleFiles('fuel_receipt_file', 'uploads/');
+    $fuel_receipt_str = implode(',', $fuel_files);
+    $acc_receipt = uploadSingleFile('accommodation_receipt_file', 'uploads/');
+    $other_receipt = uploadSingleFile('other_receipt_file', 'uploads/');
+
+    // ✅ ประกาศตัวแปรแยกต่างหาก เพื่อแก้ปัญหา Passed by reference
+    $problem = $_POST['problem'] ?? '';
+    $suggestion = $_POST['suggestion'] ?? '';
+    $activity_type_default = 'เข้าพบลูกค้า';
+
+    // 4. บันทึกลงฐานข้อมูล
     $sql = "INSERT INTO reports (
         report_date, reporter_name, area, province, gps, gps_address, 
-        work_result, customer_type, project_name, additional_notes, job_status, next_appointment, activity_type, activity_detail, 
+        work_result, customer_type, project_name, additional_notes, job_status, next_appointment, 
+        activity_type, activity_detail, 
         fuel_cost, fuel_receipt, accommodation_cost, accommodation_receipt, 
         other_cost, other_receipt, other_cost_detail, total_expense, problem, suggestion
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     if ($stmt = $conn->prepare($sql)) {
+        // "s" = string, "d" = double/float
+        // รวมทั้งหมด 24 parameters
         $stmt->bind_param(
             "ssssssssssssssdsdsdssdds",
-            $report_date,
-            $reporter_name,
-            $area,
-            $province,
-            $gps,
-            $gps_address,
-            $work_result,
-            $customer_type,
-            $project_name,
-            $additional_notes,
-            $job_status,
-            $next_appointment,
-            $activity_type,
-            $activity_detail,
-            $fuel,
-            $fuel_receipt,
-            $acc,
-            $acc_receipt,
-            $other,
-            $other_receipt,
-            $other_cost_detail,
-            $total,
-            $problem,
-            $suggestion
+            $report_date,           // 1
+            $reporter_name,         // 2
+            $area,                  // 3
+            $province,              // 4
+            $gps,                   // 5
+            $gps_address,           // 6
+            $final_work_result,      // 7
+            $customer_type,         // 8
+            $final_project_name,    // 9
+            $final_additional_notes, // 10
+            $final_job_status,      // 11
+            $final_next_appointment, // 12
+            $activity_type_default, // 13
+            $final_activity_detail, // 14
+            $fuel_total,            // 15 (d)
+            $fuel_receipt_str,      // 16
+            $acc_cost,              // 17 (d)
+            $acc_receipt,           // 18
+            $other_cost,            // 19 (d)
+            $other_receipt,         // 20
+            $other_detail,          // 21
+            $total_expense,         // 22 (d)
+            $problem,               // 23
+            $suggestion             // 24
         );
 
-        if ($stmt->execute())
+        if ($stmt->execute()) {
             echo json_encode(["status" => "success", "message" => "บันทึกข้อมูลเรียบร้อย"]);
-        else
-            echo json_encode(["status" => "error", "message" => $stmt->error]);
+        } else {
+            echo json_encode(["status" => "error", "message" => "SQL Error: " . $stmt->error]);
+        }
+        $stmt->close();
     } else {
         echo json_encode(["status" => "error", "message" => "Prepare Error: " . $conn->error]);
     }
+    exit();
+}
+
+// ==========================================
+// 4.1 UPDATE EXPENSE (เบิกค่าใช้จ่ายเพิ่มเติม)
+// ==========================================
+else if ($action == 'update_expense_request') {
+    // รับค่าทั้งจาก POST และ GET (เผื่อบาง Server ตัดค่า)
+    $report_id = $_POST['report_id'] ?? 0;
+
+    if ($report_id == 0) {
+        echo json_encode(["status" => "error", "message" => "ไม่พบ ID รายงาน (Invalid Report ID)"]);
+        exit();
+    }
+
+    // 1. รับค่าตัวเลข (ตัดลูกน้ำออก)
+    $fuel_total = floatval(str_replace(',', '', $_POST['fuel_cost'] ?? 0));
+    $acc_cost = floatval(str_replace(',', '', $_POST['accommodation_cost'] ?? 0));
+    $other_cost = floatval(str_replace(',', '', $_POST['other_cost'] ?? 0));
+    $other_detail = $_POST['other_cost_detail'] ?? '';
+
+    // คำนวณยอดรวมใหม่
+    $total_expense = $fuel_total + $acc_cost + $other_cost;
+
+    // 2. จัดการไฟล์อัปโหลด
+    $fuel_files = uploadMultipleFiles('fuel_receipt_file', 'uploads/');
+    $fuel_receipt_str = implode(',', $fuel_files);
+
+    $acc_receipt = uploadSingleFile('accommodation_receipt_file', 'uploads/');
+    $other_receipt = uploadSingleFile('other_receipt_file', 'uploads/');
+
+    // 3. สร้างคำสั่ง SQL Update
+    $sql = "UPDATE reports SET 
+            fuel_cost = ?, 
+            accommodation_cost = ?, 
+            other_cost = ?, 
+            other_cost_detail = ?, 
+            total_expense = ?";
+
+    // ถ้ามีไฟล์ใหม่ส่งมา ให้เพิ่มคำสั่งอัปเดตไฟล์ (ถ้าไม่มี ใช้ไฟล์เดิม)
+    if (!empty($fuel_receipt_str))
+        $sql .= ", fuel_receipt = '$fuel_receipt_str'";
+    if (!empty($acc_receipt))
+        $sql .= ", accommodation_receipt = '$acc_receipt'";
+    if (!empty($other_receipt))
+        $sql .= ", other_receipt = '$other_receipt'";
+
+    $sql .= " WHERE id = ?";
+
+    // 4. บันทึกข้อมูล
+    if ($stmt = $conn->prepare($sql)) {
+        // d=double, s=string, i=integer
+        $stmt->bind_param(
+            "dddsdi",
+            $fuel_total,
+            $acc_cost,
+            $other_cost,
+            $other_detail,
+            $total_expense,
+            $report_id
+        );
+
+        if ($stmt->execute()) {
+            echo json_encode([
+                "status" => "success",
+                "message" => "บันทึกการเบิกเรียบร้อย",
+                "data" => [
+                    "fuel_cost" => $fuel_total,
+                    "total_expense" => $total_expense
+                ]
+            ]);
+        } else {
+            echo json_encode(["status" => "error", "message" => "SQL Error: " . $stmt->error]);
+        }
+        $stmt->close();
+    } else {
+        echo json_encode(["status" => "error", "message" => "Prepare Error: " . $conn->error]);
+    }
+    exit();
 }
 
 // ==========================================
@@ -2238,14 +2637,37 @@ else if ($action == 'get_menus') {
             "color" => "#f97316",
             "route" => "/history/admin",
             "requiredAction" => "view_admin_tab" // ✅ เช็คตัวนี้
+        ],
+        [
+            "id" => "service_dashboard",
+            "label" => "Dashboard งานซ่อม",
+            "subLabel" => "ภาพรวมและสถิติงามซ่อม",
+            "icon" => "stats-chart",
+            "color" => "#3b82f6",
+            "route" => "/(tabs)/ServiceDashboard",
+            "requiredAction" => "view_service_dashboard"
+        ],
+        [
+            "id" => "service_request",
+            "label" => "แจ้งซ่อม/บริการ",
+            "subLabel" => "บันทึกข้อมูลหน้างาน",
+            "icon" => "construct",
+            "color" => "#f59e0b",
+            "route" => "/(tabs)/ServiceRequest",
+            "requiredAction" => "create_service_request"
         ]
     ];
 
     // 3. กรองปุ่ม (เช็คว่ามี Action Code นั้นๆ หรือไม่)
     $my_menus = [];
     foreach ($all_menus as $menu) {
-        // ถ้าเป็น admin หรือ มี Action Code นั้นอยู่ในรายการที่อนุญาต
-        if (in_array('ALL', $allowed_actions) || in_array($menu['requiredAction'], $allowed_actions)) {
+        // ✅ แก้ไข: เพิ่มเงื่อนไข || $menu['id'] == 'admin' เพื่อให้เมนู Admin แสดงเสมอ
+        if (
+            in_array('ALL', $allowed_actions) ||
+            in_array($menu['requiredAction'], $allowed_actions) ||
+            $menu['id'] == 'admin'
+        ) {
+
             $my_menus[] = $menu;
         }
     }
@@ -2322,8 +2744,13 @@ else if ($action == 'get_manager_menus') {
     // 3. กรองเมนูที่จะส่งกลับไปให้แอป
     $my_menus = [];
     foreach ($dashboard_menus as $menu) {
-        // ถ้าเป็น Admin หรือ มีไฟล์นั้นอยู่ในสิทธิ์ที่ดึงมา
-        if (in_array('ALL', $allowed_files) || in_array($menu['requiredFile'], $allowed_files)) {
+        // ✅ แก้ไข: เพิ่มเงื่อนไข || $menu['id'] == 'admin' เพื่อให้เมนู Admin แสดงเสมอ
+        if (
+            in_array('ALL', $allowed_files) ||
+            in_array($menu['requiredFile'], $allowed_files) ||
+            $menu['id'] == 'admin'
+        ) {
+
             $my_menus[] = $menu;
         }
     }
@@ -2528,12 +2955,12 @@ else if ($action == 'update_task_status') {
     }
 }
 // ==========================================================
-// 31. GET SERVICE INITIAL DATA (ดึงข้อมูลตั้งต้นสำหรับหน้าแจ้งซ่อม)
+// 31. GET SERVICE INITIAL DATA (ดึงข้อมูลตั้งต้นสำหรับหน้าแจ้งซ่อม - ฉบับสมบูรณ์)
 // ==========================================================
 else if ($action == 'get_service_initial_data') {
     $response = [];
 
-    // ดึงรายชื่อพนักงาน (Users)
+    // 1. ดึงรายชื่อพนักงาน (Simple List - สำหรับ Dropdown ทั่วไป)
     $users = [];
     $res_u = $conn->query("SELECT fullname FROM users ORDER BY fullname ASC");
     if ($res_u) {
@@ -2543,19 +2970,35 @@ else if ($action == 'get_service_initial_data') {
     }
     $response['users'] = $users;
 
-    // ดึงรายชื่อโครงการ (สำหรับโหมด Search)
+    // 2. ดึงรายชื่อพนักงานแบบละเอียด (พร้อมชื่อบริษัท - สำหรับ Logic พิเศษ)
+    $users_detail = [];
+    $res_ud = $conn->query("SELECT u.fullname, c.company_name 
+                            FROM users u 
+                            LEFT JOIN companies c ON u.company_id = c.id 
+                            ORDER BY u.fullname ASC");
+    if ($res_ud) {
+        while ($ud = $res_ud->fetch_assoc()) {
+            $users_detail[] = [
+                "name" => $ud['fullname'],
+                "company" => $ud['company_name'] ?? 'ไม่ระบุสังกัด'
+            ];
+        }
+    }
+    $response['users_detail'] = $users_detail;
+
+    // 3. ดึงรายชื่อโครงการ (สำหรับโหมด Search / Auto-complete)
     $projects = [];
     $res_p = $conn->query("SELECT site_id, project_name FROM project_contracts ORDER BY site_id ASC");
     if ($res_p) {
         while ($p = $res_p->fetch_assoc()) {
-            // รวมชื่อกับรหัสไว้ให้แอปโชว์ง่ายๆ
+            // รวมชื่อกับรหัสไว้ให้แอปโชว์ใน List ได้ทันที
             $p['display_name'] = $p['site_id'] . " : " . $p['project_name'];
             $projects[] = $p;
         }
     }
     $response['projects'] = $projects;
 
-    // ดึงประเภทงาน (Job Types)
+    // 4. ดึงประเภทงาน (Job Types)
     $job_types = [];
     $res_jt = $conn->query("SELECT job_type_name FROM job_types ORDER BY id ASC");
     if ($res_jt) {
@@ -2563,93 +3006,130 @@ else if ($action == 'get_service_initial_data') {
             $job_types[] = $jt['job_type_name'];
         }
     }
-    // ใส่ other ปิดท้ายเสมอ
-    if (!in_array('other', $job_types))
+    // ตรวจสอบและใส่ 'other' ปิดท้ายเสมอถ้ายังไม่มีในฐานข้อมูล
+    if (!in_array('other', $job_types) && !in_array('อื่นๆ', $job_types)) {
         $job_types[] = 'other';
+    }
     $response['job_types'] = $job_types;
 
-    // ดึงช่องทางติดต่อ (Contact Channels)
+    // 5. ดึงช่องทางติดต่อ (Contact Channels) พร้อมคุณสมบัติ Input
     $channels = [];
-    $res_ch = $conn->query("SELECT channel_name FROM contact_channels ORDER BY id ASC");
+    $res_ch = $conn->query("SELECT channel_name, channel_type, placeholder_text, has_ext, is_tel FROM contact_channels ORDER BY id ASC");
     if ($res_ch) {
         while ($ch = $res_ch->fetch_assoc()) {
-            $channels[] = $ch['channel_name'];
+            // แปลงค่าที่เป็นเลข 0/1 ให้เป็น Boolean เพื่อให้ฝั่ง React Native ใช้งานง่ายขึ้น
+            $ch['has_ext'] = (bool) $ch['has_ext'];
+            $ch['is_tel'] = (bool) $ch['is_tel'];
+            $channels[] = $ch;
         }
     }
     $response['contact_channels'] = $channels;
 
-    // 🟢 [จุดที่แก้ 1] ดึงข้อมูลจังหวัด
+    // 6. ดึงข้อมูลจังหวัด (Provinces)
     $provinces = [];
     $res_prov = $conn->query("SELECT name_th FROM provinces ORDER BY name_th ASC");
     if ($res_prov) {
         while ($prov = $res_prov->fetch_assoc()) {
-            $provinces[] = current($prov);
+            $provinces[] = $prov['name_th'];
         }
     }
     $response['provinces'] = $provinces;
 
-    echo json_encode(["status" => "success", "data" => $response]);
+    // ส่งข้อมูลกลับเป็น JSON โดยไม่ทำการแปลงอักขระไทย (JSON_UNESCAPED_UNICODE)
+    echo json_encode([
+        "status" => "success",
+        "data" => $response
+    ], JSON_UNESCAPED_UNICODE);
     exit();
 }
 
 // ==========================================================
-// 32. SUBMIT SERVICE REQUEST (บันทึกข้อมูลแจ้งซ่อมจาก App)
+// 32. SUBMIT SERVICE REQUEST (แก้ไข: รองรับ File Upload สมบูรณ์)
 // ==========================================================
 else if ($action == 'submit_service_request') {
-    $data = getInput(); // ฟังก์ชันใน api_mobile.php ที่คอยรับ JSON จาก App
+    // 🟢 1. รับค่าแบบ POST ตรงๆ (เพราะมาเป็น FormData)
+    $mode = $_POST['projectMode'] ?? 'manual';
 
-    $mode = $data['projectMode'] ?? 'manual';
-    $pInfo = $data['projectInfo'] ?? [];
-    $rInfo = $data['requestInfo'] ?? [];
-    $contacts = $data['contacts'] ?? [];
-    $items = $data['serviceItems'] ?? [];
+    // 🟢 2. แปลง JSON String กลับเป็น Array PHP
+    // (เพราะ React Native ส่ง object มาเป็น string ผ่าน FormData)
+    $pInfo = json_decode($_POST['projectInfo'] ?? '{}', true);
+    $rInfo = json_decode($_POST['requestInfo'] ?? '{}', true);
+    $contacts = json_decode($_POST['contacts'] ?? '[]', true);
+    $items = json_decode($_POST['serviceItems'] ?? '[]', true);
+
+    // --- A. เตรียมข้อมูลลงตาราง ---
 
     // 1. ข้อมูลโครงการ
-    $site_id = ($mode === 'search') ? intval($pInfo['siteId']) : 0;
+    $site_id = ($mode === 'search') ? intval($pInfo['siteId'] ?? 0) : 0;
     $man_code = trim($pInfo['siteCode'] ?? '');
     $man_contract = trim($pInfo['contractNo'] ?? '');
     $man_budget = trim($pInfo['budget'] ?? '');
     $man_name = trim($pInfo['projectName'] ?? '');
     $man_cust_name = trim($pInfo['customerName'] ?? '');
     $man_province = trim($pInfo['province'] ?? '');
-    $man_start = null; // ข้ามวันที่ไปก่อน ฝั่งแอปยังไม่ได้ทำ DatePicker
-    $man_end = null;
+    $man_start = null; // ฝั่งแอปยังไม่ได้ส่งมา
+    $man_end = null;   // ฝั่งแอปยังไม่ได้ส่งมา
 
-    // 2. ข้อมูลการแจ้ง
-    $request_date = date('Y-m-d H:i:s'); // ยึดเวลาฝั่งเซิร์ฟเวอร์เป็นหลักชัวร์สุด
-    $expected_finish = date('Y-m-d H:i:s', strtotime($request_date . ' +48 hours')); // สร้าง SLA 48 ชม.
+    // 2. ข้อมูลการแจ้ง & วันที่
+    $request_date = date('Y-m-d H:i:s');
+
+    // ตรวจสอบวันที่กำหนดเสร็จ (ถ้ามีค่าส่งมาให้ใช้ ถ้าไม่มีบวกเพิ่ม 2 วัน)
+    $input_finish = $rInfo['expectedFinish'] ?? '';
+    if (!empty($input_finish) && strtotime($input_finish) !== false) {
+        // แปลง Slash เป็น Dash เผื่อรูปแบบวันที่เพี้ยน
+        $expected_finish = date('Y-m-d H:i:s', strtotime(str_replace('/', '-', $input_finish)));
+    } else {
+        $expected_finish = date('Y-m-d H:i:s', strtotime('+2 days'));
+    }
 
     $receiver_by = $rInfo['receiverBy'] ?? '';
     $reporter_name = $rInfo['reporterName'] ?? '';
     $urgency = $rInfo['urgency'] ?? 'normal';
-
-    // 🟢 [จุดที่แก้ 2] ดึงชื่อคนลงข้อมูล (recorderName) ที่ส่งมาจาก App
     $user_updated = !empty($rInfo['recorderName']) ? $rInfo['recorderName'] : 'Mobile App';
 
-    // 3. แปลงช่องทางติดต่อเป็น JSON
+    // 3. แปลงช่องทางติดต่อกลับเป็น JSON เพื่อเก็บลง DB
     $contact_json = json_encode($contacts, JSON_UNESCAPED_UNICODE);
 
-    // 4. จัดเตรียมรายการซ่อมให้ตรงกับโครงสร้างของ Web
+    // --- B. จัดการรายการซ่อม & อัปโหลดไฟล์ ---
+
     $items_data_to_save = [];
     $issue_summary = [];
     $advice_summary = [];
     $assess_summary = [];
     $collected_job_types = [];
 
-    foreach ($items as $index => $itm) {
-        $prod_name = $itm['product'] ?? '';
+    // สร้างโฟลเดอร์เก็บไฟล์ (ถ้ายังไม่มี)
+    $target_dir = "uploads/service_requests/";
+    if (!file_exists($target_dir)) {
+        @mkdir($target_dir, 0777, true);
+    }
 
-        // แปลงโครงสร้างให้เก็บเป็น Array เหมือนของเว็บ (เผื่อเว็บจะดึงไปใช้ต่อ)
+    foreach ($items as $index => $itm) {
+        $prod_name = is_array($itm['product']) ? implode(', ', $itm['product']) : ($itm['product'] ?? '');
+
+        // 🟢 4. อัปโหลดไฟล์ (แยกตาม Index ของ Item)
+        // Key ที่ส่งมาจาก React Native คือ "files_item_0[]", "files_item_1[]"
+        $uploaded_files = [];
+        $file_key = "files_item_" . $index;
+
+        // เรียกใช้ฟังก์ชัน Helper (ต้องมีฟังก์ชัน uploadMultipleFiles ในไฟล์นี้)
+        if (isset($_FILES[$file_key])) {
+            $uploaded_files = uploadMultipleFiles($file_key, $target_dir);
+        }
+
+        // 5. เตรียม Object สำหรับบันทึกลง JSON (ให้ตรงกับโครงสร้าง Web)
         $items_data_to_save[] = [
-            'product' => [$prod_name],
+            'product' => is_array($itm['product']) ? $itm['product'] : [$prod_name],
             'job_type' => $itm['jobType'] ?? '',
             'job_other' => $itm['jobOther'] ?? '',
             'issue' => $itm['issue'] ?? '',
             'initial_advice' => $itm['initialAdvice'] ?? '',
             'assessment' => $itm['assessment'] ?? '',
-            'attached_files' => [] // ฝั่งแอปยังไม่มีส่งไฟล์ เลยใส่ Array ว่างไว้
+            // 🟢 บันทึกชื่อไฟล์ลงไปใน JSON เพื่อให้หน้าเว็บดึงไปแสดงได้
+            'attached_files' => $uploaded_files
         ];
 
+        // สร้างสรุปข้อความ (Issue / Advice / Assessment)
         $issue_summary[] = ($index + 1) . ". [" . $prod_name . "] : " . ($itm['issue'] ?? '');
         if (!empty($itm['initialAdvice']))
             $advice_summary[] = "(" . $prod_name . "): " . $itm['initialAdvice'];
@@ -2659,12 +3139,13 @@ else if ($action == 'submit_service_request') {
             $collected_job_types[] = $itm['jobType'];
     }
 
+    // แปลงข้อมูลเป็น JSON/String เพื่อลง DB
     $item_name_json = !empty($items_data_to_save) ? json_encode($items_data_to_save, JSON_UNESCAPED_UNICODE) : "[]";
     $issue_final = !empty($issue_summary) ? implode("\n", $issue_summary) : "-";
     $initial_advice_final = !empty($advice_summary) ? implode("\n", $advice_summary) : "";
     $assessment_final = !empty($assess_summary) ? implode("\n", $assess_summary) : "";
 
-    // หาประเถทงานหลัก
+    // หาประเภทงานหลัก
     $unique_types = array_unique($collected_job_types);
     $job_type_final = !empty($unique_types) ? implode(', ', $unique_types) : 'other';
     $job_other_final = ($job_type_final == 'other' && isset($items_data_to_save[0]['job_other'])) ? $items_data_to_save[0]['job_other'] : '';
@@ -2672,7 +3153,7 @@ else if ($action == 'submit_service_request') {
     $remark = "";
     $status_to_save = 'pending';
 
-    // 5. INSERT ลงฐานข้อมูล (โค้ดนี้ตรงกับของเว็บ 100%)
+    // --- C. INSERT ลงฐานข้อมูล ---
     $sql = "INSERT INTO service_requests (
                 site_id, request_date, project_item_name, issue_description, assessment, remark, 
                 updated_by, expected_finish_date, status,
@@ -2682,43 +3163,62 @@ else if ($action == 'submit_service_request') {
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     if ($stmt = $conn->prepare($sql)) {
-        // Parameter Types: isssssssssssssssssssssss (i=1, s=23)
+        // Bind Parameters (24 ตัว)
         $stmt->bind_param(
             "isssssssssssssssssssssss",
-            $site_id,
-            $request_date,
-            $item_name_json,
-            $issue_final,
-            $assessment_final,
-            $remark,
-            $user_updated, // 🟢 ใช้ตัวแปรที่ดึงจาก App
-            $expected_finish,
-            $status_to_save,
-            $receiver_by,
-            $reporter_name,
-            $contact_json,
-            $job_type_final,
-            $job_other_final,
-            $urgency,
-            $initial_advice_final,
-            $man_code,
-            $man_contract,
-            $man_budget,
-            $man_name,
-            $man_cust_name,
-            $man_province,
-            $man_start,
-            $man_end
+            $site_id,               // i
+            $request_date,          // s
+            $item_name_json,        // s (JSON ที่มีชื่อไฟล์แนบ)
+            $issue_final,           // s
+            $assessment_final,      // s
+            $remark,                // s
+            $user_updated,          // s
+            $expected_finish,       // s
+            $status_to_save,        // s
+            $receiver_by,           // s
+            $reporter_name,         // s
+            $contact_json,          // s
+            $job_type_final,        // s
+            $job_other_final,       // s
+            $urgency,               // s
+            $initial_advice_final,  // s
+            $man_code,              // s
+            $man_contract,          // s
+            $man_budget,            // s
+            $man_name,              // s
+            $man_cust_name,         // s
+            $man_province,          // s
+            $man_start,             // s
+            $man_end                // s
         );
 
         if ($stmt->execute()) {
-            echo json_encode(["status" => "success", "message" => "เปิดใบงาน Service Request เรียบร้อยจาก App!"]);
+            echo json_encode(["status" => "success", "message" => "บันทึกและอัปโหลดไฟล์เรียบร้อย!"]);
         } else {
             echo json_encode(["status" => "error", "message" => "SQL Error: " . $stmt->error]);
         }
         $stmt->close();
     } else {
         echo json_encode(["status" => "error", "message" => "Prepare Error: " . $conn->error]);
+    }
+    exit();
+}
+// ==========================================================
+// 33. GET SERVICE DETAIL (ดึงข้อมูลเจาะลึกรายรายการ - เพื่อวาด Timeline)
+// ==========================================================
+else if ($action == 'get_service_detail') {
+    $id = intval($_GET['id']);
+    $sql = "SELECT sr.*, pc.project_name, c.customer_name 
+            FROM service_requests sr
+            LEFT JOIN project_contracts pc ON sr.site_id = pc.site_id
+            LEFT JOIN customers c ON pc.customer_id = c.customer_id
+            WHERE sr.id = $id";
+
+    $result = $conn->query($sql);
+    if ($row = $result->fetch_assoc()) {
+        echo json_encode(["status" => "success", "data" => $row], JSON_UNESCAPED_UNICODE);
+    } else {
+        echo json_encode(["status" => "error", "message" => "ไม่พบข้อมูลงาน"]);
     }
     exit();
 }

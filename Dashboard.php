@@ -139,7 +139,8 @@ if (isset($_GET['ajax_action']) && $_GET['ajax_action'] == 'get_customer_history
         $sql_where .= " AND report_date <= '$e_date'";
     }
 
-    // 🟢 แก้ไข: เพิ่ม work_result เข้าไปใน SELECT
+    // 🟢 แก้ไข: ดึงข้อมูลเหมือนเดิม แต่ตอนแสดงผลเราจะตัดมูลค่าออกใน JS หรือ PHP ก็ได้
+    // เพื่อความง่าย ผมจะจัดการตัดสตริง "มูลค่า..." ออกตั้งแต่นี้เลย
     $sql_hist = "SELECT 
                     id, 
                     report_date, 
@@ -148,8 +149,8 @@ if (isset($_GET['ajax_action']) && $_GET['ajax_action'] == 'get_customer_history
                     job_status, 
                     total_expense, 
                     project_name, 
-                    activity_detail,   /* 👈 ตัวสำคัญ! ต้องเพิ่มคำนี้ */
-                    additional_notes   /* 👈 บันทึกเพิ่มเติม ก็ต้องเพิ่ม */
+                    activity_detail, 
+                    additional_notes 
                  FROM reports $sql_where 
                  ORDER BY report_date DESC";
 
@@ -157,6 +158,12 @@ if (isset($_GET['ajax_action']) && $_GET['ajax_action'] == 'get_customer_history
     $history_data = [];
     if ($res_hist) {
         while ($row = $res_hist->fetch_assoc()) {
+            // ✂️ ตัดส่วน "(มูลค่า: ... บาท)" ออกจากชื่อโครงการ
+            if (!empty($row['project_name'])) {
+                // ใช้ Regex ลบวงเล็บมูลค่าทิ้ง
+                $row['project_name'] = preg_replace('/\s*\(มูลค่า:.*?\)/u', '', $row['project_name']);
+            }
+
             $history_data[] = $row;
         }
     }
@@ -291,7 +298,42 @@ if ($res_all) {
     }
 }
 
-// เรียงลำดับชื่อพนักงาน
+$s_date_check = date('Y-m-01', strtotime($start_date));
+$e_date_check = date('Y-m-t', strtotime($end_date));
+
+// เตรียมตัวแปร Global Target
+$global_stats['total_target'] = 0;
+
+$sql_target = "SELECT reporter_name, SUM(target_amount) as total_target 
+               FROM sales_targets 
+               WHERE CONCAT(target_year, '-', LPAD(target_month, 2, '0'), '-01') BETWEEN '$s_date_check' AND '$e_date_check'
+               GROUP BY reporter_name";
+
+$res_target = $conn->query($sql_target);
+if ($res_target) {
+    while ($row_t = $res_target->fetch_assoc()) {
+        $emp_name = trim($row_t['reporter_name']);
+        $amt = floatval($row_t['total_target']);
+
+        // ถ้าพนักงานคนนี้ยังไม่มีใน list ให้สร้าง Array รอไว้
+        if (!isset($employee_stats[$emp_name])) {
+            $employee_stats[$emp_name] = [
+                'total_reports' => 0,
+                'total_expense' => 0,
+                'total_project_value' => 0, // ยอดขายจริง (Actual)
+                'statuses' => $master_status_template
+            ];
+        }
+
+        // ยัดเป้าหมายใส่เข้าไป
+        $employee_stats[$emp_name]['target_amount'] = $amt;
+
+        // บวกยอดรวมบริษัท
+        $global_stats['total_target'] += $amt;
+    }
+}
+
+// เรียงลำดับชื่อพนักงาน (บรรทัดเดิมที่มีอยู่แล้ว)
 ksort($employee_stats);
 
 // 🟢 3. เตรียมข้อมูลสำหรับ Dropdown สถานะ (โชว์เฉพาะสถานะหลัก)
@@ -418,9 +460,27 @@ function hexToRgba($hex, $alpha = 0.1)
                 </div>
 
                 <div class="kpi-card" style="border-left: 5px solid #8b5cf6;">
-                    <div class="kpi-label" style="color:#8b5cf6;">มูลค่าโครงการรวม</div>
-                    <div class="kpi-value" style="color:#1e293b;">฿
-                        <?php echo number_format($global_stats['total_project_value'], 2); ?>
+                    <div class="kpi-label" style="color:#8b5cf6;">ยอดขาย vs เป้าหมาย</div>
+                    <div class="kpi-value" style="color:#1e293b;">
+                        ฿<?php echo number_format($global_stats['total_project_value'], 2); ?>
+                        <span style="font-size: 0.9rem; color: #64748b; font-weight: normal;">
+                            /
+                            <?php echo ($global_stats['total_target'] > 0) ? number_format($global_stats['total_target'], 0) : '-'; ?>
+                        </span>
+                    </div>
+
+                    <?php
+                    $g_percent = ($global_stats['total_target'] > 0) ? ($global_stats['total_project_value'] / $global_stats['total_target']) * 100 : 0;
+                    $g_cap = min($g_percent, 100);
+                    $g_cls = ($g_percent >= 100) ? 'success' : 'warning';
+                    ?>
+                    <div class="target-progress-container" style="height: 6px; margin-top: 8px;">
+                        <div class="target-progress-bar <?php echo $g_cls; ?>" style="width: <?php echo $g_cap; ?>%">
+                        </div>
+                    </div>
+                    <div
+                        style="text-align: right; font-size: 0.8rem; color: <?php echo ($g_percent >= 100) ? '#059669' : '#d97706'; ?>; font-weight: 600;">
+                        <?php echo number_format($g_percent, 1); ?>%
                     </div>
                     <i class="fas fa-hand-holding-usd kpi-icon" style="color:#8b5cf6;"></i>
                 </div>
@@ -478,7 +538,11 @@ function hexToRgba($hex, $alpha = 0.1)
                     <?php else: ?>
                         <div class="employee-grid">
                             <?php foreach ($employee_stats as $name => $stats): ?>
-                                <div class="emp-card">
+                                <div class="emp-card"
+                                    onclick="filterByUser('<?php echo htmlspecialchars($name, ENT_QUOTES); ?>')"
+                                    style="cursor: pointer; transition: transform 0.2s;"
+                                    onmouseover="this.style.transform='translateY(-5px)'"
+                                    onmouseout="this.style.transform='translateY(0)'">
                                     <div class="emp-header">
                                         <div class="emp-avatar"><?php echo mb_substr($name, 0, 1); ?></div>
                                         <div class="emp-info">
@@ -488,16 +552,79 @@ function hexToRgba($hex, $alpha = 0.1)
                                         </div>
                                     </div>
 
-                                    <div class="emp-money-grid">
-                                        <div class="money-box project-val">
-                                            <div class="mb-label">มูลค่าโครงการ</div>
-                                            <div class="mb-value">฿<?php echo number_format($stats['total_project_value']); ?>
+                                    <div class="emp-money-grid"
+                                        style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+
+                                        <div
+                                            style="grid-column: span 2; background: #f8fafc; padding: 12px; border-radius: 12px; border: 1px dashed #cbd5e1; margin-bottom: 5px;">
+                                            <?php
+                                            $target = isset($stats['target_amount']) ? $stats['target_amount'] : 0;
+                                            $actual = $stats['total_project_value'];
+
+                                            // สูตรคำนวณ %
+                                            $percent = ($target > 0) ? ($actual / $target) * 100 : 0;
+
+                                            // กำหนดสี Progress Bar
+                                            $bar_color = ($percent >= 100) ? 'linear-gradient(90deg, #10b981, #059669)' : 'linear-gradient(90deg, #f59e0b, #d97706)';
+                                            $percent_cap = min($percent, 100);
+
+                                            // 🟢 สูตรคำนวณส่วนต่าง (Diff)
+                                            $diff = $actual - $target;
+                                            ?>
+
+                                            <div
+                                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; font-size: 0.85rem;">
+                                                <span style="color: #64748b; font-weight: 600;">
+                                                    <i class="fas fa-flag-checkered"></i> เป้า:
+                                                    <?php echo number_format($target); ?>
+                                                </span>
+                                                <span style="color: #475569; font-weight: 800;">
+                                                    <?php echo number_format($percent, 1); ?>%
+                                                </span>
+                                            </div>
+
+                                            <div
+                                                style="height: 8px; background: #e2e8f0; border-radius: 10px; overflow: hidden; margin-bottom: 8px;">
+                                                <div
+                                                    style="width: <?php echo $percent_cap; ?>%; height: 100%; background: <?php echo $bar_color; ?>; border-radius: 10px; transition: width 0.6s ease;">
+                                                </div>
+                                            </div>
+
+                                            <div style="font-size: 0.8rem; font-weight: 600; text-align: right;">
+                                                <?php if ($target > 0): ?>
+                                                    <?php if ($diff >= 0): ?>
+                                                        <span
+                                                            style="color: #059669; background: #d1fae5; padding: 2px 8px; border-radius: 4px;">
+                                                            <i class="fas fa-arrow-up"></i> เกินเป้า:
+                                                            <?php echo number_format($diff); ?>
+                                                        </span>
+                                                    <?php else: ?>
+                                                        <span
+                                                            style="color: #d97706; background: #ffedd5; padding: 2px 8px; border-radius: 4px;">
+                                                            <i class="fas fa-exclamation-circle"></i> ขาดอีก:
+                                                            <?php echo number_format(abs($diff)); ?>
+                                                        </span>
+                                                    <?php endif; ?>
+                                                <?php else: ?>
+                                                    <span style="color: #94a3b8;">- ไม่ได้ตั้งเป้า -</span>
+                                                <?php endif; ?>
                                             </div>
                                         </div>
-                                        <div class="money-box expense-val">
-                                            <div class="mb-label">รวมเบิกจ่าย</div>
-                                            <div class="mb-value">฿<?php echo number_format($stats['total_expense']); ?></div>
+
+                                        <div class="money-box project-val">
+                                            <div class="mb-label" style="color: #3b82f6;">ยอดขายทำได้</div>
+                                            <div class="mb-value" style="color: #1d4ed8;">
+                                                ฿<?php echo number_format($stats['total_project_value']); ?>
+                                            </div>
                                         </div>
+
+                                        <div class="money-box expense-val">
+                                            <div class="mb-label" style="color: #ef4444;">รวมเบิกจ่าย</div>
+                                            <div class="mb-value" style="color: #b91c1c;">
+                                                ฿<?php echo number_format($stats['total_expense']); ?>
+                                            </div>
+                                        </div>
+
                                     </div>
 
                                     <div class="emp-status-container">
@@ -510,7 +637,7 @@ function hexToRgba($hex, $alpha = 0.1)
                                                 $cfg = getCardConfig($st_name);
                                                 ?>
                                                 <div class="mini-status-card"
-                                                    onclick="filterByStatusAndUser('<?php echo htmlspecialchars($st_name); ?>', '<?php echo htmlspecialchars($name); ?>')"
+                                                    onclick="event.stopPropagation(); filterByStatusAndUser('<?php echo htmlspecialchars($st_name); ?>', '<?php echo htmlspecialchars($name); ?>')"
                                                     style="border-left: 3px solid <?php echo $cfg['color']; ?>;">
                                                     <div class="mini-val" style="color: <?php echo $cfg['color']; ?>;">
                                                         <?php echo number_format($count); ?>
@@ -801,11 +928,12 @@ function hexToRgba($hex, $alpha = 0.1)
                                                 </td>
                                                 <td style="text-align:center;">
                                                     <div style="display:flex; gap:5px; justify-content:center;">
-                                                        <button onclick='showDetail(<?php echo json_encode($row); ?>)'
+                                                        <button
+                                                            onclick='showDetail(<?php echo htmlspecialchars(json_encode($row), ENT_QUOTES, "UTF-8"); ?>)'
                                                             class="btn-view" title="ดูรายละเอียด"><i
                                                                 class="fas fa-eye"></i></button>
                                                         <button style="display:none;"
-                                                            onclick='openExpenseModal(<?php echo json_encode($row); ?>)'
+                                                            onclick='openExpenseModal(<?php echo htmlspecialchars(json_encode($row), ENT_QUOTES, "UTF-8"); ?>)'
                                                             class="btn-action-edit" title="แก้ไขค่าใช้จ่าย"><i
                                                                 class="fas fa-edit"></i></button>
                                                     </div>

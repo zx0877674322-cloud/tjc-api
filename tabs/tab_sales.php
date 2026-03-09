@@ -15,12 +15,20 @@ echo '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/t
 // --- CONFIG & FILTER ---
 $table_name = 'reports';
 $upload_path = 'uploads/';
-$start_date = $_GET['start_date'] ?? date('Y-m-01');
-$end_date = $_GET['end_date'] ?? date('Y-m-d');
+$start_date = $_GET['start_date'] ?? '';
+$end_date = $_GET['end_date'] ?? '';
 
 // ✅ 1. กรองเฉพาะงานของฉัน
 $my_name = $_SESSION['fullname'] ?? '';
-$where_sql = "WHERE reporter_name = '$my_name' AND report_date BETWEEN '$start_date' AND '$end_date'";
+$where_sql = "WHERE reporter_name = '$my_name'";
+
+if (!empty($start_date) && !empty($end_date)) {
+    $where_sql .= " AND report_date BETWEEN '$start_date' AND '$end_date'";
+} elseif (!empty($start_date)) {
+    $where_sql .= " AND report_date >= '$start_date'";
+} elseif (!empty($end_date)) {
+    $where_sql .= " AND report_date <= '$end_date'";
+}
 
 // Filter Status
 $filter_status = $_GET['filter_status'] ?? '';
@@ -85,6 +93,25 @@ if ($result_list) {
 
         $rows_buffer[] = $row;
     }
+    $my_target = 0;
+    // กรองเป้าหมายตามช่วงวันที่เลือก (ถ้าไม่เลือกจะดึงของเดือนปัจจุบัน)
+    $target_s = !empty($start_date) ? date('Y-m-01', strtotime($start_date)) : date('Y-m-01');
+    $target_e = !empty($end_date) ? date('Y-m-t', strtotime($end_date)) : date('Y-m-t');
+
+    $sql_t = "SELECT SUM(target_amount) as total FROM sales_targets 
+          WHERE reporter_name = '$my_name' 
+          AND CONCAT(target_year, '-', LPAD(target_month, 2, '0'), '-01') BETWEEN '$target_s' AND '$target_e'";
+    $res_t = $conn->query($sql_t);
+    if ($res_t) {
+        $row_t = $res_t->fetch_assoc();
+        $my_target = floatval($row_t['total']);
+    }
+
+    // คำนวณส่วนต่างและ %
+    $diff = $total_project_value - $my_target;
+    $percent = ($my_target > 0) ? ($total_project_value / $my_target) * 100 : 0;
+    $percent_cap = min($percent, 100);
+    $status_color = ($percent >= 100) ? '#10b981' : '#f59e0b';
 }
 
 // ✅ Helper functions (Sync ระบบสี และไอคอน Dashboard)
@@ -125,6 +152,39 @@ function hexToRgba($hex, $alpha = 0.1)
     return "rgba(0,0,0,$alpha)";
 }
 ?>
+<div class="target-box-mini">
+    <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+        <div>
+            <div style="font-size: 0.9rem; color: #64748b; font-weight: 600;">เป้าหมายของคุณในช่วงนี้</div>
+            <div style="font-size: 1.4rem; font-weight: 800; color: #1e293b;">
+                ฿
+                <?= number_format($total_project_value, 2) ?>
+                <span style="font-size: 0.9rem; color: #94a3b8; font-weight: 400;">/ ฿
+                    <?= number_format($my_target) ?>
+                </span>
+            </div>
+        </div>
+        <div style="text-align: right;">
+            <span style="font-size: 1.2rem; font-weight: 800; color: <?= $status_color ?>;">
+                <?= number_format($percent, 1) ?>%
+            </span>
+            <div style="font-size: 0.75rem; font-weight: 600;">
+                <?php if ($diff >= 0): ?>
+                    <span style="color: #10b981;">(+
+                        <?= number_format($diff) ?>)
+                    </span>
+                <?php else: ?>
+                    <span style="color: #ef4444;">(ขาดอีก
+                        <?= number_format(abs($diff)) ?>)
+                    </span>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    <div class="pg-bg">
+        <div class="pg-bar" style="width: <?= $percent_cap ?>%; background: <?= $status_color ?>;"></div>
+    </div>
+</div>
 
 <div class="kpi-grid">
     <div class="kpi-card" onclick="filterByStatus('')" style="border-left: 5px solid #64748b;">
@@ -136,7 +196,11 @@ function hexToRgba($hex, $alpha = 0.1)
     <div class="kpi-card" style="border-left: 5px solid #8b5cf6;">
         <div class="kpi-label" style="color:#8b5cf6;">มูลค่าโครงการรวม</div>
         <div class="kpi-value">฿ <?= number_format($total_project_value, 2) ?></div>
-        <i class="fa-solid fa-hand-holding-usd kpi-icon"></i>
+        <div
+            style="font-size: 0.8rem; margin-top: 5px; font-weight: 600; color: <?= ($diff >= 0) ? '#10b981' : '#64748b' ?>;">
+            <?= ($diff >= 0) ? '<i class="fa-solid fa-caret-up"></i> ทะลุเป้าแล้ว' : 'ยังไม่ถึงเป้าหมาย' ?>
+        </div>
+        <i class="fa-solid fa-hand-holding-usd kpi-icon" style="color:#8b5cf6;"></i>
     </div>
 
     <?php foreach ($status_counts as $st => $cnt):
@@ -323,9 +387,22 @@ function hexToRgba($hex, $alpha = 0.1)
                                         <i class="fa-solid fa-magnifying-glass-plus"></i>
                                     </button>
 
+                                    <a href="Report.php?edit_id=<?= $row['id'] ?>" class="btn-edit-main"
+                                        title="แก้ไขข้อมูลรายงาน">
+                                        <i class="fa-solid fa-pen"></i>
+                                    </a>
+
                                     <button onclick='openExpenseModal(<?= $row_json ?>)' class="btn-action-edit"
                                         title="อัปเดตค่าใช้จ่าย">
                                         <i class="fa-solid fa-pen-to-square"></i>
+                                    </button>
+
+                                    <button onclick='confirmDeleteReport(<?= $row["id"] ?>)' class="btn-action-delete"
+                                        title="ลบรายงานนี้"
+                                        style="color: #ef4444; border: 1px solid #fee2e2; background: #fef2f2; border-radius: 8px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s;"
+                                        onmouseover="this.style.background='#fee2e2'"
+                                        onmouseout="this.style.background='#fef2f2'">
+                                        <i class="fa-solid fa-trash"></i>
                                     </button>
                                 </div>
                             </td>

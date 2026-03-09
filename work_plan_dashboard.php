@@ -320,7 +320,7 @@ $sql = "SELECT wp.*, c.company_shortname, ms.status_name, ms.id as master_status
         LEFT JOIN companies c ON wp.company = c.company_name COLLATE utf8mb4_general_ci
         LEFT JOIN master_job_status ms ON wp.status_id = ms.id
         WHERE $final_where
-        ORDER BY wp.plan_date ASC";
+        ORDER BY wp.plan_date DESC";
 
 $plans = [];
 if ($stmt = $conn->prepare($sql)) {
@@ -374,7 +374,12 @@ if (isset($_GET['ajax'])) {
                 $summary_by_html = "<div class='small text-muted mt-1' style='font-size: 10px; line-height: 1.2;'><i class='fas fa-user-edit me-1'></i>{$row['summary_by']}</div>";
             }
 
-            $safe_summary = htmlspecialchars($row['summary'] ?? '', ENT_QUOTES, 'UTF-8');
+            // 🟢 [จุดที่ต้องแก้] เพิ่ม 3 บรรทัดนี้เพื่อลบ Enter ออกจากข้อความ
+            $raw_summary = $row['summary'] ?? '';
+            $safe_summary = htmlspecialchars($raw_summary, ENT_QUOTES, 'UTF-8');
+            $safe_summary = preg_replace("/\r|\n/", " ", $safe_summary);
+            // --------------------------------------------------------
+
             $current_status_id = (int) ($row['status_id'] ?? 0);
 
             // แสดง HTML ของแถว
@@ -399,8 +404,10 @@ if (isset($_GET['ajax'])) {
                         <span class='status-pill' style='$statusPillStyle'>$showStatus</span>
                     </td>
                     <td class='text-center'>
-                        <a href='work_plan_add.php?edit_id={$row['id']}' class='text-warning me-2'><i class='fas fa-pen'></i></a>
-                        <a href='#' onclick='confirmDelete({$row['id']})' class='text-danger'><i class='fas fa-trash'></i></a>
+                        " . ($_SESSION['fullname'] == $row['reporter_name'] ? "
+                            <a href='work_plan_add.php?edit_id={$row['id']}' class='text-warning me-2'><i class='fas fa-pen'></i></a>
+                            <a href='#' onclick='confirmDelete({$row['id']})' class='text-danger'><i class='fas fa-trash'></i></a>
+                        " : "") . "
                     </td>
                   </tr>";
         }
@@ -441,6 +448,11 @@ if (isset($_GET['ajax'])) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/l10n/th.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/airbnb.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/th.js"></script>
 </head>
 
 <body>
@@ -640,19 +652,21 @@ if (isset($_GET['ajax'])) {
                                 $worker = !empty($row['team_member']) ? $row['team_member'] : $row['reporter_name'];
                                 $hasSummary = !empty($row['summary']);
 
-                                // 🟢 [Logic] ถ้ามีสรุปงานเเล้ว -> ใช้สถานะใหม่ / ถ้ายัง -> ใช้ Plan
+                                // 🟢 [1. เพิ่มส่วนนี้] จัดการข้อความสรุป: ลบ Enter ออก เพื่อไม่ให้ JS พัง
+                                $raw_summary = $row['summary'] ?? '';
+                                $safe_summary = htmlspecialchars($raw_summary, ENT_QUOTES, 'UTF-8');
+                                $safe_summary = preg_replace("/\r|\n/", " ", $safe_summary); // เปลี่ยนบรรทัดใหม่เป็นวรรคตอน
+                                // -----------------------------------------------------------
+                        
                                 if ($hasSummary && !empty($row['status_name'])) {
                                     $showStatus = $row['status_name'];
                                     $statusIdForColor = $row['master_status_id'];
                                 } else {
-                                    $showStatus = $row['status']; // Plan
+                                    $showStatus = $row['status'];
                                     $statusIdForColor = 999;
                                 }
 
-                                // 🟢 [เรียกใช้ฟังก์ชันใหม่] getStatusThemeColor
                                 $themeColor = getStatusThemeColor($showStatus, $statusIdForColor);
-
-                                // สร้าง Style สำหรับ Pill ในตาราง (พื้นหลังจางๆ สวยๆ)
                                 $statusPillStyle = "background: $themeColor; color: white; border-radius: 6px; padding: 4px 10px; font-weight: 500; box-shadow: 0 2px 4px rgba(0,0,0,0.15); border: 1px solid rgba(255,255,255,0.2);";
                                 ?>
                                 <tr>
@@ -674,7 +688,7 @@ if (isset($_GET['ajax'])) {
 
                                     <td>
                                         <button class="btn btn-sm btn-light border mt-1 text-success"
-                                            onclick="openSummaryModal(<?php echo $row['id']; ?>, '<?php echo htmlspecialchars($row['summary'] ?? ''); ?>', <?php echo (int) $row['status_id']; ?>)">
+                                            onclick="openSummaryModal(<?php echo $row['id']; ?>, '<?php echo $safe_summary; ?>', <?php echo (int) $row['status_id']; ?>)">
                                             <i class="fas <?php echo $hasSummary ? 'fa-check-double' : 'fa-plus'; ?>"></i>
                                             <?php echo $hasSummary ? 'สรุปแล้ว' : 'บันทึกผล'; ?>
                                         </button>
@@ -693,12 +707,14 @@ if (isset($_GET['ajax'])) {
                                     </td>
 
                                     <td class="text-center">
-                                        <a href="work_plan_add.php?edit_id=<?php echo $row['id']; ?>" class="text-warning me-2">
-                                            <i class="fas fa-pen"></i>
-                                        </a>
-                                        <a href="#" onclick="confirmDelete(<?php echo $row['id']; ?>)" class="text-danger">
-                                            <i class="fas fa-trash"></i>
-                                        </a>
+                                        <?php if ($_SESSION['fullname'] == $row['reporter_name']): ?>
+                                            <a href="work_plan_add.php?edit_id=<?php echo $row['id']; ?>" class="text-warning me-2">
+                                                <i class="fas fa-pen"></i>
+                                            </a>
+                                            <a href="#" onclick="confirmDelete(<?php echo $row['id']; ?>)" class="text-danger">
+                                                <i class="fas fa-trash"></i>
+                                            </a>
+                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -769,11 +785,13 @@ if (isset($_GET['ajax'])) {
                         <div class="mb-3">
                             <label class="form-label fw-bold">ช่วงวันที่แผนงาน</label>
                             <div class="input-group">
-                                <input type="date" id="ex_start_date" class="form-control"
-                                    value="<?php echo date('Y-m-01'); ?>">
+                                <input type="text" id="ex_start_date" class="form-control datepicker"
+                                    placeholder="เลือกวันที่เริ่มต้น" value="">
+
                                 <span class="input-group-text bg-light">ถึง</span>
-                                <input type="date" id="ex_end_date" class="form-control"
-                                    value="<?php echo date('Y-m-t'); ?>">
+
+                                <input type="text" id="ex_end_date" class="form-control datepicker"
+                                    placeholder="เลือกวันที่สิ้นสุด" value="">
                             </div>
                         </div>
 
@@ -849,6 +867,17 @@ if (isset($_GET['ajax'])) {
             } else {
                 console.error("❌ Flatpickr Library ยังไม่ถูกโหลด!");
             }
+        });
+
+        document.addEventListener('DOMContentLoaded', function () {
+            flatpickr(".datepicker", {
+                locale: "th",             // 🇹🇭 ตั้งค่าเป็นภาษาไทย
+                dateFormat: "Y-m-d",      // 💾 ค่าจริงที่ส่งไป Database (เช่น 2026-03-01)
+                altInput: true,           // ✅ เปิดโหมดแสดงผลต่างจากค่าจริง
+                altFormat: "d/m/Y",       // 👀 รูปแบบที่โชว์ให้ตาเห็น (เช่น 01/03/2026)
+                allowInput: true,         // อนุญาตให้พิมพ์วันที่เองได้
+                disableMobile: "true"     // บังคับใช้หน้าตา Flatpickr บนมือถือ (เพื่อให้ฟอร์แมตไม่เพี้ยน)
+            });
         });
     </script>
 </body>

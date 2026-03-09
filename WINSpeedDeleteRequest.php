@@ -227,7 +227,7 @@ $sql_history = "SELECT w.*, c.company_shortname AS req_comp_short
 if (!empty($where_clauses)) {
     $sql_history .= " WHERE " . implode(" AND ", $where_clauses);
 }
-$sql_history .= " ORDER BY w.request_datetime DESC LIMIT 100";
+$sql_history .= " ORDER BY w.request_datetime DESC";
 
 // Prepare & Execute
 $stmt_hist = $conn->prepare($sql_history);

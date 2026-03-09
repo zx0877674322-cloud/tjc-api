@@ -18,7 +18,13 @@ $kpi_query = "SELECT
             ELSE 0 
         END 
         ELSE 0 
-    END) AS expiring_projects
+    END) AS expiring_projects,
+    SUM(CASE 
+        WHEN status = 'เซ็นสัญญา' AND guarantee_end_date IS NOT NULL AND guarantee_end_date != '0000-00-00'
+        THEN CASE 
+            WHEN DATEDIFF(guarantee_end_date, CURDATE()) <= COALESCE(NULLIF(alert_warranty_days, 0), 30) AND DATEDIFF(guarantee_end_date, CURDATE()) >= 0 THEN 1 
+            ELSE 0 
+        END ELSE 0 END) AS expiring_warranty
 FROM projects";
 
 $kpi_result = $conn->query($kpi_query);
@@ -38,7 +44,12 @@ $kpi_company_query = "SELECT
             ELSE 0 
         END 
         ELSE 0 
-    END) AS expiring_projects
+    END) AS expiring_projects,
+    SUM(CASE 
+        WHEN status = 'เซ็นสัญญา' AND guarantee_end_date IS NOT NULL AND guarantee_end_date != '0000-00-00'
+        THEN CASE 
+            WHEN DATEDIFF(guarantee_end_date, CURDATE()) <= COALESCE(NULLIF(alert_warranty_days, 0), 30) AND DATEDIFF(guarantee_end_date, CURDATE()) >= 0 THEN 1 
+            ELSE 0 END ELSE 0 END) AS expiring_warranty
 FROM projects GROUP BY company_id";
 
 $kpi_company_result = $conn->query($kpi_company_query);
@@ -67,14 +78,15 @@ $sql_list = "SELECT p.*,
             COALESCE(cust.customer_name, 'ไม่ระบุ') as customer_name,
             COALESCE(p.customer_address, CONCAT_WS(' ', cust.address, cust.sub_district, cust.district, cust.province, cust.zip_code), 'ไม่ระบุ') as customer_address,
             COALESCE(p.customer_phone, cust.phone_number, 'ไม่ระบุ') as customer_phone,
+            cust.contact_person,  /* <--- เพิ่ม */
+            cust.contact_phone,   /* <--- เพิ่ม */
             COALESCE(p.customer_affiliation, cust.affiliation, 'ไม่ระบุ') as customer_affiliation,
             COALESCE(jt.type_name, 'ไม่ระบุ') as job_type_name
         FROM projects p
         LEFT JOIN companies c ON p.company_id = c.id
         LEFT JOIN customers cust ON p.customer_id = cust.customer_id
         LEFT JOIN project_job_types jt ON p.job_type_id = jt.id
-        ORDER BY p.created_at ASC 
-        LIMIT 500"; // ดึงมา 500 รายการล่าสุด
+        ORDER BY p.created_at ASC";
 $projects = $conn->query($sql_list);
 ?>
 
@@ -833,6 +845,30 @@ $projects = $conn->query($sql_list);
             word-break: break-word;
             font-size: 0.95rem;
         }
+
+        .border-cyan {
+            border-left-color: #06b6d4 !important;
+        }
+
+        .text-cyan {
+            color: #06b6d4 !important;
+        }
+
+        /* ไฮไลท์แถวในตารางเมื่อประกันใกล้หมด */
+        .expiring-warranty-row {
+            background-color: #ecfeff !important;
+            border-left: 4px solid #06b6d4 !important;
+        }
+
+        .btn-list {
+            background: #f3e8ff;
+            color: #9333ea;
+        }
+
+        .btn-list:hover {
+            background: #9333ea;
+            color: #fff;
+        }
     </style>
 </head>
 
@@ -880,9 +916,17 @@ $projects = $conn->query($sql_list);
                     </div>
                     <div class="kpi-mini-card border-red text-red clickable mini-card-status" data-status="expiring"
                         onclick="filterByCompAndStat('all', 'expiring')">
-                        <div class="mini-title"><i class="fas fa-bell"></i> แจ้งเตือนหมดสัญญา</div>
+                        <div class="mini-title"><i class="fas fa-bell"></i> แจ้งเตือนใกล้หมดสัญญา</div>
                         <div class="mini-value"><?= number_format($kpi_all['expiring_projects']) ?> <span
                                 style="font-size:0.9rem;color:#ef4444;font-weight:400;">งาน</span></div>
+                    </div>
+                    <div class="kpi-mini-card border-cyan text-cyan clickable mini-card-status"
+                        data-status="expiring_warranty" onclick="filterByCompAndStat('all', 'expiring_warranty')">
+                        <div class="mini-title"><i class="fas fa-shield-alt"></i> แจ้งเตือนหมดประกัน</div>
+                        <div class="mini-value">
+                            <?= number_format($kpi_all['expiring_warranty'] ?? 0) ?> <span
+                                style="font-size:0.9rem;color:#94a3b8;font-weight:400;">งาน</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -949,6 +993,15 @@ $projects = $conn->query($sql_list);
                             <div class="mini-value"><?= number_format($cdata['expiring_projects']) ?> <span
                                     style="font-size:0.9rem;color:#ef4444;font-weight:400;">งาน</span></div>
                         </div>
+                        <div class="kpi-mini-card border-cyan text-cyan clickable mini-card-status"
+                            data-status="expiring_warranty"
+                            onclick="filterByCompAndStat('<?= $cid ?>', 'expiring_warranty')">
+                            <div class="mini-title"><i class="fas fa-shield-alt"></i> แจ้งเตือนหมดประกัน</div>
+                            <div class="mini-value">
+                                <?= number_format($cdata['expiring_warranty'] ?? 0) ?> <span
+                                    style="font-size:0.9rem;color:#94a3b8;font-weight:400;">งาน</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             <?php endforeach; ?>
@@ -981,115 +1034,168 @@ $projects = $conn->query($sql_list);
                 <table id="projectTable">
                     <thead>
                         <tr>
-                            <th width="10%">หน้างาน</th>
-                            <th width="15%">บริษัท</th>
-                            <th width="12%" style="text-align: center;">วันที่สิ้นสุดสัญญา</th>
-                            <th width="15%" style="text-align: center;">ระยะเวลาครบกำหนดส่ง</th>
-                            <th width="20%">ลูกค้า</th>
-                            <th width="10%">ประเภทงาน</th>
-                            <th width="10%" style="text-align: center;">สถานะ</th>
-                            <th width="8%" style="text-align: center;">จัดการ</th>
+                            <th width="8%">หน้างาน</th>
+                            <th width="12%">บริษัท</th>
+
+                            <th width="10%" style="text-align: center;">สิ้นสุดสัญญา</th>
+                            <th width="10%" style="text-align: center;">ครบกำหนดส่ง</th>
+
+                            <th width="10%" style="text-align: center; color:#2563eb;">ระยะประกัน</th>
+                            <th width="10%" style="text-align: center;">เริ่มค้ำฯ</th>
+                            <th width="10%" style="text-align: center;">สิ้นสุดค้ำฯ</th>
+
+                            <th width="15%">ลูกค้า</th>
+                            <th width="8%">ประเภทงาน</th>
+                            <th width="8%" style="text-align: center;">สถานะ</th>
+                            <th width="7%" style="text-align: center;">จัดการ</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if ($projects && $projects->num_rows > 0): ?>
                             <?php while ($row = $projects->fetch_assoc()):
-                                // คำนวณสี Badge
+                                // --- เตรียมตัวแปรวันที่ปัจจุบัน ---
+                                $today = new DateTime();
+                                $today->setTime(0, 0, 0);
+
+                                // 1. จัดการข้อมูลสัญญา (ครบกำหนดส่ง)
                                 $is_signed = ($row['status'] == 'เซ็นสัญญา');
                                 $badge_class = $is_signed ? 'badge-success' : 'badge-warning';
                                 $badge_icon = $is_signed ? 'fa-check-circle' : 'fa-clock';
-
-                                // จัดการวันที่แสดงผล
                                 $end_date_show = !empty($row['end_date']) ? date('d/m/Y', strtotime($row['end_date'])) : '-';
 
-                                $days_remaining = "-";
-                                $is_expiring = false;
+                                $contract_countdown_html = "-";
+                                $is_row_expiring = false;
+                                $alert_contract = isset($row['alert_days_before_expire']) ? intval($row['alert_days_before_expire']) : 30;
 
-                                // ดึงค่าการแจ้งเตือนจากฐานข้อมูล (ถ้าไม่มีให้ใช้ 30 เป็นค่าเริ่มต้น)
-                                $alert_days = isset($row['alert_days_before_expire']) && $row['alert_days_before_expire'] !== '' ? intval($row['alert_days_before_expire']) : 30;
-
-                                if (!empty($row['end_date'])) {
-                                    $today = new DateTime();
-                                    $today->setTime(0, 0, 0); // รีเซ็ตเวลาให้เริ่มที่เที่ยงคืน
+                                if (!empty($row['end_date']) && $row['end_date'] != '0000-00-00') {
                                     $expire_date = new DateTime($row['end_date']);
                                     $expire_date->setTime(0, 0, 0);
                                     if ($today <= $expire_date) {
-                                        $interval = $today->diff($expire_date);
-                                        $diff_days = $interval->days;
-
-                                        // ตรวจสอบเงื่อนไขแจ้งเตือน (เหลือน้อยกว่าหรือเท่ากับวันแจ้งเตือนที่ตั้งไว้)
-                                        if ($diff_days <= $alert_days) {
-                                            $is_expiring = true;
-                                            $days_remaining = '<span class="badge badge-danger expiring-badge"><i class="fas fa-exclamation-triangle"></i> ' . $diff_days . ' วัน</span>';
+                                        $diff_c = $today->diff($expire_date)->days;
+                                        if ($diff_c <= $alert_contract) {
+                                            $is_row_expiring = true;
+                                            $contract_countdown_html = '<span class="badge badge-danger expiring-badge" style="font-size: 0.85rem; min-width: 60px;">' . $diff_c . ' วัน</span>';
                                         } else {
-                                            $days_remaining = '<span style="color:#059669; font-weight:700;"><i class="far fa-clock" style="margin-right:5px; opacity:0.7;"></i>' . $diff_days . ' วัน</span>';
+                                            $contract_countdown_html = '<span style="color:#059669; font-weight:700; font-size: 0.9rem;">' . $diff_c . ' วัน</span>';
                                         }
                                     } else {
-                                        $is_expiring = true;
-                                        $days_remaining = '<span class="badge badge-danger"><i class="fas fa-times-circle"></i> หมดสัญญาแล้ว</span>';
+                                        $is_row_expiring = true;
+                                        $contract_countdown_html = '<span class="badge badge-danger" style="font-size: 0.75rem;">หมดสัญญา</span>';
                                     }
                                 }
+
+                                // 2. จัดการข้อมูลประกัน (ระยะประกัน)
+                                $warranty_countdown_html = "-";
+                                $is_warranty_warning = false;
+                                $alert_warranty = isset($row['alert_warranty_days']) ? intval($row['alert_warranty_days']) : 30;
+
+                                if (!empty($row['guarantee_end_date']) && $row['guarantee_end_date'] != '0000-00-00') {
+                                    $g_end_dt = new DateTime($row['guarantee_end_date']);
+                                    $g_end_dt->setTime(0, 0, 0);
+                                    if ($today <= $g_end_dt) {
+                                        $diff_w = $today->diff($g_end_dt)->days;
+                                        if ($diff_w <= $alert_warranty) {
+                                            $is_warranty_warning = true;
+                                            $warranty_countdown_html = '<span class="badge badge-warning expiring-badge" style="background:#f97316; color:#fff; border:none; font-size: 0.85rem; min-width: 60px;">' . $diff_w . ' วัน</span>';
+                                        } else {
+                                            $warranty_countdown_html = '<span style="color:#2563eb; font-weight:700; font-size: 0.9rem;">' . $diff_w . ' วัน</span>';
+                                        }
+                                    } else {
+                                        $warranty_countdown_html = '<span class="badge" style="font-size: 0.75rem; background:#94a3b8; color:#fff;">หมดประกัน</span>';
+                                    }
+                                }
+
+                                // จัดการข้อมูลวันที่เริ่ม-สิ้นสุดค้ำ เพื่อแสดงผลในตาราง
+                                $g_start_show = (!empty($row['guarantee_start_date']) && $row['guarantee_start_date'] != '0000-00-00') ? date('d/m/Y', strtotime($row['guarantee_start_date'])) : '-';
+                                $g_end_show = (!empty($row['guarantee_end_date']) && $row['guarantee_end_date'] != '0000-00-00') ? date('d/m/Y', strtotime($row['guarantee_end_date'])) : '-';
                                 ?>
-                                <tr class="<?= $is_expiring ? 'expiring-row' : '' ?>"
+
+                                <tr class="<?= $is_row_expiring ? 'expiring-row' : '' ?> <?= $is_warranty_warning ? 'expiring-warranty-row' : '' ?>"
                                     data-company-id="<?= htmlspecialchars($row['company_id']) ?>"
                                     data-start-date="<?= htmlspecialchars($row['start_date']) ?>"
                                     data-end-date="<?= htmlspecialchars($row['end_date']) ?>">
+
                                     <td>
                                         <div class="text-bold"><?= htmlspecialchars($row['id']) ?></div>
                                     </td>
+
                                     <td>
-                                        <div class="text-bold"><i class="fas fa-building"
+                                        <div class="text-bold" style="font-size:0.85rem;"><i class="fas fa-building"
                                                 style="color:#94a3b8; margin-right:5px;"></i><?= htmlspecialchars($row['company_name']) ?>
                                         </div>
                                     </td>
+
                                     <td style="text-align: center;">
-                                        <div style="font-size: 0.9rem; font-weight: 500; color: #475569;">
-                                            <i class="far fa-calendar-alt"></i> <?= $end_date_show ?>
+                                        <div style="font-size: 0.85rem; color: #475569;"><?= $end_date_show ?></div>
+                                    </td>
+
+                                    <td style="text-align: center;"><?= $contract_countdown_html ?></td>
+
+                                    <td style="text-align: center;"><?= $warranty_countdown_html ?></td>
+
+                                    <td style="text-align: center;">
+                                        <div style="font-size: 0.85rem; color: #64748b;"><?= $g_start_show ?></div>
+                                    </td>
+
+                                    <td style="text-align: center;">
+                                        <div style="font-size: 0.85rem; color: #475569; font-weight:500;"><?= $g_end_show ?>
                                         </div>
                                     </td>
-                                    <td style="text-align: center;">
-                                        <?= $days_remaining ?>
-                                    </td>
+
                                     <td>
-                                        <div class="text-bold" style="color: #4f46e5; white-space: nowrap;"><i
-                                                class="fas fa-user-tie"
-                                                style="margin-right:5px;"></i><?= htmlspecialchars($row['customer_name']) ?>
+                                        <div class="text-bold"
+                                            style="color: #4f46e5; font-size:0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px;"
+                                            title="<?= htmlspecialchars($row['customer_name']) ?>">
+                                            <?= htmlspecialchars($row['customer_name']) ?>
                                         </div>
                                     </td>
-                                    <td>
-                                        <span class="badge"
-                                            style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1;">
-                                            <i class="fas fa-tag"></i> <?= htmlspecialchars($row['job_type_name']) ?>
-                                        </span>
+
+                                    <td><span class="badge"
+                                            style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; font-size: 0.7rem;"><?= htmlspecialchars($row['job_type_name']) ?></span>
                                     </td>
-                                    <td class="status-col">
-                                        <span class="badge <?= $badge_class ?>">
-                                            <i class="fas <?= $badge_icon ?>"></i> <?= htmlspecialchars($row['status']) ?>
-                                        </span>
-                                    </td>
+
+                                    <td class="status-col" style="text-align: center;"><span class="badge <?= $badge_class ?>"
+                                            style="font-size: 0.7rem;"><i class="fas <?= $badge_icon ?>"></i>
+                                            <?= htmlspecialchars($row['status']) ?></span></td>
+
                                     <td style="text-align: center;">
-                                        <div style="display: flex; justify-content: center; gap: 5px;">
-                                            <a href="javascript:void(0);" class="btn-action btn-view"
-                                                title="ดูรายละเอียดข้อมูลเพิ่มเติม" data-info='<?= htmlspecialchars(json_encode([
+                                        <div style="display: flex; justify-content: center; gap: 4px;">
+                                            <a href="javascript:void(0);" class="btn-action btn-view" title="ดูรายละเอียด"
+                                                data-info='<?= htmlspecialchars(json_encode([
+                                                    // ข้อมูลโครงการ
                                                     "project_name" => $row['project_name'] ?? '-',
                                                     "contract_no" => $row['contract_no'] ?? '-',
+                                                    "project_budget" => number_format($row['project_budget'] ?? 0, 2),
+                                                    "start_date" => (!empty($row['start_date']) && $row['start_date'] != '0000-00-00') ? date('d/m/Y', strtotime($row['start_date'])) : '-',
+
+                                                    // ข้อมูลลูกค้า
                                                     "customer_affiliation" => $row['customer_affiliation'] ?? '-',
                                                     "customer_phone" => $row['customer_phone'] ?? '-',
                                                     "customer_address" => $row['customer_address'] ?? '-',
-                                                    "project_budget" => number_format($row['project_budget'] ?? 0, 2),
-                                                    "start_date" => (!empty($row['start_date']) && $row['start_date'] != '0000-00-00') ? date('d/m/Y', strtotime($row['start_date'])) : '-',
-                                                    "warranty" => ($row['warranty_value'] > 0 ? $row['warranty_value'] . ' ' . ($row['warranty_unit'] == 'years' ? 'ปี' : 'วัน') : '-'),
-                                                    "alert_days" => ($row['alert_days_before_expire'] ?? '-') . ' วัน',
+                                                    "contact_person" => $row['contact_person'] ?? '-',
+                                                    "contact_phone" => $row['contact_phone'] ?? '-',
+
+                                                    // ระยะประกันและการแจ้งเตือน (✅ ส่วนที่มักจะว่าง)
+                                                    "warranty" => ($row['warranty_value'] > 0) ? $row['warranty_value'] . ' ' . ($row['warranty_unit'] == 'years' ? 'ปี' : 'วัน') : '-',
+                                                    "alert_warranty_days" => ($row['alert_warranty_days'] ?? '30') . " วัน",
+                                                    "alert_contract_days" => ($row['alert_days_before_expire'] ?? '30') . " วัน",
+                                                    "alert_days" => ($row['alert_days_before_expire'] ?? '30') . " วัน",
+
+                                                    // การยื่นซอง
                                                     "bidding_type" => $row['bidding_type'] ?? '-',
                                                     "bidding_date" => (!empty($row['bidding_date']) && $row['bidding_date'] != '0000-00-00') ? date('d/m/Y', strtotime($row['bidding_date'])) : '-',
                                                     "quotation_no" => $row['quotation_no'] ?? '-',
                                                     "quote_creator" => $row['quote_creator'] ?? '-',
+
+                                                    // ค้ำประกัน (✅ ส่วนที่มักจะว่าง)
                                                     "guarantee_type" => $row['guarantee_type'] ?? 'ไม่มี',
-                                                    "guarantee_no" => $row['guarantee_no'] ?? '-',
-                                                    "guarantee_percent" => ($row['project_budget'] > 0 && $row['guarantee_amount'] > 0) ? rtrim(rtrim(number_format(($row['guarantee_amount'] / $row['project_budget']) * 100, 2), '0'), '.') : '0',
+                                                    "guarantee_no" => $row['guarantee_no'] ?: '-',
                                                     "guarantee_amount" => number_format($row['guarantee_amount'] ?? 0, 2),
+                                                    "guarantee_percent" => ($row['project_budget'] > 0) ? number_format((($row['guarantee_amount'] ?? 0) / $row['project_budget']) * 100, 2) : '0',
                                                     "guarantee_start" => (!empty($row['guarantee_start_date']) && $row['guarantee_start_date'] != '0000-00-00') ? date('d/m/Y', strtotime($row['guarantee_start_date'])) : '-',
                                                     "guarantee_end" => (!empty($row['guarantee_end_date']) && $row['guarantee_end_date'] != '0000-00-00') ? date('d/m/Y', strtotime($row['guarantee_end_date'])) : '-',
+
+                                                    // ประวัติการบันทึก (✅ ส่วนที่มักจะว่าง)
                                                     "sales_user" => $row['sales_user'] ?: '-',
                                                     "recorder" => $row['recorder'] ?? '-',
                                                     "created_at" => !empty($row['created_at']) ? date('d/m/Y H:i', strtotime($row['created_at'])) : '-'
@@ -1099,17 +1205,22 @@ $projects = $conn->query($sql_list);
                                             </a>
                                             <a href="create_project.php?edit_id=<?= $row['id'] ?>" class="btn-action btn-edit"
                                                 title="แก้ไข"><i class="fas fa-edit"></i></a>
+                                            <a href="project_details.php?id=<?= $row['id'] ?>" class="btn-action btn-list"
+                                                title="จัดการรายการสินค้า">
+                                                <i class="fas fa-list-ul"></i>
+                                            </a>
+                                            <a href="create_item_entry.php?project_id=<?= $row['id'] ?>"
+                                                class="btn-action btn-add-item" title="เพิ่มรายการสินค้า / จัดซื้อ">
+                                                <i class="fas fa-cart-plus"></i>
+                                            </a>
                                         </div>
                                     </td>
                                 </tr>
                             <?php endwhile; ?>
                         <?php else: ?>
                             <tr>
-                                <td colspan="8" style="text-align: center; padding: 40px; color: #94a3b8;">
-                                    <i class="fas fa-folder-open fa-3x"
-                                        style="display: block; margin-bottom: 10px; opacity: 0.3;"></i>
-                                    ยังไม่มีข้อมูลโครงการในระบบ
-                                </td>
+                                <td colspan="11" style="text-align: center; padding: 40px; color: #94a3b8;">
+                                    ยังไม่มีข้อมูลโครงการในระบบ</td>
                             </tr>
                         <?php endif; ?>
                     </tbody>
@@ -1140,8 +1251,17 @@ $projects = $conn->query($sql_list);
                     <div class="detail-value" id="modal-customer-affiliation">-</div>
                 </div>
                 <div class="detail-row">
-                    <div class="detail-label"><i class="fas fa-phone-alt"></i> เบอร์ติดต่อ</div>
+                    <div class="detail-label"><i class="fas fa-phone-alt"></i> เบอร์หน่วยงาน (Office)</div>
                     <div class="detail-value" id="modal-customer-phone">-</div>
+                </div>
+
+                <div class="detail-row">
+                    <div class="detail-label"><i class="fas fa-user-tie text-success"></i> ชื่อผู้ติดต่อ</div>
+                    <div class="detail-value" id="modal-contact-person">-</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label"><i class="fas fa-mobile-alt text-success"></i> เบอร์มือถือผู้ติดต่อ</div>
+                    <div class="detail-value" id="modal-contact-phone">-</div>
                 </div>
                 <div class="detail-row">
                     <div class="detail-label"><i class="fas fa-map-marker-alt"></i> ที่อยู่</div>
@@ -1161,6 +1281,17 @@ $projects = $conn->query($sql_list);
                 <div class="detail-row">
                     <div class="detail-label"><i class="fas fa-shield-alt"></i> ระยะเวลารับประกัน</div>
                     <div class="detail-value" id="modal-warranty"></div>
+                </div>
+
+                <div class="detail-row">
+                    <div class="detail-label"><i class="fas fa-exclamation-circle text-blue"></i> แจ้งเตือนหมดประกัน
+                    </div>
+                    <div class="detail-value" id="modal-alert-warranty-days"></div>
+                </div>
+
+                <div class="detail-row">
+                    <div class="detail-label"><i class="fas fa-bell text-red"></i> แจ้งเตือนหมดสัญญา</div>
+                    <div class="detail-value" id="modal-alert-contract-days"></div>
                 </div>
                 <div class="detail-row">
                     <div class="detail-label"><i class="fas fa-bell"></i> แจ้งเตือนล่วงหน้า</div>
@@ -1327,8 +1458,11 @@ $projects = $conn->query($sql_list);
                 if (currentFilterStatus === 'all') {
                     matchStatus = true;
                 } else if (currentFilterStatus === 'expiring') {
-                    // ดูว่า tr นี้มี class expiring-row หรือไม่
                     if (row.classList.contains('expiring-row')) {
+                        matchStatus = true;
+                    }
+                } else if (currentFilterStatus === 'expiring_warranty') {
+                    if (row.classList.contains('expiring-warranty-row')) {
                         matchStatus = true;
                     }
                 } else {
@@ -1375,17 +1509,26 @@ $projects = $conn->query($sql_list);
         function viewDetails(element) {
             let data = JSON.parse(element.getAttribute('data-info'));
 
+            // 1. ข้อมูลพื้นฐาน
             document.getElementById('modal-project-name').innerText = data.project_name;
             document.getElementById('modal-contract-no').innerText = data.contract_no;
-            document.getElementById('modal-customer-affiliation').innerText = data.customer_affiliation;
-            document.getElementById('modal-customer-phone').innerText = data.customer_phone;
-            document.getElementById('modal-customer-address').innerText = data.customer_address;
             document.getElementById('modal-project-budget').innerText = '฿' + data.project_budget;
             document.getElementById('modal-start-date').innerText = data.start_date;
 
+            // 2. ข้อมูลลูกค้า
+            document.getElementById('modal-customer-affiliation').innerText = data.customer_affiliation;
+            document.getElementById('modal-contact-person').innerText = data.contact_person;
+            document.getElementById('modal-contact-phone').innerText = data.contact_phone;
+            document.getElementById('modal-customer-phone').innerText = data.customer_phone;
+            document.getElementById('modal-customer-address').innerText = data.customer_address;
+
+            // 3. ประกันและการแจ้งเตือน
             document.getElementById('modal-warranty').innerText = data.warranty;
+            document.getElementById('modal-alert-warranty-days').innerText = data.alert_warranty_days;
+            document.getElementById('modal-alert-contract-days').innerText = data.alert_contract_days;
             document.getElementById('modal-alert-days').innerText = data.alert_days;
 
+            // 4. การยื่นซอง
             document.getElementById('modal-bidding-type').innerText = data.bidding_type;
             if (data.bidding_type === 'ยื่น') {
                 document.getElementById('bidding-date-row').style.display = 'flex';
@@ -1393,35 +1536,33 @@ $projects = $conn->query($sql_list);
             } else {
                 document.getElementById('bidding-date-row').style.display = 'none';
             }
-
             document.getElementById('modal-quotation-no').innerText = data.quotation_no;
             document.getElementById('modal-quote-creator').innerText = data.quote_creator;
 
-            document.getElementById('modal-sales-user').innerText = data.sales_user;
-            document.getElementById('modal-recorder').innerText = data.recorder;
-            document.getElementById('modal-created-at').innerText = data.created_at;
-
+            // 5. ค้ำประกัน (จัดการซ่อน/แสดง ตามประเภท)
             document.getElementById('modal-guarantee-type').innerText = data.guarantee_type;
-
-            // ซ่อน/แสดง แถวตามประเภทการค้ำประกัน
             if (data.guarantee_type === 'หนังสือค้ำ') {
                 document.getElementById('guarantee-no-row').style.display = 'flex';
-                document.getElementById('modal-guarantee-no').innerText = data.guarantee_no;
-
                 document.getElementById('guarantee-start-row').style.display = 'flex';
-                document.getElementById('modal-guarantee-start').innerText = data.guarantee_start;
-
                 document.getElementById('guarantee-end-row').style.display = 'flex';
-                document.getElementById('modal-guarantee-end').innerText = data.guarantee_end;
-
                 document.getElementById('guarantee-amount-row').style.display = 'none';
+
+                document.getElementById('modal-guarantee-no').innerText = data.guarantee_no;
+                document.getElementById('modal-guarantee-start').innerText = data.guarantee_start;
+                document.getElementById('modal-guarantee-end').innerText = data.guarantee_end;
             } else if (data.guarantee_type === 'เงินสด') {
                 document.getElementById('guarantee-no-row').style.display = 'none';
-                document.getElementById('guarantee-start-row').style.display = 'none';
-                document.getElementById('guarantee-end-row').style.display = 'none';
 
+                // ✅ 1. แก้เป็น flex เพื่อโชว์บรรทัดวันที่
+                document.getElementById('guarantee-start-row').style.display = 'flex';
+                document.getElementById('guarantee-end-row').style.display = 'flex';
                 document.getElementById('guarantee-amount-row').style.display = 'flex';
+
+                // ✅ 2. ใส่ข้อมูลวันที่ลงไป
                 document.getElementById('modal-guarantee-amount').innerText = '฿' + data.guarantee_amount + ' (' + data.guarantee_percent + '%)';
+                document.getElementById('modal-guarantee-start').innerText = data.guarantee_start;
+                document.getElementById('modal-guarantee-end').innerText = data.guarantee_end;
+
             } else {
                 document.getElementById('guarantee-no-row').style.display = 'none';
                 document.getElementById('guarantee-start-row').style.display = 'none';
@@ -1429,12 +1570,15 @@ $projects = $conn->query($sql_list);
                 document.getElementById('guarantee-amount-row').style.display = 'none';
             }
 
+            // 6. ประวัติผู้บันทึก
+            document.getElementById('modal-sales-user').innerText = data.sales_user;
+            document.getElementById('modal-recorder').innerText = data.recorder;
+            document.getElementById('modal-created-at').innerText = data.created_at;
+
+            // เปิด Modal
             let modal = document.getElementById('detailModal');
             modal.style.display = 'flex';
-            // slight delay to allow display flex to apply before opacity transition
-            setTimeout(() => {
-                modal.classList.add('show');
-            }, 10);
+            setTimeout(() => { modal.classList.add('show'); }, 10);
         }
 
         function closeModal() {

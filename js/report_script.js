@@ -1,16 +1,127 @@
 let workBoxCount = 1;
 
-document.addEventListener('DOMContentLoaded', function() {
-    // 1. Init ปฏิทิน (เหมือนเดิม)
-    initFlatpickr("#reportDateDisplay", "#reportDateHidden");
+document.addEventListener('DOMContentLoaded', async function() {
+    // 1. Init ปฏิทิน (เหมือนเดิม ยกเว้นวันที่รายงานถูกล็อคแล้ว)
+    // initFlatpickr("#reportDateDisplay", "#reportDateHidden");
     initFlatpickr(".next-appt", null);
 
     // 2. Load Job Status (เหมือนเดิม)
-    loadJobStatus(document.querySelector('#work-box-1 .job-status-select'));
+    await loadJobStatus(document.querySelector('#work-box-1 .job-status-select'));
 
     // ✅ 3. เปิดใช้งาน Autocomplete ให้กล่องแรกทันที
     setupAutocomplete(document.querySelector('#work-box-1 .customer-input'), customerList);
+    if (typeof isEditMode !== 'undefined' && isEditMode === true && existingWorkData) {
+        loadExistingData();
+    }
 });
+function loadExistingData() {
+    console.log("Loading existing data...");
+    try {
+        // 1. จัดการข้อมูล Header (GPS, จังหวัด ฯลฯ)
+        // หมายเหตุ: ตัวแปร editData ต้องถูกส่งมาจาก PHP ผ่าน json_encode
+        if (typeof editData !== 'undefined' && editData) {
+        const workType = editData.gps && editData.gps !== 'Office' ? 'outside' : 'company';
+        const radioInp = document.querySelector(`input[name="work_type"][value="${workType}"]`);
+        if (radioInp) {
+            radioInp.checked = true;
+            toggleWorkMode(workType);
+        }
+
+        if (workType === 'outside') {
+            const gpsInput = document.getElementById("gpsInput");
+            if (gpsInput) gpsInput.value = editData.gps || '';
+            const areaSelect = document.getElementById("areaSelect");
+            if (areaSelect) {
+                areaSelect.value = editData.area || '';
+                updateProvinces(); 
+                setTimeout(() => {
+                    const provinceSelect = document.getElementById("provinceSelect");
+                    if (provinceSelect) provinceSelect.value = editData.province || '';
+                }, 100);
+            }
+        }
+    }
+
+    // 2. จัดการกล่องงาน (Work Boxes)
+    const customers = existingWorkData.customers || [];
+    const projects = existingWorkData.projects || [];
+    const statuses = existingWorkData.statuses || [];
+    const nextApps = existingWorkData.next_apps || [];
+    const summaries = existingWorkData.summaries || []; // ต้องส่งมาจาก PHP ด้วย
+    const notes = existingWorkData.notes || [];
+
+    // วนลูปสร้างกล่องงานตามจำนวนข้อมูลจริง
+    customers.forEach((cus, idx) => {
+        if (idx > 0) addWorkBox(); // ถ้ามีงานมากกว่า 1 ให้สร้างกล่องเพิ่ม
+
+        const box = document.getElementById(`work-box-${idx + 1}`);
+        if (box) {
+            // ยัดข้อมูลลงช่องต่างๆ
+            box.querySelector('.customer-input').value = cus;
+            
+            // แยกข้อมูลโครงการ (กรณีมีการเก็บ มูลค่า: xxx บาท ต่อท้าย)
+            let pjFull = projects[idx] || '';
+            let pjName = pjFull.replace(/\(มูลค่า:.*บาท\)/g, "").trim();
+            let pjVal = "";
+            if (pjFull.match(/มูลค่า:\s*([\d,.]+)/)) {
+                pjVal = pjFull.match(/มูลค่า:\s*([\d,.]+)/)[1];
+            }
+
+            box.querySelector('input[name="project_name[]"]').value = pjName;
+            box.querySelector('input[name="project_value[]"]').value = pjVal;
+            box.querySelector('.job-status-select').value = statuses[idx] || '';
+            box.querySelector('.next-appt').value = nextApps[idx] || '';
+            box.querySelector('textarea[name="visit_summary[]"]').value = (summaries[idx] || '').replace(/^•\s.*:\s/, "");
+            box.querySelector('textarea[name="additional_notes[]"]').value = notes[idx] || '';
+            
+            // เรียกเช็คประเภทลูกค้าเพื่อติ๊ก Radio เก่า/ใหม่ อัตโนมัติ
+            checkCustomerType(box.querySelector('.customer-input'));
+        }
+    });
+
+    // 3. จัดการค่าใช้จ่าย (Expenses)
+    if (typeof editData !== 'undefined') {
+        // ค่าน้ำมัน
+        if (parseFloat(editData.fuel_cost) > 0) {
+            document.getElementById('fuel_check').checked = true;
+            document.getElementById('row-fuel').classList.add('active');
+            // กรณีน้ำมันมีหลายบิล (คั่นด้วยคอมม่า)
+            const fuelParts = String(editData.fuel_cost).split(','); 
+            fuelParts.forEach((val, i) => {
+                if (i > 0) addFuelRow();
+                const fuelInputs = document.querySelectorAll('input[name="fuel_cost[]"]');
+                fuelInputs[i].value = val.trim();
+            });
+        }
+        
+        // ค่าที่พัก
+        if (parseFloat(editData.accommodation_cost) > 0) {
+            const chk = document.querySelector('#row-hotel input[type="checkbox"]');
+            chk.checked = true;
+            toggleOneExpense('hotel_input', 'row-hotel');
+            document.getElementById('hotel_input').value = editData.accommodation_cost;
+        }
+
+        // ค่าอื่นๆ
+        if (parseFloat(editData.other_cost) > 0) {
+            const chk = document.querySelector('#row-other input[type="checkbox"]');
+            chk.checked = true;
+            toggleOneExpense('other_input', 'row-other');
+            document.getElementById('other_input').value = editData.other_cost;
+            document.querySelector('input[name="other_cost_detail"]').value = editData.other_cost_detail;
+        }
+        
+        // สรุปยอดรวมเบื้องต้น
+        calculateTotal();
+
+        // ปัญหาและข้อเสนอแนะ
+        document.querySelector('textarea[name="problem"]').value = editData.problem || '';
+        }
+    } catch (e) {
+        console.error("Error in loadExistingData:", e);
+        alert("เกิดข้อผิดพลาดในการโหลดข้อมูลเก่า กรุณาติดต่อผู้พัฒนา: \n" + e.message + "\n\n" + e.stack);
+    }
+}
 
 // ฟังก์ชันเพิ่มกล่องงาน
 function addWorkBox() {
@@ -194,8 +305,11 @@ function toggleWorkMode(mode) {
 }
 
 function updateProvinces() {
-    const zone = document.getElementById("areaSelect").value;
+    const areaSelect = document.getElementById("areaSelect");
+    if (!areaSelect) return;
+    const zone = areaSelect.value;
     const provinceSelect = document.getElementById("provinceSelect");
+    if (!provinceSelect) return;
     provinceSelect.innerHTML = '<option value="">-- รอเลือกภาค --</option>';
     let list = [];
     if (zone === 'เฉพาะ จ.อุบลราชธานี') list = ['อุบลราชธานี'];

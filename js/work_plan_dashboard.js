@@ -164,19 +164,42 @@ function exportToExcel() {
 }
 // 1. ฟังก์ชันเปิด Modal
     function openExportModal() {
-        var myModal = new bootstrap.Modal(document.getElementById('exportModal'));
-        myModal.show();
-    }
+    // ดึงค่าจากหน้า Dashboard ที่กรองค้างไว้
+    let currentStartDate = document.getElementById('start_date').value;
+    let currentEndDate = document.getElementById('end_date').value;
+    let currentStatus = document.getElementById('filter_status_input').value; // ค่า ID สถานะ
+    let currentTeam = document.querySelector('select[name="filter_team"]').value;
+    let currentWorker = document.querySelector('select[name="filter_worker"]').value;
+    let currentUser = document.querySelector('select[name="filter_user"]').value; // ผู้บันทึก
+
+    // เอาค่ามาหยอดใส่ใน Modal Export
+    document.getElementById('ex_start_date').value = currentStartDate;
+    document.getElementById('ex_end_date').value = currentEndDate;
+    document.getElementById('ex_type').value = currentTeam;
+    document.getElementById('ex_worker').value = currentWorker;
+    
+    // ตั้งค่า Select สถานะใน Modal ให้ตรงกับที่เลือกไว้
+    let statusSelect = document.getElementById('ex_status');
+    if(statusSelect) statusSelect.value = currentStatus;
+
+    // เปิด Modal
+    var myModal = new bootstrap.Modal(document.getElementById('exportModal'));
+    myModal.show();
+}
 
     // 2. ฟังก์ชันกดปุ่มยืนยันดาวน์โหลด (ใน Modal)
-    function confirmExport() {
-    let startDate = document.getElementById('ex_start_date').value;
-    let endDate   = document.getElementById('ex_end_date').value;
-    let type      = document.getElementById('ex_type').value;
-    let worker    = document.getElementById('ex_worker').value;
-    let status    = document.getElementById('ex_status').value; // ดึงค่าจาก Select ใน Modal
+   function confirmExport() {
+    // รับค่าจาก Input ใน Modal (ที่ผู้ใช้ตรวจสอบแล้ว)
+    let params = new URLSearchParams({
+        start_date: document.getElementById('ex_start_date').value,
+        end_date: document.getElementById('ex_end_date').value,
+        filter_team: document.getElementById('ex_type').value,
+        filter_worker: document.getElementById('ex_worker').value,
+        filter_status: document.getElementById('ex_status').value // ค่าสถานะที่เลือก
+    });
 
-    // ส่งค่า status ไปใน URL
-    let url = `export_work_plan.php?start_date=${startDate}&end_date=${endDate}&type=${type}&worker=${encodeURIComponent(worker)}&status=${status}`;
-    window.location.href = url;
+    // 🟢 ส่งไปที่ไฟล์ export_work_plan_excel.php (ไฟล์ใหม่)
+    let url = `export_work_plan.php?${params.toString()}`;
+    
+    window.open(url, '_blank');
 }

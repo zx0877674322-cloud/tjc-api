@@ -458,14 +458,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
                     <div class="card-body-modern">
 
-                        <div  class="form-group" style="margin-bottom: 20px; display:none; background: #f8fafc; padding: 15px; border-radius: 10px; border: 1px dashed #cbd5e1;">
+                        <div  class="form-group" style="margin-bottom: 20px; ; background: #f8fafc; padding: 15px; border-radius: 10px; border: 1px dashed #cbd5e1;">
                             <label class="form-label" style="font-size:1rem; color:var(--primary); margin-bottom:10px;">ระบุข้อมูลโครงการ</label>
                             <div style="display:flex; gap:30px;">
                                 <label style="cursor:pointer; display:flex; align-items:center; gap:8px;">
                                     <input type="radio" name="project_mode" value="search" 
                                         <?php echo ($get_site_id > 0) ? 'checked' : ''; ?> 
                                         onclick="toggleProjectMode('search')"> 
-                                    <span style="font-weight:600; color:#334155; display:none;">🔍 ค้นหาจากฐานข้อมูล</span>
+                                    <span style="font-weight:600; color:#334155; ;">🔍 ค้นหาจากฐานข้อมูล</span>
                                 </label>
                                 
                                 <label style="cursor:pointer; display:flex; align-items:center; gap:8px;">

@@ -34,33 +34,45 @@ $edit_id = 0;
 $is_team_edit = false; // ตัวแปรเช็คว่าเป็นงานทีมหรือไม่
 
 // --- 3. โหมดแก้ไข ---
+$row_edit = []; // ประกาศเผื่อไว้ก่อน
 if (isset($_GET['edit_id'])) {
     $edit_id = intval($_GET['edit_id']);
+
+    // ดึงข้อมูลโดยตรง
     $stmt_edit = $conn->prepare("SELECT * FROM work_plans WHERE id = ?");
     $stmt_edit->bind_param("i", $edit_id);
     $stmt_edit->execute();
     $res_edit = $stmt_edit->get_result();
+
     if ($res_edit->num_rows > 0) {
         $temp = $res_edit->fetch_assoc();
-        // เช็คสิทธิ์ (เจ้าของ หรือ เป็นชื่อลูกทีมในนั้น)
-        if ($temp['reporter_name'] === $current_user || $temp['team_member'] === $current_user) {
+
+        // 🟢 [จุดที่ปรับแก้] เช็คสิทธิ์: เจ้าของงาน OR ลูกทีม OR ผู้บันทึก
+        // เพิ่ม trim() เพื่อป้องกันช่องว่างทำให้เช็คชื่อไม่ผ่าน
+        if (
+            trim($temp['reporter_name']) === trim($current_user) ||
+            trim($temp['team_member']) === trim($current_user)
+        ) {
+
             $row_edit = $temp;
             $edit_mode = true;
-            // เช็คว่าเป็นงานทีมหรือไม่
-            if ($row_edit['team_type'] == 'Auction') {
-                $is_team_edit = true;
-            }
+            $is_team_edit = ($row_edit['team_type'] == 'Auction');
+
+        } else {
+            // ถ้ามี ID แต่ไม่มีสิทธิ์ ให้เด้งออกทันที
+            echo "<script>alert('คุณไม่มีสิทธิ์แก้ไขรายการนี้'); window.location.href='work_plan_dashboard.php';</script>";
+            exit;
         }
     }
     $stmt_edit->close();
 }
 
-// --- 4. ส่วนบันทึกข้อมูล (ฉบับแก้ไขสมบูรณ์) ---
+// --- 4. ส่วนบันทึกข้อมูล (แก้ไขเรื่อง Status ID) ---
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_plan'])) {
 
     $plan_type = $_POST['plan_type'] ?? 'individual';
 
-    // 1. แปลงวันที่บันทึก (Record Date)
+    // 1. แปลงวันที่บันทึก
     $record_date_raw = $_POST['record_date'] ?? '';
     if (!empty($record_date_raw)) {
         $record_date = DateTime::createFromFormat('d/m/Y', $record_date_raw)->format('Y-m-d');
@@ -69,28 +81,40 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_plan'])) {
     }
     $final_created_at = $record_date . " " . date("H:i:s");
 
-    $status = 'Plan'; // Default status
+    // 🟢 2. หา ID ของสถานะ 'Plan' จากตาราง master (แก้ปัญหา ID 1 ผิด)
+    $status_id = 0; // Default เป็น 0 ไว้ก่อน (หรือ NULL)
+    $status_text = 'Plan';
+
+    // ลองค้นหา ID ของคำว่า "Plan" หรือ "วางแผน"
+    $q_st = $conn->query("SELECT id FROM master_job_status WHERE status_name LIKE '%Plan%' OR status_name LIKE '%วางแผน%' LIMIT 1");
+    if ($q_st && $row_st = $q_st->fetch_assoc()) {
+        $status_id = $row_st['id']; // ได้ ID ที่ถูกต้องจาก DB
+    }
 
     // ====================================================
-    // กรณีที่ 1: แก้ไขข้อมูล (Edit Mode) - ทำทีละรายการ
+    // กรณีที่ 1: แก้ไขข้อมูล (Edit Mode)
     // ====================================================
     if ($edit_mode) {
         $plan_date_raw = $_POST['plan_date'] ?? '';
         $plan_date = !empty($plan_date_raw) ? DateTime::createFromFormat('d/m/Y', $plan_date_raw)->format('Y-m-d') : '';
         $contact_person = trim($_POST['contact_person']);
         $work_detail = trim($_POST['work_detail']);
-        $status = $_POST['status'];
+
+        // ถ้าเป็นการแก้ไข ให้ใช้ status เดิมที่มีอยู่ (ไม่เปลี่ยนเป็น Plan ใหม่)
+        $current_status_text = $_POST['status'] ?? $row_edit['status'];
+        $current_status_id = $row_edit['status_id'] ?? $status_id; // ใช้ของเดิม หรือถ้าไม่มีให้ใช้ Plan
 
         $team_member_save = (!empty($row_edit['team_member'])) ? $row_edit['team_member'] : null;
 
-        $sql = "UPDATE work_plans SET plan_date=?, contact_person=?, work_detail=?, status=?, created_at=?, team_member=? WHERE id=?";
+        $sql = "UPDATE work_plans SET plan_date=?, contact_person=?, work_detail=?, status=?, status_id=?, created_at=?, team_member=? WHERE id=?";
         $stmt = $conn->prepare($sql);
-        $stmt->bind_param("ssssssi", $plan_date, $contact_person, $work_detail, $status, $final_created_at, $team_member_save, $edit_id);
+        // แก้ไข type ให้ตรง (status เป็น s, status_id เป็น i)
+        $stmt->bind_param("ssssissi", $plan_date, $contact_person, $work_detail, $current_status_text, $current_status_id, $final_created_at, $team_member_save, $edit_id);
         $stmt->execute();
         $stmt->close();
     }
     // ====================================================
-    // กรณีที่ 2: เพิ่มใหม่ - แผนงานเดี่ยว (Individual Loop)
+    // กรณีที่ 2: เพิ่มใหม่ - แผนงานเดี่ยว
     // ====================================================
     elseif ($plan_type == 'individual') {
         $ind_dates = $_POST['ind_plan_date'] ?? [];
@@ -100,7 +124,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_plan'])) {
         $team_type = 'Marketing';
         $company_to_save = $user_company_fullname;
 
-        $sql = "INSERT INTO work_plans (reporter_name, created_at, plan_date, contact_person, work_detail, status, company, team_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+        // 🟢 เพิ่ม status_id ในการบันทึก
+        $sql = "INSERT INTO work_plans (reporter_name, created_at, plan_date, contact_person, work_detail, status, status_id, company, team_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $conn->prepare($sql);
 
         for ($i = 0; $i < count($ind_dates); $i++) {
@@ -111,14 +136,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_plan'])) {
             $p_date = !empty($p_date_raw) ? DateTime::createFromFormat('d/m/Y', $p_date_raw)->format('Y-m-d') : '';
 
             if (!empty($p_date) && !empty($p_contact)) {
-                $stmt->bind_param("ssssssss", $current_user, $final_created_at, $p_date, $p_contact, $p_detail, $status, $company_to_save, $team_type);
+                // bind status_text และ status_id
+                $stmt->bind_param("ssssssiss", $current_user, $final_created_at, $p_date, $p_contact, $p_detail, $status_text, $status_id, $company_to_save, $team_type);
                 $stmt->execute();
             }
         }
         $stmt->close();
     }
     // ====================================================
-    // กรณีที่ 3: เพิ่มใหม่ - แผนงานทีม (Team Loop)
+    // กรณีที่ 3: เพิ่มใหม่ - แผนงานทีม
     // ====================================================
     elseif ($plan_type == 'team') {
         $team_type = 'Auction';
@@ -128,7 +154,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_plan'])) {
         $contacts = $_POST['team_contact'] ?? [];
         $details = $_POST['team_detail'] ?? [];
 
-        $sql = "INSERT INTO work_plans (reporter_name, team_member, created_at, plan_date, contact_person, work_detail, status, company, team_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        // 🟢 เพิ่ม status_id ในการบันทึก
+        $sql = "INSERT INTO work_plans (reporter_name, team_member, created_at, plan_date, contact_person, work_detail, status, status_id, company, team_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $conn->prepare($sql);
 
         for ($i = 0; $i < count($emp_names); $i++) {
@@ -140,7 +167,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_plan'])) {
             $r_detail = $details[$i];
 
             if (!empty($r_member) && !empty($r_date)) {
-                $stmt->bind_param("sssssssss", $current_user, $r_member, $final_created_at, $r_date, $r_contact, $r_detail, $status, $r_comp, $team_type);
+                // แก้ให้ตรง: s = string (7 ตัวแรก), i = integer (ตัวที่ 8: status_id), s = string (2 ตัวท้าย) -> รวมเป็น sssssssiss
+                $stmt->bind_param("sssssssiss", $current_user, $r_member, $final_created_at, $r_date, $r_contact, $r_detail, $status_text, $status_id, $r_comp, $team_type);
                 $stmt->execute();
             }
         }
@@ -308,8 +336,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_plan'])) {
                         </div>
                         <div class="col-md-12">
                             <label class="form-label">วันที่บันทึกข้อมูล</label>
-                            <input type="text" name="created_at" class="form-control datepicker"
-                                value="<?php echo date('d/m/Y'); ?>" readonly>
+                            <input type="text" name="created_at" class="form-control bg-readonly text-muted"
+                                value="<?php echo date('d/m/Y'); ?>" readonly
+                                style="cursor: not-allowed; pointer-events: none;">
                         </div>
                     </div>
 
@@ -348,16 +377,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_plan'])) {
                                     placeholder="ระบุรายละเอียด..."><?php echo htmlspecialchars($row_edit['work_detail']); ?></textarea>
                             </div>
 
-                            <div class="mb-3">
-                                <label class="form-label">สถานะ</label>
-                                <select name="status" class="form-select">
-                                    <?php
-                                    $opts = ['Plan' => 'Plan', 'Confirmed' => 'Confirmed', 'Completed' => 'Completed', 'Cancelled' => 'Cancelled'];
-                                    foreach ($opts as $k => $v)
-                                        echo "<option value='$k' " . ($row_edit['status'] == $k ? 'selected' : '') . ">$v</option>";
-                                    ?>
-                                </select>
-                            </div>
+                            <!-- ซ่อนสถานะไม่ให้แก้ตามความต้องการผู้ใช้ -->
+                            <input type="hidden" name="status" value="<?php echo htmlspecialchars($row_edit['status']); ?>">
 
                         <?php else: ?>
                             <div class="alert alert-info border-0 bg-info-subtle text-info-emphasis mb-4">

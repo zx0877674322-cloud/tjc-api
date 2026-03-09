@@ -2,6 +2,49 @@
 session_start();
 require_once 'auth.php';
 require_once 'db_connect.php';
+// ตรวจสอบเเละรับคำสั่งลบข้อมูล (AJAX)
+if (isset($_GET['action']) && $_GET['action'] == 'delete_report' && isset($_GET['id'])) {
+    header('Content-Type: application/json; charset=utf-8');
+    if (!isset($_SESSION['fullname'])) {
+        echo json_encode(['status' => 'error', 'message' => 'คุณยังไม่ได้เข้าสู่ระบบ']);
+        exit();
+    }
+
+    $report_id = intval($_GET['id']);
+    $my_name = $_SESSION['fullname'];
+
+    $check_sql = "SELECT reporter_name FROM reports WHERE id = ?";
+    $stmt = $conn->prepare($check_sql);
+    $stmt->bind_param("i", $report_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    if ($result->num_rows === 0) {
+        echo json_encode(['status' => 'error', 'message' => 'ไม่พบข้อมูลรายงานในระบบ']);
+        $stmt->close();
+        exit();
+    }
+
+    $row = $result->fetch_assoc();
+    if ($row['reporter_name'] !== $my_name && $_SESSION['role'] !== 'admin') {
+        echo json_encode(['status' => 'error', 'message' => 'คุณไม่มีสิทธิ์ลบรายงานของพนักงานท่านอื่น']);
+        $stmt->close();
+        exit();
+    }
+    $stmt->close();
+
+    $delete_sql = "DELETE FROM reports WHERE id = ?";
+    $stmt_del = $conn->prepare($delete_sql);
+    $stmt_del->bind_param("i", $report_id);
+
+    if ($stmt_del->execute()) {
+        echo json_encode(['status' => 'success', 'message' => 'ลบข้อมูลเรียบร้อยแล้ว']);
+    } else {
+        echo json_encode(['status' => 'error', 'message' => 'ไม่สามารถลบข้อมูลได้: ' . $conn->error]);
+    }
+    $stmt_del->close();
+    exit();
+}
 
 // ตรวจสอบ Login
 if (!isset($_SESSION['fullname'])) {
@@ -579,6 +622,29 @@ function getStatusConfig($status)
 
         .text-center {
             text-align: center;
+        }
+
+        .btn-edit-main {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #e0e7ff;
+            /* สีฟ้าอ่อน Indigo */
+            color: #4338ca;
+            transition: all 0.2s;
+            text-decoration: none;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .btn-edit-main:hover {
+            background: #c7d2fe;
+            color: #3730a3;
+            transform: translateY(-3px);
+            box-shadow: 0 4px 8px rgba(67, 56, 202, 0.2);
         }
     </style>
 </head>

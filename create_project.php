@@ -16,14 +16,108 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $warranty_unit = $_POST['warranty_unit'] ?? 'days';
         $end_date = !empty($_POST['end_date']) ? $_POST['end_date'] : null;
 
-        // 🔥 ค่าใหม่: จำนวนวันแจ้งเตือนล่วงหน้า
-        $alert_days = intval($_POST['alert_days_before_expire'] ?? 30);
+        // 🔥 [1] แก้ไข: รับค่าตัวแปรให้ตรงกับที่ bind_param เรียกใช้
+        // (ในโค้ดเก่าคุณประกาศ $alert_days แต่ข้างล่างเรียก $alert_contract_days ทำให้ค่าเป็น null)
+        $alert_contract_days = intval($_POST['alert_contract_days'] ?? 30);
+        $alert_warranty_days = intval($_POST['alert_warranty_days'] ?? 30);
 
         $job_type_id = $_POST['job_type_id'] ?? null;
         $sales_user = $_POST['sales_user'] ?? null;
         $project_name = $_POST['project_name'] ?? '';
         $project_budget = floatval(str_replace(',', '', $_POST['project_budget'] ?? 0));
         $customer_id = $_POST['customer_id'] ?? null;
+
+        // 🔥 [NEW] Logic: จัดการลูกค้าใหม่ (แทรกตรงนี้ก่อนจะไปดึงข้อมูลลูกค้าเดิม)
+        if (isset($_POST['is_new_customer']) && $_POST['is_new_customer'] == '1') {
+            // 1. รับค่าจากฟอร์มลูกค้าใหม่
+            $new_name = $_POST['new_customer_name'] ?? '';
+            $new_phone = $_POST['new_phone_number'] ?? '';
+            $new_affil = $_POST['new_affiliation'] ?? '';
+            $new_addr = $_POST['new_address'] ?? '';
+            $new_sub = $_POST['new_sub_district'] ?? '';
+            $new_dist = $_POST['new_district'] ?? '';
+            $new_prov = $_POST['new_province'] ?? '';
+            $new_zip = $_POST['new_zip_code'] ?? '';
+
+            // ✅ [NEW] รับค่าผู้ติดต่อและเบอร์มือถือ
+            $new_contact_person = $_POST['new_contact_person'] ?? '';
+            $new_contact_phone = $_POST['new_contact_phone'] ?? '';
+
+            $new_remark = $_POST['new_remark'] ?? '';
+
+            // 2. Insert ลงตาราง customers (เพิ่ม contact_person, contact_phone)
+            if (!empty($new_name)) {
+                $sql_new_cust = "INSERT INTO customers (
+                    customer_name, phone_number, affiliation, address, sub_district, district, province, zip_code, 
+                    contact_person, contact_phone, remark, is_active, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())";
+
+                $stmt_nc = $conn->prepare($sql_new_cust);
+
+                // s = 11 ตัว (เพิ่มมา 2 ตัว)
+                $stmt_nc->bind_param(
+                    "sssssssssss",
+                    $new_name,
+                    $new_phone,
+                    $new_affil,
+                    $new_addr,
+                    $new_sub,
+                    $new_dist,
+                    $new_prov,
+                    $new_zip,
+                    $new_contact_person,
+                    $new_contact_phone,
+                    $new_remark
+                );
+
+                if ($stmt_nc->execute()) {
+                    $customer_id = $stmt_nc->insert_id; // ได้ ID ลูกค้าใหม่
+
+                    // 3. เตรียมข้อมูล Address Snapshot
+                    $address_parts = array_filter([$new_addr, $new_sub, $new_dist, $new_prov, $new_zip]);
+                    $customer_address_full = implode(' ', $address_parts);
+                    $customer_phone = $new_phone;
+                    $customer_affiliation = $new_affil;
+                } else {
+                    throw new Exception("ไม่สามารถบันทึกข้อมูลลูกค้าใหม่ได้: " . $stmt_nc->error);
+                }
+                $stmt_nc->close();
+            } else {
+                throw new Exception("กรุณาระบุชื่อลูกค้าใหม่");
+            }
+        }
+        // ถ้าไม่ใช่ลูกค้าใหม่ ให้ใช้ Logic เดิม (ดึงข้อมูลจาก DB)
+        else {
+            // ... (วางโค้ดส่วน // 1.1 Fetch details... เดิม ไว้ใน block else นี้) ...
+            // 1.1 Fetch details from customers table
+            $customer_address_full = null;
+            $customer_phone = null;
+            $customer_affiliation = null;
+
+            if ($customer_id) {
+                $stmt_cust = $conn->prepare("SELECT address, sub_district, district, province, zip_code, phone_number, affiliation FROM customers WHERE customer_id = ?");
+                $stmt_cust->bind_param("i", $customer_id);
+                $stmt_cust->execute();
+                $res_cust = $stmt_cust->get_result();
+
+                if ($res_cust && $row_cust = $res_cust->fetch_assoc()) {
+                    $address_parts = array_filter([
+                        $row_cust['address'],
+                        $row_cust['sub_district'],
+                        $row_cust['district'],
+                        $row_cust['province'],
+                        $row_cust['zip_code']
+                    ]);
+                    $customer_address_full = implode(' ', $address_parts);
+                    $customer_phone = $row_cust['phone_number'];
+                    $customer_affiliation = $row_cust['affiliation'];
+                }
+                $stmt_cust->close();
+            }
+        }
+
+        // กำหนดค่าเข้าตัวแปรหลัก (เพื่อให้ Logic เดิมข้างล่างทำงานต่อได้)
+        $customer_address = $customer_address_full;
 
         // 1.1 Fetch details from customers table
         $customer_address_full = null;
@@ -50,7 +144,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $stmt_cust->close();
         }
 
-        // Use the customer address from the customer table
         $customer_address = $customer_address_full;
 
         $bidding_type = $_POST['bidding_type'] ?? 'ไม่ยื่น';
@@ -63,52 +156,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $guarantee_no = null;
         $guarantee_start_date = null;
         $guarantee_end_date = null;
-        $guarantee_amount = 0; // 🔥 ค่าใหม่: จำนวนเงินค้ำประกัน
+        $guarantee_amount = 0;
 
         if ($guarantee_type == 'หนังสือค้ำ') {
             $guarantee_no = $_POST['guarantee_no'] ?? null;
+            // รับค่าจากช่องของหนังสือค้ำ
             $guarantee_start_date = !empty($_POST['guarantee_start_date']) ? $_POST['guarantee_start_date'] : null;
             $guarantee_end_date = !empty($_POST['guarantee_end_date']) ? $_POST['guarantee_end_date'] : null;
+        } elseif ($guarantee_type == 'เงินสด') {
+            // รับค่าจากช่องของเงินสด (ใช้ชื่อตัวแปรเดียวกับ DB เพื่อความง่าย)
+            $guarantee_start_date = !empty($_POST['cash_start_date']) ? $_POST['cash_start_date'] : null;
+            $guarantee_end_date = !empty($_POST['cash_end_date']) ? $_POST['cash_end_date'] : null;
         }
 
         if ($guarantee_type != 'ไม่มี') {
             $guarantee_amount = floatval(str_replace(',', '', $_POST['guarantee_amount'] ?? 0));
         }
 
-        // 🔥 LOGIC สถานะ: ถ้าวันที่เริ่ม หรือ วันที่สิ้นสุด ไม่มีข้อมูล = "รอเซ็นสัญญา"
+        // Logic สถานะ
         if (empty($start_date) || empty($end_date)) {
             $status = 'รอเซ็นสัญญา';
         } else {
             $status = 'เซ็นสัญญา';
         }
 
-        // ตรวจสอบว่าแก้ไขหรือเพิ่มใหม่
         $edit_id = $_POST['edit_id'] ?? null;
 
         if ($edit_id) {
-            // อัปเดตข้อมูล (26 ฟิลด์ + 1 edit_id = 27 ตัวแปร)
+            // ==========================================
+            // CASE UPDATE (28 Params: 27 Values + 1 ID)
+            // ==========================================
             $sql = "UPDATE projects SET 
-                company_id=?, contract_no=?, start_date=?, warranty_value=?, warranty_unit=?, end_date=?, alert_days_before_expire=?,
+                company_id=?, contract_no=?, start_date=?, warranty_value=?, warranty_unit=?, end_date=?, 
+                alert_days_before_expire=?, alert_warranty_days=?, 
                 job_type_id=?, sales_user=?, project_name=?, project_budget=?, customer_id=?, customer_address=?, customer_phone=?, customer_affiliation=?,
                 bidding_type=?, bidding_date=?, quotation_no=?, quote_creator=?, 
                 guarantee_type=?, guarantee_no=?, guarantee_start_date=?, guarantee_end_date=?, guarantee_amount=?, status=?, recorder=?
                 WHERE id=?";
+
             $stmt = $conn->prepare($sql);
-            // type definition: 27 ตัว
-            // i=1 (company_id), s=1 (contract_no), s=1 (start_date), i=1 (warranty_value), s=1 (warranty_unit), s=1 (end_date), i=1 (alert_days),
-            // i=1 (job_type_id), s=1 (sales_user), s=1 (project_name), d=1 (project_budget), i=1 (customer_id), s=1 (customer_address), s=1 (customer_phone), s=1 (customer_affiliation),
-            // s=1 (bidding_type), s=1 (bidding_date), s=1 (quotation_no), s=1 (quote_creator), 
-            // s=1 (guarantee_type), s=1 (guarantee_no), s=1 (guarantee_start_date), s=1 (guarantee_end_date), d=1 (guarantee_amount), s=1 (status), s=1 (recorder)
-            // i=1 (edit_id)
+
+            // 🔥 [2] แก้ไข Type String ให้ครบ 28 ตัว (เพิ่ม s ไป 1 ตัวตรงกลาง)
+            // ississiiissdisssssssssssdssi
             $stmt->bind_param(
-                "ississiisssdissssssssssdssi",
+                "ississiiissdisssssssssssdssi",
                 $company_id,
                 $contract_no,
                 $start_date,
                 $warranty_value,
                 $warranty_unit,
                 $end_date,
-                $alert_days,
+                $alert_contract_days,
+                $alert_warranty_days,
                 $job_type_id,
                 $sales_user,
                 $project_name,
@@ -131,26 +230,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $edit_id
             );
             $msg = 'อัปเดตโครงการสำเร็จ';
+
         } else {
-            // สร้างข้อมูลใหม่ (26 ฟิลด์)
+            // ==========================================
+            // CASE INSERT (27 Params)
+            // ==========================================
             $sql = "INSERT INTO projects (
-                company_id, contract_no, start_date, warranty_value, warranty_unit, end_date, alert_days_before_expire,
+                company_id, contract_no, start_date, warranty_value, warranty_unit, end_date, 
+                alert_days_before_expire, alert_warranty_days,
                 job_type_id, sales_user, project_name, project_budget, customer_id, customer_address, customer_phone, customer_affiliation,
                 bidding_type, bidding_date, quotation_no, quote_creator, 
                 guarantee_type, guarantee_no, guarantee_start_date, guarantee_end_date, guarantee_amount, status, recorder
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
             $stmt = $conn->prepare($sql);
-            // type definition: 26 ตัว
+
+            // 🔥 [3] แก้ไข Type String ให้ครบ 27 ตัว (เพิ่ม s ไป 1 ตัวตรงกลาง)
+            // ississiiissdisssssssssssdss
             $stmt->bind_param(
-                "ississiisssdissssssssssdss",
+                "ississiiissdisssssssssssdss",
                 $company_id,
                 $contract_no,
                 $start_date,
                 $warranty_value,
                 $warranty_unit,
                 $end_date,
-                $alert_days,
+                $alert_contract_days,
+                $alert_warranty_days,
                 $job_type_id,
                 $sales_user,
                 $project_name,
@@ -175,8 +281,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
 
         if (!$stmt->execute()) {
-            echo json_encode(['status' => 'error', 'message' => "SQL Error: " . $stmt->error]);
-            exit;
+            throw new Exception("SQL Error: " . $stmt->error);
         }
         echo json_encode(['status' => 'success', 'message' => $msg . ' สถานะ: ' . $status]);
 
@@ -229,6 +334,15 @@ if ($edit_id) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script type="text/javascript" src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+    <script type="text/javascript"
+        src="https://earthchie.github.io/jquery.Thailand.js/jquery.Thailand.js/dependencies/JQL.min.js"></script>
+    <script type="text/javascript"
+        src="https://earthchie.github.io/jquery.Thailand.js/jquery.Thailand.js/dependencies/typeahead.bundle.js"></script>
+    <link rel="stylesheet"
+        href="https://earthchie.github.io/jquery.Thailand.js/jquery.Thailand.js/dist/jquery.Thailand.min.css">
+    <script type="text/javascript"
+        src="https://earthchie.github.io/jquery.Thailand.js/jquery.Thailand.js/dist/jquery.Thailand.min.js"></script>
 
     <style>
         body {
@@ -368,12 +482,51 @@ if ($edit_id) {
             margin-top: 20px;
         }
 
+
+
+        .tt-menu {
+            width: 100%;
+            margin-top: 5px;
+            padding: 8px 0;
+            background-color: #fff;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .tt-suggestion {
+            padding: 8px 15px;
+            font-size: 0.95rem;
+            color: #334155;
+            cursor: pointer;
+        }
+
+        .tt-suggestion:hover {
+            background-color: #f1f5f9;
+            color: #3b82f6;
+        }
+
+        .tt-cursor {
+            /* ตอนกดลูกศรเลื่อนลง */
+            background-color: #3b82f6 !important;
+            color: #fff !important;
+        }
+
         .select2-container .select2-selection--single {
-            height: 42px !important;
+            height: 38px !important;
             border: 1px solid #cbd5e1 !important;
             border-radius: 8px !important;
-            display: flex;
-            align-items: center;
+        }
+
+        .select2-container--default .select2-selection--single .select2-selection__rendered {
+            line-height: 36px !important;
+            padding-left: 12px !important;
+        }
+
+        .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 36px !important;
         }
     </style>
 </head>
@@ -396,23 +549,138 @@ if ($edit_id) {
                     <label class="form-label">บริษัท <span style="color:red">*</span></label>
                     <select name="company_id" class="form-control select2" required>
                         <option value="">-- เลือกบริษัท --</option>
-                        <?php if ($companies)
+                        <?php
+                        // ✅ 1. รีเซ็ต Pointer ข้อมูลบริษัท (สำคัญ! เผื่อมีการใช้ตัวแปรนี้ไปแล้ว)
+                        if ($companies) {
+                            $companies->data_seek(0);
+
                             while ($c = $companies->fetch_assoc()) {
-                                $selected = ($project_data && $project_data['company_id'] == $c['id']) ? 'selected' : '';
+                                // ✅ 2. เช็คเงื่อนไขเทียบกับข้อมูลเดิม ($project_data)
+                                $selected = (isset($project_data['company_id']) && $project_data['company_id'] == $c['id']) ? 'selected' : '';
+
                                 echo "<option value='{$c['id']}' {$selected}>{$c['company_name']}</option>";
-                            } ?>
+                            }
+                        }
+                        ?>
                     </select>
                 </div>
+
                 <div class="form-group">
-                    <label class="form-label">ชื่อลูกค้า <span style="color:red">*</span></label>
-                    <select name="customer_id" class="form-control select2" required>
-                        <option value="">-- เลือกลูกค้า --</option>
-                        <?php if ($customers)
+                    <div class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
+                        <span>ชื่อลูกค้า <span style="color:red">*</span></span>
+
+                        <div style="font-size:0.85rem; color:#2563eb; display:flex; align-items:center; gap:6px;">
+                            <input type="checkbox" name="is_new_customer" id="is_new_customer" value="1"
+                                onchange="toggleCustomerMode()" style="width:16px; height:16px; cursor:pointer;">
+
+                            <span style="cursor:default;"> <i class="fas fa-plus-circle"></i> เพิ่มลูกค้าใหม่
+                            </span>
+                        </div>
+                    </div>
+
+                    <div id="existing_customer_box">
+                        <select name="customer_id" id="customer_id" class="form-control select2">
+                            <option value="">-- เลือกลูกค้า --</option>
+                            <?php
+                            if ($customers)
+                                $customers->data_seek(0);
                             while ($cust = $customers->fetch_assoc()) {
                                 $selected = ($project_data && $project_data['customer_id'] == $cust['customer_id']) ? 'selected' : '';
                                 echo "<option value='{$cust['customer_id']}' {$selected}>{$cust['customer_name']}</option>";
                             } ?>
-                    </select>
+                        </select>
+                    </div>
+
+                    <div id="new_customer_box" style="display:none;">
+                        <input type="text" name="new_customer_name" id="new_customer_name" class="form-control"
+                            placeholder="ระบุชื่อลูกค้า / หน่วยงานใหม่...">
+                    </div>
+                </div>
+            </div>
+
+            <div id="new_customer_details" class="hidden-group"
+                style="margin-bottom:20px; border:1px dashed #2563eb; background:#eff6ff;">
+                <div class="section-title" style="margin-top:0; background:none; padding-left:0; color:#1e40af;">
+                    <i class="fas fa-user-plus"></i> รายละเอียดลูกค้าใหม่
+                </div>
+
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label class="form-label">สังกัด / หน่วยงาน</label>
+                        <input type="text" name="new_affiliation" class="form-control" placeholder="เช่น สพฐ., อบต.">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">เบอร์โทรศัพท์หน่วยงาน (Office)</label>
+                        <input type="text" name="new_phone_number" class="form-control" placeholder="0xx-xxx-xxxx">
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label class="form-label" style="color:#059669;"><i class="fas fa-user-tie"></i> ชื่อผู้ติดต่อ
+                            (Contact Person)</label>
+                        <input type="text" name="new_contact_person" class="form-control"
+                            placeholder="ชื่อ-นามสกุล ผู้ประสานงาน">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" style="color:#059669;"><i class="fas fa-mobile-alt"></i>
+                            เบอร์มือถือผู้ติดต่อ</label>
+                        <input type="text" name="new_contact_phone" class="form-control" placeholder="0xx-xxx-xxxx">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">ที่อยู่ (เลขที่, หมู่, ซอย, ถนน)</label>
+                    <input type="text" name="new_address" class="form-control" placeholder="ระบุที่อยู่...">
+                </div>
+
+                <div style="text-align: right; margin-bottom: 10px;">
+                    <button type="button" class="btn-cancel" onclick="clearAddress()"
+                        style="padding: 5px 15px; font-size: 0.85rem; width: auto;">
+                        <i class="fas fa-sync-alt"></i> ล้างค่าที่อยู่
+                    </button>
+                </div>
+
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label class="form-label">จังหวัด</label>
+                        <select id="sel_province" name="new_province" class="form-control select2-addr">
+                            <option value="">-- เลือกจังหวัด --</option>
+                            <?php
+                            $res_p = $conn->query("SELECT * FROM provinces ORDER BY province_name ASC");
+                            if ($res_p) {
+                                while ($p = $res_p->fetch_assoc()) {
+                                    echo "<option value='{$p['province_name']}' data-id='{$p['id']}'>{$p['province_name']}</option>";
+                                }
+                            }
+                            ?>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">อำเภอ / เขต</label>
+                        <select id="sel_amphure" name="new_district" class="form-control select2-addr">
+                            <option value="">-- เลือกอำเภอ --</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label class="form-label">ตำบล / แขวง</label>
+                        <select id="sel_district" name="new_sub_district" class="form-control select2-addr">
+                            <option value="">-- เลือกตำบล --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">รหัสไปรษณีย์</label>
+                        <select id="sel_zipcode" name="new_zip_code" class="form-control select2-addr">
+                            <option value="">-- เลือกรหัสไปรษณีย์ --</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">หมายเหตุ (ถ้ามี)</label>
+                    <textarea name="new_remark" class="form-control" rows="2"></textarea>
                 </div>
             </div>
 
@@ -454,6 +722,8 @@ if ($edit_id) {
                 </div>
             </div>
 
+
+
             <?php $g_type = $project_data['guarantee_type'] ?? 'ไม่มี'; ?>
             <div class="grid-2">
                 <div class="form-group">
@@ -484,49 +754,54 @@ if ($edit_id) {
                     </div>
                     <div class="form-group">
                         <label class="form-label">วันที่ออกหนังสือ</label>
-                        <input type="text" name="guarantee_start_date" class="form-control datepicker"
-                            placeholder="เลือกวันที่..."
+                        <input type="text" name="guarantee_start_date" id="guarantee_start_date"
+                            class="form-control datepicker" placeholder="เลือกวันที่..."
+                            onchange="masterCalcWarrantyEndDate()"
                             value="<?= htmlspecialchars($project_data['guarantee_start_date'] ?? '') ?>">
                     </div>
                     <div class="form-group">
-                        <label class="form-label">วันที่สิ้นสุดหนังสือ</label>
-                        <input type="text" name="guarantee_end_date" class="form-control datepicker"
-                            placeholder="เลือกวันที่..."
+                        <label class="form-label">วันที่สิ้นสุดหนังสือ (คำนวณอัตโนมัติ)</label>
+                        <input type="text" name="guarantee_end_date" id="guarantee_end_date"
+                            class="form-control datepicker" placeholder="เลือกวันที่..."
+                            style="background:#fffbeb; font-weight:bold; color:#d97706;"
                             value="<?= htmlspecialchars($project_data['guarantee_end_date'] ?? '') ?>">
                     </div>
                 </div>
             </div>
 
-            <div class="section-title"><i class="fas fa-file-contract"></i> ข้อมูลสัญญา (Contract & Warranty)</div>
-            <div class="grid-3">
-                <div class="form-group">
-                    <label class="form-label">เลขที่สัญญา</label>
-                    <input type="text" name="contract_no" class="form-control" placeholder="ระบุเลขที่สัญญา..."
-                        value="<?= htmlspecialchars($project_data['contract_no'] ?? '') ?>">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">วันที่เริ่มสัญญา</label>
-                    <input type="text" name="start_date" id="start_date" class="form-control datepicker"
-                        placeholder="เลือกวันที่..." onchange="calcEndDate()"
-                        value="<?= htmlspecialchars($project_data['start_date'] ?? '') ?>">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">วันที่สิ้นสุดสัญญา (คำนวณอัตโนมัติ)</label>
-                    <input type="text" name="end_date" id="end_date" class="form-control datepicker"
-                        placeholder="เลือกวันที่..." style="background:#f1f5f9; font-weight:bold; color:#059669;"
-                        value="<?= htmlspecialchars($project_data['end_date'] ?? '') ?>">
+            <div id="cash_guarantee_section" style="<?= $g_type == 'เงินสด' ? 'display:block;' : 'display:none;' ?>">
+                <div class="grid-2"
+                    style="background: #ecfdf5; border: 1px dashed #10b981; padding: 15px; border-radius: 10px; margin-top: 10px; margin-bottom: 20px;">
+                    <div class="form-group">
+                        <label class="form-label" style="color: #047857;">วันที่เริ่มรับประกัน (Start)</label>
+                        <input type="text" name="cash_start_date" id="cash_start_date" class="form-control datepicker"
+                            placeholder="เลือกวันที่..." onchange="masterCalcWarrantyEndDate()"
+                            value="<?= htmlspecialchars($g_type == 'เงินสด' ? ($project_data['guarantee_start_date'] ?? '') : '') ?>">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" style="color: #047857;">วันที่สิ้นสุดประกัน
+                            (คำนวณจากระยะเวลารับประกัน)</label>
+                        <input type="text" name="cash_end_date" id="cash_end_date" class="form-control datepicker"
+                            placeholder="เลือกวันที่..." style="background:#ffffff; font-weight:bold; color:#047857;"
+                            onchange="calcWarrantyFromDate()"
+                            value="<?= htmlspecialchars($g_type == 'เงินสด' ? ($project_data['guarantee_end_date'] ?? '') : '') ?>">
+                    </div>
                 </div>
             </div>
 
-            <div class="grid-2">
+            <div class="grid-2" id="warranty_duration_group"
+                style="<?= ($project_data['guarantee_type'] ?? 'ไม่มี') == 'ไม่มี' ? 'display:none;' : '' ?>">
                 <div class="form-group">
-                    <label class="form-label">ระยะเวลารับประกัน</label>
+                    <label class="form-label" style="color: #2563eb;">ระยะเวลารับประกัน
+                        (ใช้คำนวณวันหมดอายุหนังสือค้ำ)</label>
                     <div style="display: flex; gap: 10px;">
                         <input type="number" name="warranty_value" id="warranty_value" class="form-control"
                             placeholder="ระบุตัวเลข"
                             value="<?= htmlspecialchars($project_data['warranty_value'] ?? 0) ?>" min="0"
-                            oninput="calcEndDate()">
-                        <select name="warranty_unit" id="warranty_unit" class="form-control" onchange="calcEndDate()">
+                            oninput="masterCalcWarrantyEndDate()">
+
+                        <select name="warranty_unit" id="warranty_unit" class="form-control"
+                            onchange="masterCalcWarrantyEndDate()">
                             <option value="days" <?= ($project_data && $project_data['warranty_unit'] == 'days') ? 'selected' : '' ?>>วัน (Days)</option>
                             <option value="years" <?= ($project_data && $project_data['warranty_unit'] == 'years') ? 'selected' : '' ?>>ปี (Years)</option>
                         </select>
@@ -534,12 +809,58 @@ if ($edit_id) {
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" style="color: #ea580c;"><i class="fas fa-bell"></i> แจ้งเตือนก่อนหมดสัญญา
+                    <label class="form-label" style="color: #2563eb;"><i class="fas fa-bell"></i> แจ้งเตือนก่อนหมดประกัน
                         (วัน)</label>
-                    <input type="number" name="alert_days_before_expire" class="form-control"
+                    <input type="number" name="alert_warranty_days" class="form-control"
                         placeholder="ระบุจำนวนวัน (เช่น 30)"
-                        value="<?= htmlspecialchars($project_data['alert_days_before_expire'] ?? 30) ?>" min="0">
+                        value="<?= htmlspecialchars($project_data['alert_warranty_days'] ?? 30) ?>" min="0">
                 </div>
+            </div>
+
+            <div class="section-title"><i class="fas fa-file-contract"></i> ข้อมูลสัญญา (Contract)</div>
+
+            <div class="form-group">
+                <label class="form-label">เลขที่สัญญา</label>
+                <input type="text" name="contract_no" class="form-control" placeholder="ระบุเลขที่สัญญา..."
+                    value="<?= htmlspecialchars($project_data['contract_no'] ?? '') ?>">
+            </div>
+
+            <div class="grid-3">
+                <div class="form-group">
+                    <label class="form-label">วันที่เริ่มสัญญา</label>
+                    <input type="text" name="start_date" id="start_date" class="form-control datepicker"
+                        placeholder="เลือกวันที่..." onchange="calcContractEndDate()"
+                        value="<?= htmlspecialchars($project_data['start_date'] ?? '') ?>">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" style="color: #059669;">ระยะเวลาสัญญา</label>
+                    <div style="display: flex; gap: 5px;">
+                        <input type="number" id="contract_duration" class="form-control" placeholder="ระบุจำนวน" min="0"
+                            oninput="calcContractEndDate()">
+                        <select id="contract_unit" class="form-control" style="width: 80px;"
+                            onchange="calcContractEndDate()">
+                            <option value="days">วัน</option>
+                            <option value="months">เดือน</option>
+                            <option value="years">ปี</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">วันที่สิ้นสุดสัญญา (คำนวณอัตโนมัติ)</label>
+                    <input type="text" name="end_date" id="end_date" class="form-control datepicker"
+                        placeholder="เลือกวันที่..." style="background:#f0fdf4; font-weight:bold; color:#15803d;"
+                        value="<?= htmlspecialchars($project_data['end_date'] ?? '') ?>">
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 15px;">
+                <label class="form-label" style="color: #ea580c;"><i class="fas fa-bell"></i> แจ้งเตือนก่อนหมดสัญญา
+                    (วัน)</label>
+                <input type="number" name="alert_contract_days" class="form-control"
+                    placeholder="ระบุจำนวนวัน (เช่น 45, 60)" style="width: 50%;"
+                    value="<?= htmlspecialchars($project_data['alert_contract_days'] ?? 30) ?>" min="0">
             </div>
 
             <div class="section-title"><i class="fas fa-envelope-open-text"></i> การยื่นซอง & ใบเสนอราคา</div>
@@ -594,120 +915,214 @@ if ($edit_id) {
     <script src="https://npmcdn.com/flatpickr/dist/l10n/th.js"></script>
 
     <script>
-        $(document).ready(function () {
-            $('.select2').select2({ width: '100%' });
+        // --- [1] ตัวแปร Global ---
+        let addressData = [];
+        let isUpdating = false;
+        function clearAddress() {
+            // 1. ล้างค่าในช่องโชว์ให้หายไปก่อน
+            $('.select2-addr').val(null).trigger('change.select2');
 
-            flatpickr(".datepicker", {
-                altInput: true,
-                altFormat: "d/m/Y",
-                dateFormat: "Y-m-d",
-                locale: "th"
-            });
+            // 2. ถ้ายังไม่มีข้อมูล ไม่ต้องทำต่อ
+            if (addressData.length === 0) return;
 
-            $('#projectForm').on('submit', function (e) {
-                e.preventDefault();
+            // 3. (ไม้ตาย) บังคับสร้างรายการใหม่ทั้งหมดจากฐานข้อมูลดิบ 
+            // โดยไม่ผ่าน Logic การกรองใดๆ ทั้งสิ้น เพื่อให้มั่นใจว่าได้ครบทุกตัว
+            const fullLists = {
+                sel_province: [...new Set(addressData.map(i => i.p))].filter(Boolean).sort(),
+                sel_amphure: [...new Set(addressData.map(i => i.a))].filter(Boolean).sort(),
+                sel_district: [...new Set(addressData.map(i => i.d))].filter(Boolean).sort(),
+                sel_zipcode: [...new Set(addressData.map(i => i.z))].filter(Boolean).sort()
+            };
 
-                let formData = new FormData(this);
-                Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
-
-                $.ajax({
-                    url: 'create_project.php',
-                    type: 'POST',
-                    data: formData,
-                    processData: false,
-                    contentType: false,
-                    dataType: 'json',
-                    success: function (res) {
-                        if (res.status === 'success') {
-                            Swal.fire('สำเร็จ', res.message, 'success').then(() => {
-                                window.location.href = 'project_dashboard.php'; // บันทึกเสร็จเด้งกลับไปหน้า Dashboard 
-                            });
-                        } else {
-                            Swal.fire('เกิดข้อผิดพลาด', res.message, 'error');
-                        }
-                    },
-                    error: function (xhr, status, error) {
-                        Swal.fire({
-                            title: 'เกิดข้อผิดพลาดจากเซิร์ฟเวอร์',
-                            text: xhr.responseText || error,
-                            icon: 'error'
-                        });
-                    }
+            // 4. ยัดข้อมูลใหม่ใส่ Dropdown ทุกช่อง
+            Object.keys(fullLists).forEach(id => {
+                const $el = $('#' + id);
+                let html = '<option value="">-- เลือก --</option>';
+                fullLists[id].forEach(val => {
+                    html += `<option value="${val}">${val}</option>`;
                 });
+                $el.html(html).trigger('change.select2');
             });
-        });
+        }
 
-        // Format ตัวเลข
+        // --- [2] ฟังก์ชัน Helper (อยู่นอก ready) ---
+        function toggleCustomerMode() {
+            const isNew = document.getElementById('is_new_customer').checked;
+            if (isNew) {
+                $('#existing_customer_box').hide();
+                $('#new_customer_box, #new_customer_details').show();
+                $('#new_customer_name').attr('required', 'required');
+                $('#customer_id').val(null).trigger('change').removeAttr('required');
+                $('.select2-addr').val(null).trigger('change.select2'); // ล้างค่าที่อยู่
+            } else {
+                $('#existing_customer_box').show();
+                $('#new_customer_box, #new_customer_details').hide();
+                $('#customer_id').attr('required', 'required');
+                $('#new_customer_name').removeAttr('required').val('');
+            }
+        }
+
         function formatNumber(input) {
             let val = input.value.replace(/,/g, '').replace(/[^0-9.]/g, '');
             if (val) input.value = parseFloat(val).toLocaleString('en-US');
         }
 
-        // เปิด/ปิด ช่องวันที่ยื่นซอง
         function toggleBidding() {
-            if ($('#bidding_type').val() === 'ยื่น') {
-                $('#bidding_date_box').slideDown();
-            } else {
-                $('#bidding_date_box').slideUp();
-            }
+            $('#bidding_type').val() === 'ยื่น' ? $('#bidding_date_box').slideDown() : $('#bidding_date_box').slideUp();
         }
 
-        // เปิด/ปิด ช่องค้ำประกัน
         function toggleGuarantee() {
             let type = $('#guarantee_type').val();
-            if (type === 'หนังสือค้ำ') {
-                $('#guarantee_section').slideDown();
-                $('#guarantee_amount_box').slideDown();
-            } else if (type === 'เงินสด') {
-                $('#guarantee_section').slideUp();
-                $('#guarantee_amount_box').slideDown();
-            } else {
-                $('#guarantee_section').slideUp();
-                $('#guarantee_amount_box').slideUp();
-                $('#guarantee_amount').val(''); // ลบค่าเมื่อเลือกไม่มี
-            }
-            // คำนวณ 5% อัตโนมัติเมื่อเลือกประเภท
+            $('#guarantee_section, #cash_guarantee_section, #guarantee_amount_box, #warranty_duration_group').slideUp();
+            if (type === 'หนังสือค้ำ') { $('#guarantee_section, #guarantee_amount_box, #warranty_duration_group').slideDown(); }
+            else if (type === 'เงินสด') { $('#cash_guarantee_section, #guarantee_amount_box, #warranty_duration_group').slideDown(); }
             calcGuaranteeAmount();
         }
 
-        // คำนวณ 5% ของ ยอดงบ / โครงการ
         function calcGuaranteeAmount() {
+            let budget = parseFloat($('#project_budget').val().replace(/,/g, '')) || 0;
+            $('#guarantee_amount').val(budget > 0 ? (budget * 0.05).toLocaleString('en-US', { minimumFractionDigits: 2 }) : '');
+        }
+
+        function masterCalcWarrantyEndDate() {
+            let duration = parseInt($('#warranty_value').val()) || 0, unit = $('#warranty_unit').val();
             let type = $('#guarantee_type').val();
-            if (type !== 'ไม่มี') {
-                let budgetInput = $('#project_budget').val();
-                let budget = parseFloat(budgetInput.replace(/,/g, '')) || 0;
-                let amount = budget * 0.05;
-                if (amount > 0) {
-                    $('#guarantee_amount').val(amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }));
-                } else {
-                    $('#guarantee_amount').val('');
+            let startStr = (type === 'หนังสือค้ำ') ? $('#guarantee_start_date').val() : $('#cash_start_date').val();
+            let targetId = (type === 'หนังสือค้ำ') ? 'guarantee_end_date' : 'cash_end_date';
+            if (!startStr || duration === 0) return;
+            let d = new Date(startStr);
+            unit === 'years' ? d.setFullYear(d.getFullYear() + duration) : d.setDate(d.getDate() + duration);
+            d.setDate(d.getDate() - 1);
+            let f = d.getFullYear() + '-' + ("0" + (d.getMonth() + 1)).slice(-2) + '-' + ("0" + d.getDate()).slice(-2);
+            let target = document.getElementById(targetId);
+            if (target && target._flatpickr) target._flatpickr.setDate(f); else if (target) target.value = f;
+        }
+
+        function calcContractEndDate() {
+            let s = $('#start_date').val(), dur = parseInt($('#contract_duration').val()) || 0, u = $('#contract_unit').val();
+            if (!s || dur === 0) return;
+            let d = new Date(s);
+            if (u === 'days') d.setDate(d.getDate() + dur); else if (u === 'months') d.setMonth(d.getMonth() + dur); else d.setFullYear(d.getFullYear() + dur);
+            d.setDate(d.getDate() - 1);
+            let f = d.getFullYear() + '-' + ("0" + (d.getMonth() + 1)).slice(-2) + '-' + ("0" + d.getDate()).slice(-2);
+            let target = document.getElementById("end_date");
+            if (target && target._flatpickr) target._flatpickr.setDate(f);
+        }
+
+        function calcWarrantyFromDate() {
+            let sStr = $('#cash_start_date').val(), eStr = $('#cash_end_date').val();
+            if (!sStr || !eStr) return;
+            let s = new Date(sStr), e = new Date(eStr);
+            let diffDays = Math.round((e - s) / (1000 * 3600 * 24)) + 1;
+            if (diffDays <= 0) return Swal.fire('เตือน', 'วันสิ้นสุดต้องมากกว่าวันเริ่ม', 'warning');
+
+            let isYear = false;
+            for (let i = 1; i <= 20; i++) {
+                let t = new Date(sStr); t.setFullYear(t.getFullYear() + i); t.setDate(t.getDate() - 1);
+                if (t.toISOString().split('T')[0] === eStr) {
+                    $('#warranty_value').val(i); $('#warranty_unit').val('years').trigger('change');
+                    isYear = true; break;
                 }
             }
+            if (!isYear) { $('#warranty_value').val(diffDays); $('#warranty_unit').val('days').trigger('change'); }
         }
 
-        // คํานวณวันสิ้นสุดสัญญาอัตโนมัติ
-        function calcEndDate() {
-            let startDateStr = $('#start_date').val();
-            let val = parseInt($('#warranty_value').val()) || 0;
-            let unit = $('#warranty_unit').val();
+        // --- [3] ส่วนเริ่มต้นระบบ ---
+        $(document).ready(function () {
+            $('.select2').select2({ width: '100%' });
 
-            if (!startDateStr || val === 0) return;
+            const $addrFields = $('.select2-addr').select2({
+                placeholder: 'กำลังโหลดข้อมูล...', allowClear: true, width: '100%', disabled: true
+            });
 
-            let startDate = new Date(startDateStr);
+            flatpickr(".datepicker", { altInput: true, altFormat: "d/m/Y", dateFormat: "Y-m-d", locale: "th" });
 
-            if (unit === 'years') {
-                startDate.setFullYear(startDate.getFullYear() + val);
-            } else if (unit === 'days') {
-                startDate.setDate(startDate.getDate() + val);
+            // 🔥 ดึงไฟล์ดิบ (Raw Data) เพื่อความชัวร์เรื่องข้อมูล
+            $.getJSON('https://raw.githubusercontent.com/earthchie/jquery.Thailand.js/master/jquery.Thailand.js/database/raw_database/raw_database.json')
+                .done(function (res) {
+                    addressData = res.map(item => ({
+                        d: item.district, a: item.amphoe, p: item.province, z: String(item.zipcode)
+                    }));
+
+                    $addrFields.prop('disabled', false).select2({ placeholder: '-- ค้นหา/เลือก --', allowClear: true, width: '100%' });
+                    updateAddressOptions();
+                });
+
+            // ⭐ แก้ไข: เมื่อมีการ "เปลี่ยนค่า" หรือ "ลบค่า" (Clear)
+            $('.select2-addr').on('change', function (e) {
+                // ทำงานเฉพาะเมื่อ User เป็นคนเลือกเอง (originalEvent)
+                // หรือ กดกากบาท X (val เป็น null)
+                // *สำคัญ* เราจะไม่ให้มันทำงานตอนกดปุ่ม "ล้างที่อยู่" (เพราะเราจัดการใน clearAddress แล้ว)
+                if (e.originalEvent || $(this).data('manual')) {
+                    const val = $(this).val();
+
+                    // ถ้าเป็นการกดกากบาท X (ค่าว่าง) ให้ล้างช่องลูกน้องทิ้งด้วย
+                    if (!val) {
+                        // ไม่ต้องทำอะไรพิเศษ เพราะเดี๋ยว updateAddressOptions จะจัดการกรองใหม่ให้เอง
+                    }
+
+                    updateAddressOptions(this.id);
+                }
+            });
+
+            // เพิ่มส่วนนี้: ดักจับตอนกดปุ่ม X (Clear) ของ Select2 โดยตรง
+            $('.select2-addr').on('select2:select', function () {
+                $(this).data('manual', true).trigger('change').data('manual', false);
+            });
+
+            // ดักจับการกด X (Clear) ในช่อง Select2 โดยตรง
+            $('.select2-addr').on('select2:clear', function (e) {
+                $(this).data('manual', true).trigger('change').data('manual', false);
+            });
+
+            function updateAddressOptions(triggerId) {
+                if (addressData.length === 0) return;
+
+                const selP = $('#sel_province').val();
+                const selA = $('#sel_amphure').val();
+                const selD = $('#sel_district').val();
+                const selZ = $('#sel_zipcode').val();
+
+                const filtered = addressData.filter(i => {
+                    return (!selP || i.p === selP) && (!selA || i.a === selA) && (!selD || i.d === selD) && (!selZ || i.z === selZ);
+                });
+
+                const lists = {
+                    sel_province: [...new Set(filtered.map(i => i.p))].filter(Boolean).sort(),
+                    sel_amphure: [...new Set(filtered.map(i => i.a))].filter(Boolean).sort(),
+                    sel_district: [...new Set(filtered.map(i => i.d))].filter(Boolean).sort(),
+                    sel_zipcode: [...new Set(filtered.map(i => i.z))].filter(Boolean).sort()
+                };
+
+                Object.keys(lists).forEach(id => {
+                    if (id !== triggerId) {
+                        const $el = $('#' + id);
+                        const cur = $el.val();
+                        let options = '<option value="">-- เลือก --</option>';
+                        lists[id].forEach(val => {
+                            const isSelected = (lists[id].length === 1 || String(val) === String(cur)) ? 'selected' : '';
+                            options += `<option value="${val}" ${isSelected}>${val}</option>`;
+                        });
+                        $el.html(options).trigger('change.select2');
+                    }
+                });
             }
 
-            let y = startDate.getFullYear();
-            let m = ("0" + (startDate.getMonth() + 1)).slice(-2);
-            let d = ("0" + startDate.getDate()).slice(-2);
-
-            let formattedDate = `${y}-${m}-${d}`;
-            document.getElementById("end_date")._flatpickr.setDate(formattedDate);
-        }
+            // AJAX Submit
+            $('#projectForm').on('submit', function (e) {
+                e.preventDefault();
+                let formData = new FormData(this);
+                Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+                $.ajax({
+                    url: 'create_project.php', type: 'POST', data: formData, processData: false, contentType: false, dataType: 'json',
+                    success: function (res) {
+                        if (res.status === 'success') {
+                            Swal.fire('สำเร็จ', res.message, 'success').then(() => { window.location.href = 'project_dashboard.php'; });
+                        } else { Swal.fire('เกิดข้อผิดพลาด', res.message, 'error'); }
+                    }
+                });
+            });
+        });
     </script>
 </body>
 

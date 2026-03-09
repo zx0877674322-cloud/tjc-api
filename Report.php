@@ -12,6 +12,43 @@ if (!isset($_SESSION['fullname'])) {
 }
 
 require_once 'db_connect.php';
+
+$edit_id = isset($_GET['edit_id']) ? intval($_GET['edit_id']) : null;
+$edit_data = null;
+$existing_work_data = 'null';
+
+if ($edit_id) {
+    $sql_edit = "SELECT * FROM reports WHERE id = $edit_id LIMIT 1";
+    $res_edit = $conn->query($sql_edit);
+    if ($res_edit && $row = $res_edit->fetch_assoc()) {
+        $edit_data = $row;
+        // ระเบิดข้อมูล Array
+        $customers = array_map('trim', explode(',', $row['work_result']));
+        $projects = preg_split('/,(?!\d)/', $row['project_name']);
+        $statuses = array_map('trim', explode(',', $row['job_status']));
+        $next_apps = array_map('trim', explode(',', $row['next_appointment']));
+        $notes = explode("\n", $row['additional_notes']);
+        // จัดการสรุปการเข้าพบ
+        $raw_summaries = preg_split('/\n(?=•)/u', $row['activity_detail']);
+        $clean_summaries = array_map(function ($line) {
+            return preg_replace('/^•\s*.*:\s*/u', '', trim($line));
+        }, $raw_summaries);
+
+        $existing_work_data = json_encode([
+            'customers' => $customers,
+            'projects' => $projects,
+            'statuses' => $statuses,
+            'next_apps' => $next_apps,
+            'summaries' => $clean_summaries,
+            'notes' => $notes
+        ], JSON_UNESCAPED_UNICODE);
+    }
+} // ✅ ปิดปีกกา if ($edit_id) ตรงนี้ (สำคัญมาก!)
+
+// ✅ ย้ายออกมาข้างนอกปีกกา เพื่อให้ทำงานทั้งตอน "เพิ่มใหม่" และ "แก้ไข"
+// ถ้าเป็นแก้ไข -> ใช้วันที่เดิม | ถ้าเป็นใหม่ -> ใช้วันนี้ (Y-m-d)
+$default_date = ($edit_id && isset($edit_data['report_date'])) ? $edit_data['report_date'] : date('Y-m-d');
+
 $message = "";
 
 // =========================================================
@@ -46,6 +83,19 @@ $sql_master = "SELECT customer_name FROM master_customers";
 $res_master = $conn->query($sql_master);
 while ($row = $res_master->fetch_assoc()) {
     $master_customers_list[] = $row['customer_name'];
+}
+
+$current_month = date('n');
+$current_year = date('Y');
+$show_target_input = false;
+
+$sql_check_target = "SELECT id FROM sales_targets 
+                     WHERE reporter_name = '$my_name' 
+                     AND target_month = $current_month 
+                     AND target_year = $current_year";
+$res_target = $conn->query($sql_check_target);
+if ($res_target->num_rows == 0) {
+    $show_target_input = true; // ยังไม่มีเป้าเดือนนี้ ให้โชว์ช่องกรอก
 }
 
 // --- PHP Functions (Upload) ---
@@ -106,11 +156,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $gps_address = $_POST['gps_address'] ?? '';
     }
 
+    // 2. จัดการค่าใช้จ่ายและไฟล์แนบ
     $fuel_costs_array = isset($_POST['fuel_cost']) ? $_POST['fuel_cost'] : [];
-    $fuel_cost = 0;
-    foreach ($fuel_costs_array as $cost) {
-        $fuel_cost += floatval($cost);
-    }
+    $fuel_cost_sum = array_sum(array_map('floatval', $fuel_costs_array));
     $fuel_receipt = uploadMultipleReceipts('fuel_receipt_file');
 
     $accommodation_cost = !empty($_POST['accommodation_cost']) ? floatval($_POST['accommodation_cost']) : 0;
@@ -118,12 +166,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $other_cost_detail = $_POST['other_cost_detail'] ?? '';
     $accommodation_receipt = uploadReceipt('accommodation_receipt_file');
     $other_receipt = uploadReceipt('other_receipt_file');
-    $total_expense = $fuel_cost + $accommodation_cost + $other_cost;
+    $total_expense = $fuel_cost_sum + $accommodation_cost + $other_cost;
 
     $problem = $_POST['problem'] ?? '';
     $suggestion = $_POST['suggestion'] ?? '';
 
-    // 2. รับค่าส่วน Work Details (Loop Box)
+    // 🔴 ส่วนสำคัญ: รักษาไฟล์เดิมกรณีแก้ไขแล้วไม่มีการเลือกไฟล์ใหม่
+    if ($edit_id && $edit_data) {
+        if (empty($fuel_receipt))
+            $fuel_receipt = $edit_data['fuel_receipt'];
+        if (empty($accommodation_receipt))
+            $accommodation_receipt = $edit_data['accommodation_receipt'];
+        if (empty($other_receipt))
+            $other_receipt = $edit_data['other_receipt'];
+    }
+
+    // 3. รับค่าส่วน Work Details (Loop Box)
     $work_results = $_POST['work_result'] ?? [];
     $project_names = $_POST['project_name'] ?? [];
     $visit_summaries = $_POST['visit_summary'] ?? [];
@@ -135,8 +193,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $combined_customers = [];
     $combined_projects = [];
     $combined_summaries = [];
-    $combined_statuses = [];    // 🟢 เพิ่มใหม่: เก็บสถานะทั้งหมด
-    $combined_next_apps = [];   // 🟢 เพิ่มใหม่: เก็บวันนัดหมายทั้งหมด
+    $combined_statuses = [];
+    $combined_next_apps = [];
 
     for ($i = 0; $i < count($work_results); $i++) {
         $name = trim($work_results[$i]);
@@ -145,22 +203,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         $combined_customers[] = $name;
         if (!empty($project_names[$i])) {
-            // 🟢 จัดการเพิ่มมูลค่าโครงการต่อท้ายชื่อโครงการ
             $val_raw = isset($project_values[$i]) ? str_replace(',', '', $project_values[$i]) : 0;
             $val_text = floatval($val_raw) > 0 ? " (มูลค่า: " . number_format((float) $val_raw, 2) . " บาท)" : "";
             $combined_projects[] = $project_names[$i] . $val_text;
         }
 
-        // รวมสถานะของทุกคน (คั่นด้วยคอมม่าเพื่อให้ระเบิดออกใน Dashboard ได้)
         $combined_statuses[] = !empty($job_statuses[$i]) ? $job_statuses[$i] : '-';
-
-        // รวมวันนัดหมาย (คั่นด้วยคอมม่า)
         $combined_next_apps[] = !empty($next_appointments[$i]) ? $next_appointments[$i] : '-';
-
-        // รวมรายละเอียดการเข้าพบลูกค้าแต่ละราย
         $combined_summaries[] = "• " . $name . ": " . ($visit_summaries[$i] ?? '-');
 
-        // --- ส่วนการบันทึก Master Customers (คงไว้เหมือนเดิม) ---
+        // บันทึก Master Customers
         $check_sql = "SELECT id FROM master_customers WHERE customer_name = ?";
         if ($chk_stmt = $conn->prepare($check_sql)) {
             $chk_stmt->bind_param("s", $name);
@@ -178,54 +230,123 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
     }
 
-    // 🟢 แปลง Array เป็น String เพื่อลง Database 1 แถว
     $final_work_result = implode(', ', $combined_customers);
     $final_project_name = implode(', ', array_unique($combined_projects));
-    $final_job_status = implode(', ', $combined_statuses);      // 🟢 รวมสถานะทั้งหมด
-    $final_next_app = implode(', ', $combined_next_apps);       // 🟢 รวมวันนัดหมายทั้งหมด
+    $final_job_status = implode(', ', $combined_statuses);
+    $final_next_app = implode(', ', $combined_next_apps);
     $final_activity_detail = implode("\n", $combined_summaries);
     $final_notes = implode("\n", array_filter($additional_notes_arr));
 
-    // ส่วนค่าใช้จ่าย
-    $fuel_cost_sum = array_sum(array_map('floatval', $fuel_costs_array));
-
     // =========================================================
-    // 🔵 3. สั่ง INSERT เพียงครั้งเดียว (Single Row)
+    // 🔵 4. สั่ง INSERT หรือ UPDATE
     // =========================================================
-    $sql = "INSERT INTO reports (report_date, reporter_name, area, province, gps, gps_address, work_result, customer_type, project_name, additional_notes, job_status, next_appointment, activity_detail, fuel_cost, fuel_receipt, accommodation_cost, accommodation_receipt, other_cost, other_receipt, other_cost_detail, total_expense, problem, suggestion) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    if ($edit_id) {
+        // กรณีแก้ไข (UPDATE): ไม่อัปเดต reporter_name
+        $sql = "UPDATE reports SET 
+                report_date=?, area=?, province=?, gps=?, gps_address=?, work_result=?, 
+                customer_type=?, project_name=?, additional_notes=?, job_status=?, 
+                next_appointment=?, activity_detail=?, fuel_cost=?, fuel_receipt=?, 
+                accommodation_cost=?, accommodation_receipt=?, other_cost=?, other_receipt=?, 
+                other_cost_detail=?, total_expense=?, problem=?, suggestion=? 
+                WHERE id = ?";
+    } else {
+        // กรณีเพิ่มใหม่ (INSERT)
+        $sql = "INSERT INTO reports (
+                report_date, reporter_name, area, province, gps, gps_address, work_result, 
+                customer_type, project_name, additional_notes, job_status, next_appointment, 
+                activity_detail, fuel_cost, fuel_receipt, accommodation_cost, accommodation_receipt, 
+                other_cost, other_receipt, other_cost_detail, total_expense, problem, suggestion, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    }
 
     if ($stmt = $conn->prepare($sql)) {
         $cus_type_first = $_POST['customer_type_1'] ?? 'ลูกค้าใหม่';
 
-        $stmt->bind_param(
-            "sssssssssssssdssdssdsss",
-            $report_date,
-            $reporter_name,
-            $area,
-            $province,
-            $gps,
-            $gps_address,
-            $final_work_result,
-            $cus_type_first,
-            $final_project_name,
-            $final_notes,
-            $final_job_status,     // 🟢 ใช้ค่าที่รวมแล้ว (แทน $last_status)
-            $final_next_app,       // 🟢 ใช้ค่าที่รวมแล้ว (แทน $last_next_app)
-            $final_activity_detail,
-            $fuel_cost_sum,
-            $fuel_receipt,
-            $accommodation_cost,
-            $accommodation_receipt,
-            $other_cost,
-            $other_receipt,
-            $other_cost_detail,
-            $total_expense,
-            $problem,
-            $suggestion
-        );
+        if ($edit_id) {
+            // Bind Params สำหรับ UPDATE (22 ฟิลด์ + 1 ID = 23 ตัว)
+            $stmt->bind_param(
+                "ssssssssssssdsdsdsdsssi",
+                $report_date,
+                $area,
+                $province,
+                $gps,
+                $gps_address,
+                $final_work_result,
+                $cus_type_first,
+                $final_project_name,
+                $final_notes,
+                $final_job_status,
+                $final_next_app,
+                $final_activity_detail,
+                $fuel_cost_sum,
+                $fuel_receipt,
+                $accommodation_cost,
+                $accommodation_receipt,
+                $other_cost,
+                $other_receipt,
+                $other_cost_detail,
+                $total_expense,
+                $problem,
+                $suggestion,
+                $edit_id
+            );
+        } else {
+            $created_at = date('Y-m-d H:i:s');
+            // Bind Params สำหรับ INSERT (24 ตัว)
+            $stmt->bind_param(
+                "sssssssssssssdssdssdssss",
+                $report_date,
+                $reporter_name,
+                $area,
+                $province,
+                $gps,
+                $gps_address,
+                $final_work_result,
+                $cus_type_first,
+                $final_project_name,
+                $final_notes,
+                $final_job_status,
+                $final_next_app,
+                $final_activity_detail,
+                $fuel_cost_sum,
+                $fuel_receipt,
+                $accommodation_cost,
+                $accommodation_receipt,
+                $other_cost,
+                $other_receipt,
+                $other_cost_detail,
+                $total_expense,
+                $problem,
+                $suggestion,
+                $created_at
+            );
+        }
 
         if ($stmt->execute()) {
-            header("Location: StaffHistory.php");
+            // ✅ 1. แทรกโค้ดบันทึกเป้าหมายตรงนี้ (ก่อนเด้งหน้า)
+            if (isset($_POST['monthly_target']) && !empty($_POST['monthly_target'])) {
+                // แปลงวันที่รายงานที่เลือก มาเป็น เดือน/ปี ของเป้าหมาย
+                $report_date_timestamp = strtotime($_POST['report_date']);
+                $target_month = date('n', $report_date_timestamp);
+                $target_year = date('Y', $report_date_timestamp);
+
+                $target_amt = floatval(str_replace(',', '', $_POST['monthly_target']));
+
+                // บันทึกลงตาราง sales_targets
+                $sql_target = "INSERT IGNORE INTO sales_targets (reporter_name, target_month, target_year, target_amount) 
+                               VALUES (?, ?, ?, ?)";
+
+                if ($t_stmt = $conn->prepare($sql_target)) {
+                    $t_stmt->bind_param("siid", $reporter_name, $target_month, $target_year, $target_amt);
+                    $t_stmt->execute();
+                    $t_stmt->close();
+                }
+            }
+            // ----------------------------------------------------
+
+            // ✅ 2. บันทึกเสร็จค่อยเด้ง
+            $redirect_url = $edit_id ? "StaffHistory.php?tab=sales" : "Dashboard.php";
+            header("Location: " . $redirect_url);
             exit();
         } else {
             $message = "Error: " . $stmt->error;
@@ -275,16 +396,33 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <div class="form-grid-2-custom">
                         <div class="form-group">
                             <label>วันที่รายงาน <span style="color:red">*</span></label>
-                            <input type="hidden" name="report_date" id="reportDateHidden"
-                                value="<?php echo date('Y-m-d'); ?>">
-                            <input type="text" id="reportDateDisplay" class="form-input" placeholder="เลือกวันที่"
-                                readonly required>
+                            <input type="text" name="report_date" id="reportDate" class="form-input"
+                                value="<?php echo $default_date; ?>" placeholder="เลือกวันที่..." required readonly
+                                style="background-color: #fff; cursor: pointer;">
                         </div>
                         <div class="form-group">
                             <label>ผู้รายงาน</label>
                             <input type="text" name="reporter_name" value="<?php echo $_SESSION['fullname']; ?>"
                                 class="form-input" readonly
                                 style="background-color: var(--hover-bg); cursor: not-allowed;">
+                        </div>
+                        <div id="targetSection" class="form-group"
+                            style="margin-top: 15px; background: #fffbeb; padding: 15px; border-radius: 12px; border: 1px solid #fcd34d;">
+                            <label id="targetLabel" style="color: #b45309; font-weight: 700;">
+                                <i class="fas fa-bullseye"></i> เป้าหมายยอดขายเดือนนี้
+                            </label>
+                            <div style="position: relative;">
+                                <input type="text" name="monthly_target" id="monthlyTargetInput" class="form-input"
+                                    placeholder="ระบุยอดขาย..."
+                                    style="border-color: #f59e0b; font-size: 1.1rem; font-weight: bold; color: #9a3412;"
+                                    oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',');">
+                                <span
+                                    style="position: absolute; right: 15px; top: 10px; color: #b45309; font-weight: bold;">บาท</span>
+                            </div>
+                            <div id="targetStatusText"
+                                style="margin-top: 5px; font-size: 0.85rem; color: #d97706; display: none;">
+                                * เดือนนี้คุณได้ตั้งเป้าหมายไว้แล้ว (แสดงข้อมูลเดิม)
+                            </div>
                         </div>
                     </div>
 
@@ -396,7 +534,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                     placeholder="เช่น ลูกค้าสนใจสินค้า, เสนอราคาแล้ว, ติดตามผล..." required></textarea>
                             </div>
 
-                            <div class="form-group">
+                            <div style="display:none;" class="form-group">
                                 <label>บันทึกเพิ่มเติม</label>
                                 <textarea name="additional_notes[]" class="form-textarea" rows="2"
                                     placeholder="หมายเหตุอื่นๆ..."></textarea>
@@ -494,11 +632,96 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         // 🟢 บรรทัดนี้สำคัญมาก! ถ้าไม่มี ข้อมูลจะไม่มา
         const customerList = <?php echo json_encode($customers_data, JSON_UNESCAPED_UNICODE); ?>;
         const masterCustomerList = <?php echo json_encode($master_customers_list, JSON_UNESCAPED_UNICODE); ?>;
+        const isEditMode = <?= $edit_id ? 'true' : 'false' ?>;
+        const editData = <?= json_encode($edit_data, JSON_UNESCAPED_UNICODE) ?: 'null' ?>;
+        const existingWorkData = <?= $existing_work_data ?>;
     </script>
     </script>
 
     <script src="js/report_script.js"></script>
+    <script>
+        // ✅ 1. ฟังก์ชันเช็คเป้าหมาย (เขียนไว้ตรงนี้เลย เพื่อความชัวร์ว่าทำงานแน่นอน)
+        function checkTargetForDate(dateStr) {
+            const targetSection = document.getElementById('targetSection');
+            const input = document.getElementById('monthlyTargetInput');
+            const label = document.getElementById('targetLabel');
+            const statusText = document.getElementById('targetStatusText');
 
+            // ถ้าไม่มีกล่องเป้าหมาย (เช่น หน้าแก้ไขอาจจะไม่ได้ใส่ไว้) ให้จบการทำงาน
+            if (!targetSection) return;
+
+            // เรียก API ไปถาม Database
+            fetch('check_target_api.php?date=' + dateStr)
+                .then(response => response.json())
+                .then(data => {
+                    // แสดงกล่องเสมอ
+                    targetSection.style.display = 'block';
+
+                    if (data.has_target) {
+                        // 🟢 กรณี 1: มีเป้าแล้ว -> เอาตัวเลขมาโชว์ทันที!
+                        input.value = data.amount;       // ยัดตัวเลขลงกล่อง
+
+                        // ล็อกไม่ให้แก้
+                        input.readOnly = true;
+                        input.style.backgroundColor = '#f3f4f6';
+                        input.style.color = '#6b7280';
+                        input.style.cursor = 'not-allowed';
+
+                        // เปลี่ยนข้อความเป็นสีเขียว
+                        label.innerHTML = `<i class="fas fa-check-circle"></i> เป้าหมายเดือนนี้ (บันทึกแล้ว)`;
+                        label.style.color = '#059669';
+                        statusText.style.display = 'block';
+                    } else {
+                        // 🟠 กรณี 2: ยังไม่มีเป้า -> เคลียร์ค่ารอให้กรอก
+                        input.value = '';
+
+                        // ปลดล็อกให้พิมพ์ได้
+                        input.readOnly = false;
+                        input.style.backgroundColor = '#ffffff';
+                        input.style.color = '#9a3412';
+                        input.style.cursor = 'text';
+
+                        // เปลี่ยนข้อความเป็นสีส้ม
+                        label.innerHTML = `<i class="fas fa-bullseye"></i> ตั้งเป้ายอดขาย (กรอกครั้งแรกของเดือน)`;
+                        label.style.color = '#b45309';
+                        statusText.style.display = 'none';
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        // ✅ 2. เริ่มทำงานเมื่อหน้าเว็บโหลดเสร็จ
+        document.addEventListener("DOMContentLoaded", function () {
+
+            // รับวันที่เริ่มต้นจาก PHP (วันที่รายงาน)
+            var initDate = "<?php echo $default_date; ?>";
+
+            // สร้างปฏิทิน Flatpickr
+            flatpickr("#reportDate", {
+                locale: "th",
+                dateFormat: "Y-m-d",
+                altInput: true,
+                altFormat: "d/m/Y",
+                allowInput: false,
+                clickOpens: true,
+                defaultDate: initDate, // บังคับวันที่เริ่มต้น
+
+                // 🔥 ทำงานทันทีที่ปฏิทินโหลดเสร็จ (เปิดหน้ามาก็เช็คเลย)
+                onReady: function (selectedDates, dateStr, instance) {
+                    // 1. บังคับโชว์วันที่ในช่อง
+                    instance.setDate(initDate, true);
+
+                    // 2. สั่งเช็คเป้าหมายของ "เดือนในวันที่" นั้นทันที!
+                    checkTargetForDate(initDate);
+                },
+
+                // 🔥 ทำงานเมื่อมีการเปลี่ยนวันที่
+                onChange: function (selectedDates, dateStr, instance) {
+                    checkTargetForDate(dateStr);
+                }
+            });
+        });
+    </script>
 </body>
 
 </html>

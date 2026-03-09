@@ -46,13 +46,10 @@ if ($result) {
 
     <?php include 'Logowab.php'; ?>
 
-    <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
     <script src="load_scripts.js"></script>
-    <!-- Animate.css -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
     <link rel="stylesheet" href="css/service_dashboard.css">
-    <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
@@ -186,7 +183,8 @@ if ($result) {
             background-color: #ffffff;
             color: #64748b;
             font-weight: 600;
-            padding: 14px 20px;
+            padding: 14px 16px;
+            /* ลด padding ลงนิดหน่อย */
             font-size: 0.85rem;
             letter-spacing: 0.5px;
             border-bottom: 2px solid #e2e8f0;
@@ -203,9 +201,10 @@ if ($result) {
         }
 
         .custom-table tbody td {
-            padding: 16px 20px;
+            padding: 16px 16px;
             color: #334155;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
+            /* ปรับขนาดตัวอักษรให้อ่านง่าย */
             border-bottom: 1px solid #f1f5f9;
             vertical-align: middle;
         }
@@ -284,9 +283,11 @@ if ($result) {
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: normal;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
+            /* ลดขนาดที่อยู่ลงนิดหน่อย */
             color: #475569;
-            max-width: 400px;
+            max-width: 250px;
+            /* จำกัดความกว้าง */
         }
     </style>
 </head>
@@ -307,7 +308,6 @@ if ($result) {
                 </div>
             </div>
 
-            <!-- Data Table Card -->
             <div class="action-card">
                 <div class="card-header">
                     <h3><i class="fas fa-building text-primary"></i> รายชื่อลูกค้าและหน่วยงาน</h3>
@@ -315,7 +315,7 @@ if ($result) {
                     <div class="d-flex gap-3 align-items-center">
                         <div class="search-box">
                             <i class="fas fa-search"></i>
-                            <input type="text" id="searchInput" placeholder="ค้นหาชื่อลูกค้า หรือหน่วยงาน...">
+                            <input type="text" id="searchInput" placeholder="ค้นหาชื่อ, เบอร์ หรือผู้ติดต่อ...">
                         </div>
                         <a href="manage_customers_add.php" class="btn-add-customer">
                             <i class="fas fa-plus"></i> เพิ่มลูกค้าใหม่
@@ -328,11 +328,13 @@ if ($result) {
                         <thead>
                             <tr>
                                 <th width="5%" class="text-center">#</th>
-                                <th width="25%" class="text-start">ชื่อหน่วยงาน/ลูกค้า</th>
-                                <th width="15%" class="text-start">เบอร์ติดต่อ</th>
-                                <th width="30%" class="text-start">ที่อยู่</th>
-                                <th width="15%" class="text-center">สถานะ</th>
-                                <th width="10%" class="text-center">จัดการ</th>
+                                <th width="20%" class="text-start">ชื่อหน่วยงาน/ลูกค้า</th>
+                                <th width="12%" class="text-start">เบอร์หน่วยงาน</th>
+                                <th width="15%" class="text-start">ชื่อผู้ติดต่อ</th>
+                                <th width="12%" class="text-start">เบอร์ผู้ติดต่อ</th>
+                                <th width="20%" class="text-start">ที่อยู่</th>
+                                <th width="8%" class="text-center">สถานะ</th>
+                                <th width="8%" class="text-center">จัดการ</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -340,26 +342,54 @@ if ($result) {
                                 <?php foreach ($customers as $index => $customer): ?>
                                     <tr>
                                         <td class="text-center text-muted"><?php echo $index + 1; ?></td>
+
                                         <td>
-                                            <div class="fw-bold text-dark" style="font-size: 1rem;">
+                                            <div class="fw-bold text-dark" style="font-size: 0.95rem;">
                                                 <?php echo htmlspecialchars($customer['customer_name'] ?? '-'); ?>
                                             </div>
                                             <?php if (!empty($customer['affiliation'])): ?>
                                                 <div class="text-muted small mt-1">
-                                                    <i class="fas fa-building fa-sm text-secondary me-1"></i>
-                                                    สังกัด: <span
-                                                        class="fw-medium text-dark"><?php echo htmlspecialchars($customer['affiliation']); ?></span>
+                                                    <i class="fas fa-building fa-xs text-secondary me-1"></i>
+                                                    <span class="text-secondary"
+                                                        style="font-size: 0.8rem;"><?php echo htmlspecialchars($customer['affiliation']); ?></span>
                                                 </div>
                                             <?php endif; ?>
                                         </td>
+
                                         <td>
                                             <?php if (!empty($customer['phone_number']) && $customer['phone_number'] !== '-'): ?>
-                                                <span class="text-dark"><i
-                                                        class="fas fa-phone fa-sm text-muted me-2"></i><?php echo htmlspecialchars($customer['phone_number']); ?></span>
+                                                <span class="text-dark fw-medium" style="font-size: 0.9rem;">
+                                                    <?php echo htmlspecialchars($customer['phone_number']); ?>
+                                                </span>
                                             <?php else: ?>
                                                 <span class="text-muted">-</span>
                                             <?php endif; ?>
                                         </td>
+
+                                        <td>
+                                            <?php if (!empty($customer['contact_person'])): ?>
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-user-circle text-secondary me-2"></i>
+                                                    <span class="text-dark"
+                                                        style="font-size: 0.9rem;"><?php echo htmlspecialchars($customer['contact_person']); ?></span>
+                                                </div>
+                                            <?php else: ?>
+                                                <span class="text-muted">-</span>
+                                            <?php endif; ?>
+                                        </td>
+
+                                        <td>
+                                            <?php if (!empty($customer['contact_phone'])): ?>
+                                                <div class="d-flex align-items-center">
+                                                    <i class="fas fa-mobile-alt text-success me-2"></i>
+                                                    <span class="text-dark"
+                                                        style="font-size: 0.9rem;"><?php echo htmlspecialchars($customer['contact_phone']); ?></span>
+                                                </div>
+                                            <?php else: ?>
+                                                <span class="text-muted">-</span>
+                                            <?php endif; ?>
+                                        </td>
+
                                         <td>
                                             <div class="address-text"
                                                 title="<?php echo htmlspecialchars(($customer['address'] ?? '') . " " . ($customer['sub_district'] ?? '') . " " . ($customer['district'] ?? '') . " " . ($customer['province'] ?? '') . " " . ($customer['zip_code'] ?? '')); ?>">
@@ -368,13 +398,21 @@ if ($result) {
                                                 echo empty($full_addr) ? '<span class="text-muted">-</span>' : htmlspecialchars($full_addr);
                                                 ?>
                                             </div>
+                                            <?php if (!empty($customer['zip_code'])): ?>
+                                                <div class="small text-muted mt-1" style="font-size: 0.8rem;">
+                                                    <i class="fas fa-map-pin fa-xs me-1"></i>
+                                                    <?php echo htmlspecialchars($customer['zip_code']) ?>
+                                                </div>
+                                            <?php endif; ?>
                                         </td>
+
                                         <td class="text-center">
                                             <span class="badge-status">
-                                                <i class="fas fa-check-circle"></i> ใช้งานพลปกติ
+                                                <i class="fas fa-check"></i> ปกติ
                                             </span>
                                         </td>
-                                        <td>
+
+                                        <td class="text-center">
                                             <div class="d-flex justify-content-center gap-2">
                                                 <button class="btn-action btn-edit" title="แก้ไข"
                                                     onclick="editCustomer(<?php echo $customer['customer_id']; ?>)">
@@ -390,7 +428,7 @@ if ($result) {
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <tr>
-                                    <td colspan="6">
+                                    <td colspan="8">
                                         <div class="empty-state">
                                             <i class="fas fa-box-open"></i>
                                             <h5 class="mt-3 mb-1 text-dark fw-bold">ยังไม่มีข้อมูลลูกค้าในระบบ</h5>
@@ -408,7 +446,6 @@ if ($result) {
         </div>
     </div>
 
-    <!-- Scripts for SweetAlert and interactions -->
     <script>
         // ระบบค้นหาในตาราง
         document.getElementById('searchInput').addEventListener('keyup', function () {
@@ -427,14 +464,14 @@ if ($result) {
             });
         });
 
-        // เปิดหน้าแก้ไข (ต้องสร้างไฟล์ manage_customers_edit.php)
+        // เปิดหน้าแก้ไข
         function editCustomer(id) {
             // window.location.href = 'manage_customers_edit.php?id=' + id;
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
                     icon: 'info',
                     title: 'กำลังพัฒนา',
-                    text: 'ระบบแก้ไขข้อมูลลูกค้ากำลังอยู่ในช่วงพัฒนา',
+                    text: 'กรุณาอัปเดตไฟล์ manage_customers_edit.php ให้รองรับฟิลด์ใหม่ก่อนใช้งาน',
                     confirmButtonText: 'ตกลง'
                 });
             } else {

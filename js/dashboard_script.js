@@ -63,7 +63,7 @@ function showDetail(data) {
     const nextAppts = data.next_appointment ? data.next_appointment.split(', ') : []; 
     
     // สรุปกิจกรรม (แยกบรรทัด)
-    const summaries = data.activity_detail ? data.activity_detail.split('\n') : [];
+    const summaries = data.activity_detail ? data.activity_detail.split(/\n(?=•)/) : [];
     
     // 🟢 บันทึกเพิ่มเติม: พยายามแยกตามงาน
     let notes = [];
@@ -340,7 +340,7 @@ function showCustomerHistory(customerName) {
                 const rowCustomers = item.work_result ? item.work_result.split(/,\s*/) : [];
                 const rowStatuses = item.job_status ? item.job_status.split(/,\s*/) : [];
                 const rowProjects = item.project_name ? item.project_name.split(/,\s*/) : [];
-                const rowSummaries = item.activity_detail ? item.activity_detail.split('\n') : [];
+                const rowSummaries = item.activity_detail ? item.activity_detail.split(/\n(?=•)/) : [];
                 
                 // บันทึกเพิ่มเติม
                 let rowNotes = [];
@@ -423,7 +423,7 @@ function showCustomerHistory(customerName) {
                                 <div style="font-size:0.75rem; color:#3b82f6; font-weight:600; margin-bottom:2px;">
                                     <i class="fas fa-comment-dots"></i> สรุปการเข้าพบ
                                 </div>
-                                <div style="font-size:0.85rem; color:#334155; line-height:1.4;">${mySummary}</div>
+                                <div style="font-size:0.85rem; color:#334155; line-height:1.4; white-space: pre-wrap;">${mySummary}</div>
                             </div>` : ''}
 
                             ${myNote !== '' ? `
@@ -431,7 +431,7 @@ function showCustomerHistory(customerName) {
                                 <div style="font-size:0.75rem; color:#c2410c; font-weight:600; margin-bottom:2px;">
                                     <i class="far fa-sticky-note"></i> บันทึกเพิ่มเติม
                                 </div>
-                                <div style="font-size:0.85rem; color:#7c2d12; line-height:1.4;">${myNote}</div>
+                                <div style="font-size:0.85rem; color:#7c2d12; line-height:1.4; white-space: pre-wrap;">${myNote}</div>
                             </div>` : ''}
 
                             <div style="display:flex; align-items:center; gap:10px; margin-top:10px;">
@@ -783,5 +783,64 @@ function filterByStatusAndUser(status, user) {
     if(userSelect) userSelect.value = user;
     if(typeof filterByStatus === 'function') {
         filterByStatus(status);
+    }
+}
+
+function confirmDeleteReport(id) {
+    Swal.fire({
+        title: 'ยืนยันการลบข้อมูล?',
+        text: "คุณต้องการลบรายงานนี้ใช่หรือไม่? (การกระทำนี้ไม่สามารถกู้คืนได้)",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#94a3b8',
+        confirmButtonText: 'ใช่, ฉันต้องการลบ',
+        cancelButtonText: 'ยกเลิก'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch('StaffHistory.php?action=delete_report&id=' + id, { method: 'GET' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        Swal.fire({
+                            title: 'ลบสำเร็จ!',
+                            text: 'รายงานนี้ระบุถูกลบแล้ว',
+                            icon: 'success',
+                            timer: 1500,
+                            showConfirmButton: false
+                        }).then(() => {
+                            location.reload();
+                        });
+                    } else {
+                        Swal.fire('เกิดข้อผิดพลาด', data.message || 'ไม่สามารถลบข้อมูลได้', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้', 'error');
+                });
+        }
+    });
+}
+function filterByUser(userName) {
+    // 1. หา Dropdown เลือกพนักงาน
+    const userSelect = document.querySelector('select[name="filter_name"]');
+    
+    if (userSelect) {
+        // 2. เปลี่ยนค่าใน Dropdown
+        userSelect.value = userName;
+        
+        // 3. (ทางเลือก) รีเซ็ตสถานะเป็น "ทั้งหมด" เพื่อดูภาพรวมของคนนั้น
+        const statusInput = document.getElementById('filter_status');
+        if(statusInput) statusInput.value = '';
+
+        // 4. สั่งค้นหาข้อมูลใหม่
+        fetchDashboardData();
+
+        // 5. เลื่อนหน้าจอลงมาที่ตารางรายการ เพื่อให้เห็นรายละเอียด
+        const tableSection = document.getElementById('dashboard-table-section');
+        if (tableSection) {
+            tableSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
     }
 }

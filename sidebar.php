@@ -1305,8 +1305,12 @@ function getAvatar()
         <?php endif; ?>
 
 
-        <?php if (canSeeMenu('project_dashboard.php') || canSeeMenu('project_details.php') || canSeeMenu('ServiceRequest.php') || canSeeMenu('service_dashboard.php') || canSeeMenu('ProjectShops.php') || canSeeMenu('manage_job_types.php') || canSeeMenu('manage_customers.php') || canSeeMenu('create_project.php') || canSeeMenu('project_dashboard.php') || canSeeMenu('project_job_types.php')):
-            $proj_pages = ['project_dashboard.php', 'project_details.php'];
+        <?php
+        // เพิ่ม canSeeMenu('manage_setup.php') ในเงื่อนไขตรวจสอบ
+        if (canSeeMenu('project_dashboard.php') || canSeeMenu('project_details.php') || canSeeMenu('ServiceRequest.php') || canSeeMenu('service_dashboard.php') || canSeeMenu('ProjectShops.php') || canSeeMenu('manage_job_types.php') || canSeeMenu('manage_customers.php') || canSeeMenu('create_project.php') || canSeeMenu('project_dashboard.php') || canSeeMenu('project_job_types.php') || canSeeMenu('manage_setup.php') || canSeeMenu('manage_provinces.php')):
+
+            // เพิ่ม manage_setup.php ลงใน Array เพื่อให้เมนูเปิดค้างไว้เมื่อกด
+            $proj_pages = ['project_dashboard.php', 'project_details.php', 'manage_setup.php'];
             $proj_open = in_array($current_page, $proj_pages) ? 'open' : '';
             $proj_show = in_array($current_page, $proj_pages) ? 'show' : '';
             ?>
@@ -1325,11 +1329,6 @@ function getAvatar()
                     <i class="fas fa-chevron-down dropdown-icon"></i>
                 </a>
                 <ul class="submenu <?php echo $proj_show; ?>">
-                    <?php if (canSeeMenu('project_details.php')): ?>
-                        <li><a href="project_details.php"
-                                class="<?php echo isActive('project_details.php', $current_page); ?>"><i
-                                    class="fas fa-book-open"></i> สมุดลงงานโครงการ(เก่า)</a></li>
-                    <?php endif; ?>
                     <?php if (canSeeMenu('service_dashboard.php')): ?>
                         <li>
                             <a href="service_dashboard.php"
@@ -1376,6 +1375,17 @@ function getAvatar()
                                 class="<?php echo isActive('project_job_types.php', $current_page); ?>"><i
                                     class="fa-solid fa-people-group"></i> ประเภทงาน</a></li>
                     <?php endif; ?>
+
+                    <?php if (canSeeMenu('manage_setup.php')): ?>
+                        <li><a href="manage_setup.php" class="<?php echo isActive('manage_setup.php', $current_page); ?>"><i
+                                    class="fas fa-cogs"></i> ตั้งค่าข้อมูลพื้นฐาน</a></li>
+                    <?php endif; ?>
+                    <?php if (canSeeMenu('manage_provinces.php')): ?>
+                        <li><a href="manage_provinces.php"
+                                class="<?php echo isActive('manage_provinces.php', $current_page); ?>"><i
+                                    class="fas fa-cogs"></i> จัดการข้อมูลจังหวัด</a></li>
+                    <?php endif; ?>
+
                 </ul>
             </li>
         <?php endif; ?>
