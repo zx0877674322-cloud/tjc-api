@@ -152,7 +152,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 }
 
 // --- 2. ดึงรายการสินค้า และ ประวัติ (Previous Sub-items) ---
-$sql_items = "SELECT * FROM project_items WHERE project_id = '$project_id' AND purchased_quantity < quantity AND purchase_status != 'ยกเลิก' ORDER BY id ASC";
+$sql_items = "SELECT * FROM project_items 
+              WHERE project_id = '$project_id' 
+              AND item_type = 'product' 
+              AND purchased_quantity < quantity 
+              AND purchase_status != 'ยกเลิก' 
+              ORDER BY id ASC";
 $res_items = $conn->query($sql_items);
 $items_array = [];
 
@@ -823,11 +828,10 @@ $items_json = json_encode($items_array, JSON_UNESCAPED_UNICODE);
                 mainPriceInput.style.fontWeight = "bold";
 
                 if (mainQty > 0) {
-                    // สูตร: ต้นทุนรวม ÷ จำนวนแม่ = ราคาต่อหน่วย
                     const unitPrice = totalSubCost / mainQty;
                     mainPriceInput.value = unitPrice.toFixed(2);
                 } else {
-                    // ถ้าจำนวนแม่เป็น 0 (กรณีลบเลขทิ้ง) ให้ราคาเป็น 0
+                    // 🟡 ถ้าจำนวนแม่เป็น 0 หรือไม่ระบุ ให้ราคาต่อหน่วยเป็น 0 แทนที่จะเป็น NaN
                     mainPriceInput.value = "0.00";
                 }
             } else {
