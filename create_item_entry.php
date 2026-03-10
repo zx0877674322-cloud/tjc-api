@@ -26,19 +26,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         $cost = floatval($itemData['cost_price'] ?? 0);
                         $std = floatval($itemData['standard_price'] ?? 0);
 
-                        // 🟢 [เพิ่ม] รับค่าประเภทรายการ (Default เป็น 'product' ถ้าไม่ส่งมา)
+                        // 🟢 รับค่าประเภทรายการ
                         $item_type = $conn->real_escape_string($itemData['item_type'] ?? 'product');
 
-                        // 🟢 [แก้ไข] เพิ่ม item_type เข้าไปใน SQL INSERT
+                        // 🟢 [ใหม่] รับค่าสถานะการจัดซื้อรายตัว (ถ้าไม่มี ให้ยึดตามหน้าเอกสารรวม)
+                        $item_status = isset($itemData['purchase_status']) ? $conn->real_escape_string($itemData['purchase_status']) : $status;
+
+                        // 🟢 บันทึกข้อมูล
                         $sql = "INSERT INTO project_items (
                             project_id, doc_no, purchase_status,
                             item_name, unit, quantity, cost_price, standard_price, 
-                            item_type, /* <--- เพิ่มคอลัมน์นี้ */
+                            item_type,
                             created_at
                         ) VALUES (
-                            '$p_id', '$doc_no', '$status',
+                            '$p_id', '$doc_no', '$item_status', /* ใช้สถานะรายตัว */
                             '$name', '$unit', '$qty', '$cost', '$std', 
-                            '$item_type', /* <--- เพิ่มค่าตัวแปรนี้ */
+                            '$item_type',
                             NOW()
                         )";
 

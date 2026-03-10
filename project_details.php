@@ -1050,27 +1050,35 @@ function renderStatusBadge($status)
                                         style="text-align:right; font-weight:700; color: #0284c7; background: #f0f9ff; vertical-align: middle;">
                                         <?php
                                         // 1. เช็คว่าเป็นค่าแรง/ค่าใช้จ่าย หรือไม่?
+                                        // 1. เช็คว่าเป็น 'ค่าใช้จ่าย' หรือไม่
                                         if (isset($item['item_type']) && $item['item_type'] == 'expense') {
-
-                                            // 🟡 ถ้าใช่: ให้ใส่ขีด "-" จางๆ (ไม่แสดงราคา)
-                                            echo '<span style="color:#cbd5e1; font-weight:400;">-</span>';
-
+                                            echo '<span class="status-badge st-expense"><i class="fas fa-file-invoice-dollar"></i> ค่าใช้จ่าย</span>';
                                         } else {
+                                            // 2. เตรียมตัวเลข และตรวจสอบรายการย่อย!
+                                            $plan_qty = floatval($item['quantity']);                  // แผน
+                                            $bought_qty = floatval($item['purchased_quantity'] ?? 0); // ซื้อจริงตัวหลัก
+                                
+                                            // ใช้ trim() ตัดช่องว่างทิ้ง ป้องกันบั๊กจาก DB
+                                            $db_status = trim($item['purchase_status'] ?? '');
 
-                                            // 🟢 ถ้าเป็นสินค้า: แสดงราคาล่าสุดตามปกติ
-                                            $raw_price = $item['latest_buy_price'];
-                                            $price_val = floatval($raw_price);
+                                            // 🟢 [ไม้ตาย] เช็คว่ามีประวัติสั่งซื้อ "รายการย่อย" อยู่ด้วยใช่ไหม?
+                                            $has_sub_items = !empty($item['sub_items_list']);
 
-                                            if ($price_val > 0) {
-                                                // มีราคาล่าสุด
-                                                echo '฿ ' . number_format($price_val, 2);
-                                                echo '<div style="font-size: 0.65rem; color: #94a3b8; font-weight: 400; margin-top:2px;">(ล่าสุด)</div>';
-                                            } elseif ($raw_price !== null) {
-                                                // เป็น 0 (ของแถม/ฟรี)
-                                                echo '<span style="color:#ef4444;">0.00</span>';
+                                            // ใช้ strpos เพื่อค้นหาคำแบบยืดหยุ่น (เจอคำว่า 'ยกเลิก' ก็ถือว่าใช่เลย)
+                                            if (strpos($db_status, 'ยกเลิก') !== false) {
+                                                echo '<span class="status-badge st-cancel"><i class="fas fa-ban"></i> ยกเลิก</span>';
+
+                                            } elseif (strpos($db_status, 'ครบ') !== false || ($bought_qty >= $plan_qty && $plan_qty > 0)) {
+                                                // ✅ ครบแล้ว
+                                                echo '<span class="status-badge st-full"><i class="fas fa-check-circle"></i> สั่งซื้อครบแล้ว</span>';
+
+                                            } elseif (strpos($db_status, 'บาง') !== false || $bought_qty > 0 || $has_sub_items) {
+                                                // 🟠 ซื้อบางส่วน (ถ้ายอดหลักมีซื้อ หรือ "มีซื้อรายการย่อย" ให้แสดงสถานะนี้ทันที!)
+                                                echo '<span class="status-badge st-partial"><i class="fas fa-box-open"></i> สั่งซื้อบางรายการ</span>';
+
                                             } else {
-                                                // ยังไม่เคยซื้อ
-                                                echo '<span style="color:#cbd5e1;">-</span>';
+                                                // ⚪ ยังไม่มีการเคลื่อนไหวใดๆ
+                                                echo '<span class="status-badge st-wait"><i class="fas fa-clock"></i> รอสั่งซื้อ</span>';
                                             }
                                         }
                                         ?>
@@ -1117,25 +1125,40 @@ function renderStatusBadge($status)
                                         if (isset($item['item_type']) && $item['item_type'] == 'expense') {
                                             echo '<span class="status-badge st-expense"><i class="fas fa-file-invoice-dollar"></i> ค่าใช้จ่าย</span>';
                                         } else {
-                                            // 2. เตรียมตัวเลข และดึง "ข้อความสถานะ" จากฐานข้อมูลมาด้วย
-                                            $plan_qty = floatval($item['quantity']);                  // แผน
-                                            $bought_qty = floatval($item['purchased_quantity'] ?? 0); // ซื้อจริงตัวหลัก
-                                            $db_status = $item['purchase_status'] ?? '';              // สถานะที่เซฟใน DB
-                                
-                                            if ($db_status == 'ยกเลิก') {
+                                            // 2. เตรียมตัวเลข และตรวจสอบรายการย่อย
+                                            $plan_qty = floatval($item['quantity']);
+                                            $bought_qty = floatval($item['purchased_quantity'] ?? 0);
+
+                                            // 🟢 ใช้ trim() ตัดช่องว่างออก
+                                            $db_status = trim($item['purchase_status'] ?? '');
+                                            $has_sub = !empty($item['sub_items_list']);
+
+                                            // 3. เช็คสถานะเรียงตามลำดับความสำคัญ
+                                            if (strpos($db_status, 'ยกเลิก') !== false) {
+
                                                 echo '<span class="status-badge st-cancel"><i class="fas fa-ban"></i> ยกเลิก</span>';
 
-                                            } elseif ($db_status == 'สั่งซื้อครบแล้ว' || ($bought_qty >= $plan_qty && $plan_qty > 0)) {
-                                                // ✅ ครบแล้ว (เช็คทั้งคำใน DB หรือตัวเลขครบ)
+                                            } elseif (strpos($db_status, 'รออนุมัติ') !== false) {
+
+                                                // 🟣 [เพิ่มใหม่] รออนุมัติสั่งซื้อ (ป้ายสีม่วงคราม สวยๆ)
+                                                echo '<span class="status-badge" style="background:#e0e7ff; color:#4338ca; border:1px solid #818cf8;"><i class="fas fa-user-clock"></i> ' . htmlspecialchars($db_status) . '</span>';
+
+                                            } elseif (strpos($db_status, 'ครบ') !== false || ($bought_qty >= $plan_qty && $plan_qty > 0)) {
+
+                                                // ✅ ครบแล้ว
                                                 echo '<span class="status-badge st-full"><i class="fas fa-check-circle"></i> สั่งซื้อครบแล้ว</span>';
 
-                                            } elseif ($db_status == 'สั่งซื้อบางรายการ' || $db_status == 'สั่งซื้อบางส่วน' || $bought_qty > 0) {
-                                                // 🟠 ซื้อบางส่วน (ถ้าใน DB เป็นบางรายการ หรือมียอดซื้อตัวหลัก > 0 ให้เข้าเงื่อนไขนี้เลย!)
+                                            } elseif (strpos($db_status, 'บาง') !== false || $bought_qty > 0 || $has_sub) {
+
+                                                // 🟠 ซื้อบางส่วน
                                                 echo '<span class="status-badge st-partial"><i class="fas fa-box-open"></i> สั่งซื้อบางรายการ</span>';
 
                                             } else {
-                                                // ⚪ ยังไม่ซื้อ (สีเทา)
-                                                echo '<span class="status-badge st-wait"><i class="fas fa-clock"></i> รอสั่งซื้อ</span>';
+
+                                                // ⚪ [แก้ใหม่] ถ้าไม่เข้าเงื่อนไขอะไรเลย ให้เอาข้อความใน DB มาโชว์ตรงๆ เลย (ถ้าว่างค่อยโชว์ 'รอสั่งซื้อ')
+                                                $display_text = !empty($db_status) ? htmlspecialchars($db_status) : 'รอสั่งซื้อ';
+                                                echo '<span class="status-badge st-wait"><i class="fas fa-clock"></i> ' . $display_text . '</span>';
+
                                             }
                                         }
                                         ?>
