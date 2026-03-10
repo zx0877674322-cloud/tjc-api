@@ -173,33 +173,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $guarantee_amount = floatval(str_replace(',', '', $_POST['guarantee_amount'] ?? 0));
         }
 
-        // Logic สถานะ
-        if (empty($start_date) || empty($end_date)) {
-            $status = 'รอเซ็นสัญญา';
-        } else {
+        if (!empty($contract_no) && !empty($start_date) && $start_date != '0000-00-00' && !empty($end_date) && $end_date != '0000-00-00') {
             $status = 'เซ็นสัญญา';
+            $stage_id = 2; // ✅ ID 2 = เซ็นสัญญาแล้ว (ต้องตรงกับในตาราง setup_project_stages)
+        } else {
+            $status = 'รอเซ็นสัญญา';
+            $stage_id = 1; // ❌ ID 1 = รอเซ็นสัญญา
         }
+
+        // เช็คเผื่อกรณีที่เป็นโปรเจกต์เดิมที่มีการเปิด PO ไปแล้ว (stage_id >= 3) ห้ามถอยหลังกลับ
+        if (!empty($_POST['edit_id'])) {
+            $check_stage = $conn->query("SELECT stage_id FROM projects WHERE id = " . intval($_POST['edit_id']));
+            if ($check_stage && $current_stage = $check_stage->fetch_assoc()) {
+                if ($current_stage['stage_id'] >= 3) {
+                    $stage_id = $current_stage['stage_id']; // คงค่าเดิมไว้
+                    // $status = อาจจะปล่อยตามเดิมหรือดึงชื่อเก่ามาก็ได้
+                }
+            }
+        }
+        // ==========================================================
 
         $edit_id = $_POST['edit_id'] ?? null;
 
         if ($edit_id) {
             // ==========================================
-            // CASE UPDATE (28 Params: 27 Values + 1 ID)
+            // CASE UPDATE (เพิ่ม stage_id=?)
             // ==========================================
             $sql = "UPDATE projects SET 
                 company_id=?, contract_no=?, start_date=?, warranty_value=?, warranty_unit=?, end_date=?, 
                 alert_days_before_expire=?, alert_warranty_days=?, 
                 job_type_id=?, sales_user=?, project_name=?, project_budget=?, customer_id=?, customer_address=?, customer_phone=?, customer_affiliation=?,
                 bidding_type=?, bidding_date=?, quotation_no=?, quote_creator=?, 
-                guarantee_type=?, guarantee_no=?, guarantee_start_date=?, guarantee_end_date=?, guarantee_amount=?, status=?, recorder=?
+                guarantee_type=?, guarantee_no=?, guarantee_start_date=?, guarantee_end_date=?, guarantee_amount=?, status=?, recorder=?, stage_id=?
                 WHERE id=?";
 
             $stmt = $conn->prepare($sql);
 
-            // 🔥 [2] แก้ไข Type String ให้ครบ 28 ตัว (เพิ่ม s ไป 1 ตัวตรงกลาง)
-            // ississiiissdisssssssssssdssi
+            // เพิ่ม type ตัวอักษร i (Integer) สำหรับ stage_id ก่อนตัว id
             $stmt->bind_param(
-                "ississiiissdisssssssssssdssi",
+                "ississiiissdisssssssssssdsiii",
                 $company_id,
                 $contract_no,
                 $start_date,
@@ -227,6 +239,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $guarantee_amount,
                 $status,
                 $recorder,
+                $stage_id, // 🟢 ตัวแปรใหม่ที่เพิ่มเข้ามา
                 $edit_id
             );
             $msg = 'อัปเดตโครงการสำเร็จ';

@@ -209,15 +209,8 @@ $filter_status = isset($_GET['filter_status']) ? $_GET['filter_status'] : '';
 if (!empty($filter_status)) {
     $filter_status = $conn->real_escape_string($filter_status);
 
-    // 🚨 แก้บั๊ก: ถ้าเลือก "ได้งาน" ต้องระวังไม่ให้ไปติด "ไม่ได้งาน"
-    if ($filter_status == 'ได้งาน') {
-        // สูตร: ต้องมีคำว่า "ได้งาน" แต่อย่ามีคำว่า "ไม่ได้งาน" ในบรรทัดเดียวกัน
-        // (หรือถ้าอยากให้ละเอียดกว่านี้ อาจต้องใช้ REGEXP แต่แบบนี้เข้าใจง่ายสุดครับ)
-        $where_sql .= " AND (job_status LIKE '%ได้งาน%' AND job_status NOT LIKE '%ไม่ได้งาน%')";
-    } else {
-        // กรณีอื่นๆ (เช่น ติดตามงาน, เข้าพบ) ใช้ LIKE ตามปกติ
-        $where_sql .= " AND job_status LIKE '%$filter_status%'";
-    }
+    // โค้ดคลีนๆ: ค้นหาตรงๆ ได้เลย ไม่ต้องดักบั๊กคำซ้อนทับกันแล้ว
+    $where_sql .= " AND job_status LIKE '%$filter_status%'";
 }
 
 // 🟢 3. ค้นหาจากชื่อลูกค้า/โครงการ
@@ -272,13 +265,30 @@ if ($res_all) {
         $employee_stats[$emp_name]['total_expense'] += $expense;
         $global_stats['total_expense'] += $expense;
 
-        // มูลค่าโครงการ
-        $p_names = $row['project_name'] ?? '';
-        if (preg_match_all('/มูลค่า:\s*([\d,.]+)\s*บาท/u', $p_names, $matches)) {
-            foreach ($matches[1] as $val_str) {
-                $val = floatval(str_replace(',', '', $val_str));
-                $employee_stats[$emp_name]['total_project_value'] += $val;
-                $global_stats['total_project_value'] += $val;
+        // 🟢 มูลค่าโครงการ (จับคู่หั่นแยกทีละโครงการ เช็คเฉพาะอันที่ "เซ็นสัญญา")
+        $raw_status = $row['job_status'] ? trim($row['job_status']) : '';
+        $raw_projects = $row['project_name'] ? trim($row['project_name']) : '';
+
+        // 1. หั่นสถานะ (ตัดด้วย , ปกติ แล้วลบช่องว่างทิ้ง)
+        $status_arr = array_map('trim', explode(',', $raw_status));
+
+        // 2. 🚨 หั่นโปรเจกต์ด้วย ", " (คอมม่า+เว้นวรรค) เพื่อไม่ให้ไปตัดลูกน้ำในตัวเลขเงิน (1,000)
+        $project_arr = explode(', ', $raw_projects);
+
+        // วนลูปเช็คทีละโครงการ
+        foreach ($project_arr as $index => $p_str) {
+            $p_str = trim($p_str);
+            // ดึงสถานะที่ตำแหน่งตรงกันมาเช็ค (ถ้าหาไม่เจอให้เป็นว่าง)
+            $current_status = isset($status_arr[$index]) ? $status_arr[$index] : '';
+
+            // ถ้าสถานะของโครงการ "นี้" เป็น "เซ็นสัญญา" เท่านั้น ถึงจะดึงตัวเลขมาบวก
+            if (strpos($current_status, 'เซ็นสัญญา') !== false) {
+                // ค้นหาตัวเลขในวงเล็บ (มูลค่า: XXX บาท)
+                if (preg_match('/มูลค่า:\s*([\d,.]+)\s*บาท/u', $p_str, $match)) {
+                    $val = floatval(str_replace(',', '', $match[1]));
+                    $employee_stats[$emp_name]['total_project_value'] += $val;
+                    $global_stats['total_project_value'] += $val;
+                }
             }
         }
 
@@ -357,7 +367,7 @@ function getCardConfig($status)
     }
 
     // 🟢 2. สีเขียว (ได้งาน)
-    if (strpos($status, 'ได้งาน') !== false || strpos($status, 'สำเร็จ') !== false || strpos($status, 'เรียบร้อย') !== false) {
+    if (strpos($status, 'เซ็นสัญญา') !== false || strpos($status, 'สำเร็จ') !== false || strpos($status, 'เรียบร้อย') !== false) {
         return ['color' => '#10b981', 'icon' => 'fa-check-circle'];
     }
 

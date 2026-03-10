@@ -119,25 +119,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             }
 
                             // 1.4 อัปเดตตารางแม่ (project_items)
-                            // เพิ่มยอด purchased_quantity และเช็คสถานะ
                             if (isset($itemData['update_progress']) && $itemData['update_progress'] == 1) {
-
-                                // ถ้าติ๊ก -> ให้อัปเดตจำนวนที่เสร็จจริง + เช็คสถานะ
+                                // 🟢 ติ๊กอัปเดตยอด (ซื้อตัวหลัก)
                                 $sql_update_main = "UPDATE project_items 
-                        SET purchased_quantity = purchased_quantity + $buy_qty,
-                            purchase_status = CASE 
-                                WHEN (purchased_quantity + $buy_qty) >= quantity THEN 'สั่งซื้อครบแล้ว'
-                                ELSE 'สั่งซื้อบางส่วน'
-                            END
-                        WHERE id = '$itemId'";
+                                SET purchased_quantity = purchased_quantity + $buy_qty,
+                                    purchase_status = CASE 
+                                        WHEN (purchased_quantity + $buy_qty) >= quantity THEN 'สั่งซื้อครบแล้ว'
+                                        ELSE 'สั่งซื้อบางส่วน'
+                                    END
+                                WHERE id = '$itemId'";
                                 $conn->query($sql_update_main);
 
                             } else {
-                                // 🟡 ถ้าไม่ติ๊ก (ซื้อแค่อะไหล่) -> ไม่อัปเดต purchased_quantity
-                                // แต่อาจจะอัปเดตสถานะเป็น 'สั่งซื้อบางส่วน' เพื่อให้รู้ว่ามีการขยับ
+                                // 🟡 ไม่ได้ติ๊ก (ซื้อแค่ส่วนประกอบ) -> บังคับเปลี่ยนสถานะทันที ทะลวงค่า NULL
                                 $sql_update_status = "UPDATE project_items 
-                          SET purchase_status = 'สั่งซื้อบางส่วน' 
-                          WHERE id = '$itemId' AND purchase_status != 'สั่งซื้อครบแล้ว'";
+                                SET purchase_status = 'สั่งซื้อบางส่วน' 
+                                WHERE id = '$itemId' 
+                                AND (purchase_status != 'สั่งซื้อครบแล้ว' OR purchase_status IS NULL)";
                                 $conn->query($sql_update_status);
                             }
                         }
@@ -145,6 +143,42 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 }
                 $success_count++;
             }
+        }
+        // ✅ ใส่ชุดนี้แทนครับ (เวอร์ชั่นเช็คของครบ)
+        if ($success_count > 0) {
+            // 1. นับแค่ว่า "รายการที่ซื้อครบแล้ว" เท่ากับ "รายการทั้งหมด" หรือยัง?
+            $check_sql = "SELECT 
+                            COUNT(id) as total_items,
+                            SUM(CASE WHEN purchased_quantity >= quantity THEN 1 ELSE 0 END) as completed_items
+                          FROM project_items 
+                          WHERE project_id = '$project_id' 
+                          AND item_type = 'product' 
+                          AND (purchase_status != 'ยกเลิก' OR purchase_status IS NULL)";
+
+            $chk_result = $conn->query($check_sql);
+            $chk_data = $chk_result->fetch_assoc();
+
+            $total_items = intval($chk_data['total_items']);
+            $completed_items = intval($chk_data['completed_items']);
+
+            // 2. ตัดสินใจเปลี่ยนสถานะ
+            if ($total_items > 0 && $total_items == $completed_items) {
+                // ✅ ครบทุกรายการ
+                $new_stage = 4;
+                $new_status_text = 'สั่งซื้อครบแล้ว';
+            } else {
+                // 🚚 ถ้าระบบลงมาถึงตรงนี้ ($success_count > 0) 
+                // แปลว่ามีการเซฟใบสั่งซื้อแล้วแน่ๆ (ไม่ว่าจะเป็นตัวหลักหรือส่วนประกอบ)
+                // ดังนั้นถ้ามันยังไม่ครบ ให้เป็น "บางรายการ" ทันที ไม่ต้องง้อการเช็คคำครับ
+                $new_stage = 3;
+                $new_status_text = 'สั่งซื้อบางรายการ';
+            }
+
+            // 3. อัปเดตลงตาราง Projects 
+            $update_stage_sql = "UPDATE projects 
+                                 SET stage_id = '$new_stage', status = '$new_status_text' 
+                                 WHERE id = '$project_id' AND (stage_id <= 4 OR stage_id IS NULL OR stage_id = 0)";
+            $conn->query($update_stage_sql);
         }
 
         echo "<script>alert('บันทึกใบสั่งซื้อเรียบร้อย $success_count ใบ'); window.location.href='project_details.php?id=$project_id';</script>";
@@ -556,11 +590,11 @@ $items_json = json_encode($items_array, JSON_UNESCAPED_UNICODE);
                         <div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">(จำนวนชุด)</div>
 
                         <div style="margin-top: 8px; background: #fff7ed; padding: 4px; border-radius: 4px; border: 1px dashed #fdba74;">
-                            <label style="font-size: 0.75rem; color: #c2410c; display: flex; align-items: center; justify-content: center; gap: 4px; cursor: pointer;">
-                                <input type="checkbox" name="po[${idx}][items][${item.id}][update_progress]" value="1">
-                                <span>นับยอดเสร็จ</span>
-                            </label>
-                        </div>
+    <label style="font-size: 0.75rem; color: #c2410c; display: flex; align-items: center; justify-content: center; gap: 4px; cursor: pointer;">
+        <input type="checkbox" name="po[${idx}][items][${item.id}][update_progress]" value="1" checked>
+        <span>นับยอดเสร็จ</span>
+    </label>
+</div>
 
                     </td>
 
@@ -632,7 +666,7 @@ $items_json = json_encode($items_array, JSON_UNESCAPED_UNICODE);
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>แนบเอกสารPO</label>
+                    <label>แนบเอกสารPO(Winspeed)</label>
                     <input type="file" name="po[${idx}][slip_file]" class="form-control">
                 </div>
             </div>
@@ -771,12 +805,31 @@ $items_json = json_encode($items_array, JSON_UNESCAPED_UNICODE);
 
             // แทรกก่อนหน้า Footer Row
             footerRow.parentNode.insertBefore(tr, footerRow);
+            const progressCheckbox = document.querySelector(`input[name="po[${poIdx}][items][${itemId}][update_progress]"]`);
+            if (progressCheckbox) {
+                progressCheckbox.checked = false;
+            }
         }
 
         // --- 4. ลบรายการย่อย ---
         function removeSubItem(btn, poIdx, itemId) {
+            // ลบแถวทิ้งก่อน
             btn.closest('tr').remove();
-            calcSubToMain(poIdx, itemId); // คำนวณใหม่หลังลบ
+
+            // คำนวณราคาใหม่
+            calcSubToMain(poIdx, itemId);
+
+            // 🟢 [เพิ่มใหม่] เช็คว่าเหลือรายการย่อยไหม?
+            const remainingSubs = document.querySelectorAll(`.sub-row-${poIdx}-${itemId}`);
+
+            // ถ้าไม่เหลือรายการย่อยเลย (แปลว่ากลับมาซื้อตัวแม่ปกติ)
+            if (remainingSubs.length === 0) {
+                const progressCheckbox = document.querySelector(`input[name="po[${poIdx}][items][${itemId}][update_progress]"]`);
+                // ให้ติ๊ก "นับยอดเสร็จ" กลับคืนมา
+                if (progressCheckbox) {
+                    progressCheckbox.checked = true;
+                }
+            }
         }
 
         // --- 5. สูตรคำนวณเทพ: รวมราคาย่อย -> หารจำนวนหลัก -> ใส่ราคาหลัก ---

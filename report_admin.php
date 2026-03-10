@@ -50,7 +50,8 @@ function arrToString($arr)
     if (!is_array($arr))
         return json_encode([], JSON_UNESCAPED_UNICODE);
     $cleaned = array_map(function ($value) {
-        return trim($value); }, $arr);
+        return trim($value);
+    }, $arr);
     return json_encode($cleaned, JSON_UNESCAPED_UNICODE);
 }
 
@@ -60,7 +61,8 @@ function arrSum($arr)
         return floatval($arr);
     return array_sum(array_map('floatval', $arr));
 }
-function sumDocsFromStringArray($arr) {
+function sumDocsFromStringArray($arr)
+{
     $total = 0;
     if (is_array($arr)) {
         foreach ($arr as $str) {
@@ -77,10 +79,27 @@ function sumDocsFromStringArray($arr) {
 }
 
 // --- Form Processing ---
+$edit_id = isset($_GET['edit_id']) ? intval($_GET['edit_id']) : 0;
+$edit_data = null;
+$my_name = $_SESSION['fullname'] ?? 'Test User';
+
+// --- Fetch Data for Edit Mode ---
+if ($edit_id > 0) {
+    $stmt = $conn->prepare("SELECT * FROM report_admin WHERE id = ? AND reporter_name = ?");
+    $stmt->bind_param("is", $edit_id, $my_name);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if ($row = $result->fetch_assoc()) {
+        $edit_data = $row;
+    }
+    $stmt->close();
+}
+
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $date = $_POST['report_date'];
-    $name = $_SESSION['fullname'] ?? 'Test User';
     $note = trim($_POST['additional_note']);
+    $is_edit = isset($_POST['action_edit_id']) && intval($_POST['action_edit_id']) > 0;
+    $target_id = $is_edit ? intval($_POST['action_edit_id']) : 0;
 
     $timestamp = time();
     $created_at = date('Y-m-d H:i:s', strtotime('+12 hours', $timestamp));
@@ -104,7 +123,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $sum_accom = arrSum($_POST['accommodation_cost'] ?? []);
         $sum_labor = arrSum($_POST['labor_cost'] ?? []);
         $sum_other = arrSum($_POST['other_amount'] ?? []);
-        $sum_docs  = sumDocsFromStringArray($_POST['adm_doc'] ?? []);
+        $sum_docs = sumDocsFromStringArray($_POST['adm_doc'] ?? []);
         $grand_total += ($sum_accom + ($sum_labor * 0.97) + $sum_other + $sum_docs);
     }
 
@@ -141,69 +160,123 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if ($has_stamp)
         $grand_total += arrSum($_POST['sd_cost'] ?? []);
 
-    // 3. Insert Command (เพิ่ม created_at)
-    $sql = "INSERT INTO report_admin 
-    (report_date, reporter_name, note, total_amount, created_at,
-     has_expense, exp_company, exp_dept, exp_proj, exp_doc, exp_accom, exp_labor, exp_file, 
-     exp_other_desc, exp_other_amount, exp_other_file,
-     has_pr, pr_dept, pr_proj, pr_budget,
-     has_job, job_num, job_dept, job_proj, job_budget,
-     has_bg, bg_dept, bg_proj, bg_amount,
-     has_stamp, stamp_dept, stamp_proj, stamp_cost) 
-    VALUES 
-    (?, ?, ?, ?, ?, 
-     ?, ?, ?, ?, ?, ?, ?, ?, 
-     ?, ?, ?,
-     ?, ?, ?, ?, 
-     ?, ?, ?, ?, ?, 
-     ?, ?, ?, ?, 
-     ?, ?, ?, ?)";
+    if ($is_edit) {
+        $sql = "UPDATE report_admin SET 
+            report_date=?, note=?, total_amount=?,
+            has_expense=?, exp_company=?, exp_dept=?, exp_proj=?, exp_doc=?, exp_accom=?, exp_labor=?, exp_file=?, 
+            exp_other_desc=?, exp_other_amount=?, exp_other_file=?,
+            has_pr=?, pr_dept=?, pr_proj=?, pr_budget=?,
+            has_job=?, job_num=?, job_dept=?, job_proj=?, job_budget=?,
+            has_bg=?, bg_dept=?, bg_proj=?, bg_amount=?,
+            has_stamp=?, stamp_dept=?, stamp_proj=?, stamp_cost=?
+            WHERE id=? AND reporter_name=?";
 
-    $stmt = $conn->prepare($sql);
-    if (!$stmt) {
-        die("Prepare failed: " . $conn->error);
+        $stmt = $conn->prepare($sql);
+        if (!$stmt)
+            die("Prepare failed: " . $conn->error);
+
+        $stmt->bind_param(
+            "ssd" . "isssssssss" . "isss" . "issss" . "isss" . "issss" . "is",
+            $date,
+            $note,
+            $grand_total,
+            $has_exp,
+            $exp_comp,
+            $exp_dept,
+            $exp_proj,
+            $exp_doc,
+            $exp_accom_str,
+            $exp_labor_str,
+            $exp_file,
+            $exp_other_desc,
+            $exp_other_amt,
+            $exp_other_file,
+            $has_pr,
+            $pr_dept,
+            $pr_proj,
+            $pr_budget_str,
+            $has_job,
+            $job_num,
+            $job_dept,
+            $job_proj,
+            $job_budget_str,
+            $has_bg,
+            $bg_dept,
+            $bg_proj,
+            $bg_amt_str,
+            $has_stamp,
+            $stamp_dept,
+            $stamp_proj,
+            $stamp_cost_str,
+            $target_id,
+            $my_name
+        );
+    } else {
+        // 3. Insert Command (เพิ่ม created_at)
+        $sql = "INSERT INTO report_admin 
+        (report_date, reporter_name, note, total_amount, created_at,
+         has_expense, exp_company, exp_dept, exp_proj, exp_doc, exp_accom, exp_labor, exp_file, 
+         exp_other_desc, exp_other_amount, exp_other_file,
+         has_pr, pr_dept, pr_proj, pr_budget,
+         has_job, job_num, job_dept, job_proj, job_budget,
+         has_bg, bg_dept, bg_proj, bg_amount,
+         has_stamp, stamp_dept, stamp_proj, stamp_cost) 
+        VALUES 
+        (?, ?, ?, ?, ?, 
+         ?, ?, ?, ?, ?, ?, ?, ?, 
+         ?, ?, ?,
+         ?, ?, ?, ?, 
+         ?, ?, ?, ?, ?, 
+         ?, ?, ?, ?, 
+         ?, ?, ?, ?)";
+
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            die("Prepare failed: " . $conn->error);
+        }
+
+        // 4. Bind Params (เพิ่ม s และตัวแปร $created_at)
+        $stmt->bind_param(
+            "sssdsissssssssssisssissssisssisss",
+            $date,
+            $my_name,
+            $note,
+            $grand_total,
+            $created_at,
+            $has_exp,
+            $exp_comp,
+            $exp_dept,
+            $exp_proj,
+            $exp_doc,
+            $exp_accom_str,
+            $exp_labor_str,
+            $exp_file,
+            $exp_other_desc,
+            $exp_other_amt,
+            $exp_other_file,
+            $has_pr,
+            $pr_dept,
+            $pr_proj,
+            $pr_budget_str,
+            $has_job,
+            $job_num,
+            $job_dept,
+            $job_proj,
+            $job_budget_str,
+            $has_bg,
+            $bg_dept,
+            $bg_proj,
+            $bg_amt_str,
+            $has_stamp,
+            $stamp_dept,
+            $stamp_proj,
+            $stamp_cost_str
+        );
     }
 
-    // 4. Bind Params (เพิ่ม s และตัวแปร $created_at)
-    $stmt->bind_param(
-        "sssdsissssssssssisssissssisssisss",
-        $date,
-        $name,
-        $note,
-        $grand_total,
-        $created_at,
-        $has_exp,
-        $exp_comp,
-        $exp_dept,
-        $exp_proj,
-        $exp_doc,
-        $exp_accom_str,
-        $exp_labor_str,
-        $exp_file,
-        $exp_other_desc,
-        $exp_other_amt,
-        $exp_other_file,
-        $has_pr,
-        $pr_dept,
-        $pr_proj,
-        $pr_budget_str,
-        $has_job,
-        $job_num,
-        $job_dept,
-        $job_proj,
-        $job_budget_str,
-        $has_bg,
-        $bg_dept,
-        $bg_proj,
-        $bg_amt_str,
-        $has_stamp,
-        $stamp_dept,
-        $stamp_proj,
-        $stamp_cost_str
-    );
-
     if ($stmt->execute()) {
-        echo "<script>setTimeout(() => { Swal.fire({icon: 'success', title: 'บันทึกสำเร็จ', text: 'บันทึกข้อมูลเรียบร้อยแล้ว', showConfirmButton: false, timer: 1500}).then(() => { window.location.href = 'StaffHistory.php?tab=admin'; }); }, 100);</script>";
+        $msg = $is_edit ? 'อัปเดตสำเร็จ' : 'บันทึกสำเร็จ';
+        echo "<script>setTimeout(() => { Swal.fire({icon: 'success', title: '$msg', text: 'บันทึกข้อมูลเรียบร้อยแล้ว', showConfirmButton: false, timer: 1500}).then(() => { window.location.href = 'StaffHistory.php?tab=admin'; }); }, 100);</script>";
     } else {
         echo "<script>Swal.fire({icon: 'error', title: 'Error', text: '" . $stmt->error . "'});</script>";
     }
@@ -590,13 +663,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <form method="post" action="" enctype="multipart/form-data" id="mainForm">
 
             <div class="header-container">
-                <h1 class="page-title">บันทึกรายงานประจำวัน</h1>
+                <h1 class="page-title"><?php echo $edit_id > 0 ? 'แก้ไขรายงานประจำวัน' : 'บันทึกรายงานประจำวัน'; ?></h1>
                 <div class="page-subtitle">Daily Work & Expense Report</div>
             </div>
 
             <div class="date-input-wrapper">
+                <input type="hidden" name="action_edit_id" value="<?php echo $edit_id; ?>">
                 <input type="date" name="report_date" id="reportDate" class="form-control date-input"
-                    value="<?php echo date('Y-m-d'); ?>" required>
+                    value="<?php echo $edit_id > 0 ? $edit_data['report_date'] : date('Y-m-d'); ?>" required>
                 <input type="hidden" name="client_time" id="clientTime">
             </div>
 
@@ -710,11 +784,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <label class="form-label"><i class="fas fa-comment-alt" style="margin-right:5px;"></i>
                     บันทึกเพิ่มเติม</label>
                 <textarea name="additional_note" rows="3" class="form-control"
-                    placeholder="รายละเอียดอื่นๆ..."></textarea>
+                    placeholder="รายละเอียดอื่นๆ..."><?php echo $edit_id > 0 ? htmlspecialchars($edit_data['note']) : ''; ?></textarea>
             </div>
 
             <button type="button" class="btn-submit" onclick="confirmSubmit()"><i class="fas fa-save"></i>
-                บันทึกข้อมูลเข้าระบบ</button>
+                <?php echo $edit_id > 0 ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูลเข้าระบบ'; ?></button>
         </form>
     </div>
 
@@ -722,15 +796,213 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         // --- Init ---
         const companyOptions = `<?php foreach ($companies_list as $c)
             echo "<option value='$c'>$c</option>"; ?>`;
+        const isEditMode = <?php echo $edit_id > 0 ? 'true' : 'false'; ?>;
+        const editData = <?php echo $edit_id > 0 ? json_encode($edit_data) : 'null'; ?>;
 
         document.addEventListener("DOMContentLoaded", () => {
             flatpickr("#reportDate", { dateFormat: "Y-m-d", locale: "th" });
-            ['adminSection', 'prSection', 'jobSection', 'bgSection', 'sdSection'].forEach(id => toggleInputs(id, false));
+
+            if (isEditMode && editData) {
+                // Pre-fill data
+                populateEditData();
+            } else {
+                ['adminSection', 'prSection', 'jobSection', 'bgSection', 'sdSection'].forEach(id => toggleInputs(id, false));
+            }
 
             // Check LocalStorage on load (in case sidebar set it but page reloaded)
             const savedTheme = localStorage.getItem('theme') || 'light';
             document.documentElement.setAttribute('data-theme', savedTheme);
         });
+
+        // --- Logic: Populate Edit Data ---
+        function populateEditData() {
+            // Admin Exp Ensure Boolean
+            const adminSwitch = document.querySelector('input[name="enable_admin_expense"]');
+            if (editData.has_expense == 1) {
+                adminSwitch.checked = true;
+                toggleInputs('adminSection', true);
+                document.getElementById('admin_exp_container').innerHTML = ''; // clear auto-added row
+
+                try {
+                    let comps = JSON.parse(editData.exp_company || '[]');
+                    let depts = JSON.parse(editData.exp_dept || '[]');
+                    let projs = JSON.parse(editData.exp_proj || '[]');
+                    let accoms = JSON.parse(editData.exp_accom || '[]');
+                    let labors = JSON.parse(editData.exp_labor || '[]');
+                    let otherDescs = JSON.parse(editData.exp_other_desc || '[]');
+                    let otherAmts = JSON.parse(editData.exp_other_amount || '[]');
+                    let docs = JSON.parse(editData.exp_doc || '[]');
+
+                    let maxLen = Math.max(comps.length, depts.length, projs.length, accoms.length, labors.length, otherDescs.length, otherAmts.length, docs.length, 1);
+
+                    for (let i = 0; i < maxLen; i++) {
+                        addAdminExpRow();
+                        let rows = document.getElementById('admin_exp_container').querySelectorAll('.dynamic-item');
+                        let currRow = rows[rows.length - 1];
+
+                        if (comps[i]) currRow.querySelector('select[name="adm_company[]"]').value = comps[i];
+                        if (depts[i]) currRow.querySelector('input[name="adm_department[]"]').value = depts[i];
+                        if (projs[i]) currRow.querySelector('input[name="adm_project[]"]').value = projs[i];
+                        if (accoms[i]) currRow.querySelector('input[name="accommodation_cost[]"]').value = accoms[i];
+
+                        let laborInput = currRow.querySelector('input[name="labor_cost[]"]');
+                        if (labors[i]) {
+                            laborInput.value = labors[i];
+                            calcRowNet(laborInput);
+                        }
+
+                        if (otherDescs[i]) currRow.querySelector('input[name="other_desc[]"]').value = otherDescs[i];
+                        if (otherAmts[i]) currRow.querySelector('input[name="other_amount[]"]').value = otherAmts[i];
+
+                        // Parse doc string into rows
+                        if (docs[i] && typeof docs[i] === 'string' && docs[i] !== '') {
+                            let docWrapper = currRow.querySelector('.doc-list-wrapper');
+                            docWrapper.innerHTML = ''; // Clear default 1 row
+
+                            let docEntries = docs[i].split(', ');
+                            docEntries.forEach(entry => {
+                                // "AX 1234 (ขนม : 500.00)"
+                                let prefix = '';
+                                let num = '';
+                                let desc = '';
+                                let amt = '';
+
+                                let r1 = entry.match(/^(AX|PO|SO)?\s*([^\(]+)?/);
+                                if (r1) {
+                                    prefix = r1[1] ? r1[1].trim() : '';
+                                    num = r1[2] ? r1[2].trim() : '';
+                                }
+
+                                let r2 = entry.match(/\(([^:]+) : ([^\)]+)\)/);
+                                if (r2) {
+                                    desc = r2[1] ? r2[1].trim() : '';
+                                    amt = r2[2] ? r2[2].trim() : '';
+                                }
+
+                                addSubDocBtnObj(currRow, prefix, num, desc, amt);
+                            });
+
+                            updateDocHidden(currRow); // trigger calc
+                        }
+                    }
+                } catch (e) { console.error('Error parsing admin data', e); }
+                calcTotalWht();
+            } else { toggleInputs('adminSection', false); }
+
+            // PR Ensure Boolean
+            const prSwitch = document.querySelector('input[name="enable_pr"]');
+            if (editData.has_pr == 1) {
+                prSwitch.checked = true;
+                toggleInputs('prSection', true);
+                document.getElementById('pr_container').innerHTML = '';
+                try {
+                    let depts = JSON.parse(editData.pr_dept || '[]');
+                    let projs = JSON.parse(editData.pr_proj || '[]');
+                    let buds = JSON.parse(editData.pr_budget || '[]');
+                    let maxLen = Math.max(depts.length, projs.length, buds.length, 1);
+                    for (let i = 0; i < maxLen; i++) {
+                        addPrRow();
+                        let rows = document.getElementById('pr_container').querySelectorAll('.dynamic-item');
+                        let currRow = rows[rows.length - 1];
+                        if (depts[i]) currRow.querySelector('input[name="pr_department[]"]').value = depts[i];
+                        if (projs[i]) currRow.querySelector('input[name="pr_project[]"]').value = projs[i];
+                        if (buds[i]) currRow.querySelector('input[name="pr_budget[]"]').value = buds[i];
+                    }
+                } catch (e) { }
+            } else { toggleInputs('prSection', false); }
+
+            // Job
+            const jobSwitch = document.querySelector('input[name="enable_job_update"]');
+            if (editData.has_job == 1) {
+                jobSwitch.checked = true;
+                toggleInputs('jobSection', true);
+                document.getElementById('job_container').innerHTML = '';
+                try {
+                    let nums = JSON.parse(editData.job_num || '[]');
+                    let depts = JSON.parse(editData.job_dept || '[]');
+                    let projs = JSON.parse(editData.job_proj || '[]');
+                    let buds = JSON.parse(editData.job_budget || '[]');
+                    let maxLen = Math.max(nums.length, depts.length, projs.length, buds.length, 1);
+                    for (let i = 0; i < maxLen; i++) {
+                        addJobRow();
+                        let rows = document.getElementById('job_container').querySelectorAll('.dynamic-item');
+                        let currRow = rows[rows.length - 1];
+                        if (nums[i]) currRow.querySelector('input[name="job_number[]"]').value = nums[i];
+                        if (depts[i]) currRow.querySelector('input[name="job_department[]"]').value = depts[i];
+                        if (projs[i]) currRow.querySelector('input[name="job_project[]"]').value = projs[i];
+                        if (buds[i]) currRow.querySelector('input[name="job_budget[]"]').value = buds[i];
+                    }
+                } catch (e) { }
+            } else { toggleInputs('jobSection', false); }
+
+            // BG
+            const bgSwitch = document.querySelector('input[name="enable_bank_guarantee"]');
+            if (editData.has_bg == 1) {
+                bgSwitch.checked = true;
+                toggleInputs('bgSection', true);
+                document.getElementById('bg_container').innerHTML = '';
+                try {
+                    let depts = JSON.parse(editData.bg_dept || '[]');
+                    let projs = JSON.parse(editData.bg_proj || '[]');
+                    let amts = JSON.parse(editData.bg_amount || '[]');
+                    let maxLen = Math.max(depts.length, projs.length, amts.length, 1);
+                    for (let i = 0; i < maxLen; i++) {
+                        addBgRow();
+                        let rows = document.getElementById('bg_container').querySelectorAll('.dynamic-item');
+                        let currRow = rows[rows.length - 1];
+                        if (depts[i]) currRow.querySelector('input[name="bg_department[]"]').value = depts[i];
+                        if (projs[i]) currRow.querySelector('input[name="bg_project[]"]').value = projs[i];
+                        if (amts[i]) currRow.querySelector('input[name="bg_amount[]"]').value = amts[i];
+                    }
+                } catch (e) { }
+            } else { toggleInputs('bgSection', false); }
+
+            // Stamp
+            const stampSwitch = document.querySelector('input[name="enable_stamp_duty"]');
+            if (editData.has_stamp == 1) {
+                stampSwitch.checked = true;
+                toggleInputs('sdSection', true);
+                document.getElementById('sd_container').innerHTML = '';
+                try {
+                    let depts = JSON.parse(editData.stamp_dept || '[]');
+                    let projs = JSON.parse(editData.stamp_proj || '[]');
+                    let costs = JSON.parse(editData.stamp_cost || '[]');
+                    let maxLen = Math.max(depts.length, projs.length, costs.length, 1);
+                    for (let i = 0; i < maxLen; i++) {
+                        addSdRow();
+                        let rows = document.getElementById('sd_container').querySelectorAll('.dynamic-item');
+                        let currRow = rows[rows.length - 1];
+                        if (depts[i]) currRow.querySelector('input[name="sd_department[]"]').value = depts[i];
+                        if (projs[i]) currRow.querySelector('input[name="sd_project[]"]').value = projs[i];
+                        if (costs[i]) currRow.querySelector('input[name="sd_cost[]"]').value = costs[i];
+                    }
+                } catch (e) { }
+            } else { toggleInputs('sdSection', false); }
+        }
+
+        function addSubDocBtnObj(itemRow, p, n, desc, amt) {
+            const wrapper = itemRow.querySelector('.doc-list-wrapper');
+            const html = `
+            <div class="sub-doc-row" style="padding:10px; border:1px dashed #cbd5e1; border-radius:8px; margin-bottom:8px; background:#f8fafc;">
+                <div style="display:flex; gap:8px; margin-bottom:8px; align-items:center;">
+                    <select class="sub-prefix form-control" style="width:85px; font-weight:bold;" onchange="updateDocHidden(this)">
+                        <option value="AX" ${p === 'AX' ? 'selected' : ''}>AX</option>
+                        <option value="PO" ${p === 'PO' ? 'selected' : ''}>PO</option>
+                        <option value="SO" ${p === 'SO' ? 'selected' : ''}>SO</option>
+                        <option value="" ${!p ? 'selected' : ''}>-</option>
+                    </select>
+                    <input type="text" class="sub-num form-control" placeholder="เลขที่เอกสาร..." oninput="updateDocHidden(this)" value="${n}">
+                    <button type="button" onclick="const main=this.closest('.dynamic-item'); this.closest('.sub-doc-row').remove(); updateDocHidden(main);" style="color:var(--danger); background:none; border:none; cursor:pointer; margin-left:auto;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <input type="text" class="sub-desc form-control" style="flex:2;" placeholder="รายการค่าใช้จ่าย" oninput="updateDocHidden(this)" value="${desc}">
+                    <input type="number" step="0.01" class="sub-amount form-control" style="flex:1;" placeholder="จำนวนเงิน" oninput="updateDocHidden(this)" value="${amt}">
+                </div>
+            </div>`;
+            wrapper.insertAdjacentHTML('beforeend', html);
+        }
 
         // --- Logic: Toggle Sections ---
         function toggleSection(id, header) {
@@ -909,10 +1181,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             document.querySelectorAll('.labor-input').forEach(i => tLabor += parseFloat(i.value) || 0);
             document.querySelectorAll('.accom-input').forEach(i => tAccom += parseFloat(i.value) || 0);
             document.querySelectorAll('.other-input').forEach(i => tOther += parseFloat(i.value) || 0);
-            
+
             // 2. [เพิ่มใหม่] รวมยอดเงินจากเอกสาร (AX/PO/SO)
             document.querySelectorAll('.sub-amount').forEach(i => tDocs += parseFloat(i.value) || 0);
-            
+
             // 3. คำนวณภาษีหัก ณ ที่จ่าย 3% (คิดเฉพาะค่าแรง)
             let wht = tLabor * 0.03;
 
@@ -920,8 +1192,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             let net = (tLabor * 0.97) + tAccom + tOther + tDocs;
 
             // 5. แสดงผล
-            document.getElementById('totalWht').innerText = wht.toLocaleString(undefined, {minimumFractionDigits:2});
-            document.getElementById('totalNet').innerText = net.toLocaleString(undefined, {minimumFractionDigits:2});
+            document.getElementById('totalWht').innerText = wht.toLocaleString(undefined, { minimumFractionDigits: 2 });
+            document.getElementById('totalNet').innerText = net.toLocaleString(undefined, { minimumFractionDigits: 2 });
         }
 
         // --- Add Rows (Generic) ---

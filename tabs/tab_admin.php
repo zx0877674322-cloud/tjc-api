@@ -601,7 +601,19 @@ $result = $conn->query($sql_list);
                         </td>
                         <td style="text-align:right; font-weight:800; font-size:16px; color:var(--text-main);"><?php echo number_format($row['total_amount']); ?></td>
                         <td style="text-align:center;">
-                            <button onclick='showAdminDetail(<?php echo $row_json; ?>)' class="btn-view-custom"><i class="fas fa-eye"></i></button>
+                            <div style="display:flex; gap:8px; justify-content:center; align-items:center;">
+                                <button onclick='showAdminDetail(<?php echo $row_json; ?>)' class="btn-view-custom" title="เปิดดูรายละเอียด" style="width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; padding: 0;">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                
+                                <a href="report_admin.php?edit_id=<?= $row['id'] ?>" class="btn-edit-main" title="แก้ไขข้อมูลรายงาน" style="border: 1px solid var(--border-color); background: var(--bg-input); width: 36px; height: 36px; border-radius: 10px; cursor: pointer; color: var(--primary-color); text-decoration: none; display: inline-flex; align-items: center; justify-content: center; transition: 0.2s;" onmouseover="this.style.background='var(--primary-color)'; this.style.color='white';" onmouseout="this.style.background='var(--bg-input)'; this.style.color='var(--primary-color)';">
+                                    <i class="fa-solid fa-pen"></i>
+                                </a>
+
+                                <button onclick='confirmDeleteAdminReport(<?= $row["id"] ?>)' class="btn-action-delete" title="ลบรายงานนี้" style="color: #ef4444; border: 1px solid #fee2e2; background: #fef2f2; border-radius: 10px; width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s;" onmouseover="this.style.background='#fee2e2'" onmouseout="this.style.background='#fef2f2'">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </div>
                         </td>
                     </tr>
                     <?php endwhile; ?>
@@ -907,5 +919,59 @@ $result = $conn->query($sql_list);
             }
         });
         form.submit();
+    }
+
+    // ✅ ฟังก์ชันลบรายงาน (Admin)
+    function confirmDeleteAdminReport(id) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'ยืนยันการลบ?',
+                text: "คุณต้องการลบข้อมูลรายงานธุรการนี้ใช่หรือไม่? (การลบจะไม่สามารถกู้คืนได้)",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#94a3b8',
+                confirmButtonText: '<i class="fas fa-trash"></i> ลบข้อมูล',
+                cancelButtonText: 'ยกเลิก',
+                reverseButtons: true
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    executeDeleteAdminReport(id);
+                }
+            });
+        } else if (confirm('คุณต้องการลบข้อมูลรายงานธุรการนี้ใช่หรือไม่? (การลบจะไม่สามารถกู้คืนได้)')) {
+            executeDeleteAdminReport(id);
+        }
+    }
+
+    function executeDeleteAdminReport(id) {
+        fetch('StaffHistory.php?action=delete_admin_report&id=' + id, { method: 'GET' })
+            .then(r => r.json())
+            .then(data => {
+                if(data.status === 'success') {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success', 
+                            title: 'ลบสำเร็จ!', 
+                            text: data.message, 
+                            showConfirmButton: false, 
+                            timer: 1500
+                        }).then(() => location.reload());
+                    } else {
+                        alert(data.message);
+                        location.reload();
+                    }
+                } else {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire('ข้อผิดพลาด', data.message, 'error');
+                    } else {
+                        alert('ข้อผิดพลาด: ' + data.message);
+                    }
+                }
+            })
+            .catch(err => {
+                console.error('Error deleting:', err);
+                alert('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+            });
     }
 </script>

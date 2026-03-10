@@ -34,9 +34,7 @@ if (!empty($start_date) && !empty($end_date)) {
 $filter_status = $_GET['filter_status'] ?? '';
 if (!empty($filter_status)) {
     $filter_status = $conn->real_escape_string($filter_status);
-    $where_sql .= ($filter_status == 'ได้งาน')
-        ? " AND (job_status LIKE '%ได้งาน%' AND job_status NOT LIKE '%ไม่ได้งาน%')"
-        : " AND job_status LIKE '%$filter_status%'";
+    $where_sql .= " AND job_status LIKE '%$filter_status%'";
 }
 
 // Search Keyword
@@ -83,11 +81,23 @@ if ($result_list) {
         $total_expense += $row['total_expense_calc'];
         $total_reports++;
 
-        // 💰 ถอดรหัสมูลค่าโครงการออกมาบวกยอดรวม (จับจากคำว่า "มูลค่า: XXX บาท")
-        $p_names = $row['project_name'] ?? '';
-        if (preg_match_all('/มูลค่า:\s*([\d,.]+)\s*บาท/u', $p_names, $matches)) {
-            foreach ($matches[1] as $val_str) {
-                $total_project_value += floatval(str_replace(',', '', $val_str));
+        // 🟢 💰 ถอดรหัสมูลค่าโครงการ (จับคู่หั่นแยกทีละโครงการ เช็คเฉพาะอันที่ "เซ็นสัญญา")
+        $raw_status = $row['job_status'] ? trim($row['job_status']) : '';
+        $raw_projects = $row['project_name'] ? trim($row['project_name']) : '';
+
+        $status_arr = array_map('trim', explode(',', $raw_status));
+        $project_arr = explode(', ', $raw_projects); // หั่นด้วย ", " (คอมม่า+สเปซบาร์)
+
+        foreach ($project_arr as $index => $p_str) {
+            $p_str = trim($p_str);
+            $current_status = isset($status_arr[$index]) ? $status_arr[$index] : '';
+
+            // ถ้ารายการนั้นเป็น "เซ็นสัญญา" ค่อยดึงมูลค่ามาบวก
+            if (strpos($current_status, 'เซ็นสัญญา') !== false) {
+                if (preg_match('/มูลค่า:\s*([\d,.]+)\s*บาท/u', $p_str, $match)) {
+                    $val = floatval(str_replace(',', '', $match[1]));
+                    $total_project_value += $val;
+                }
             }
         }
 
@@ -121,7 +131,7 @@ function getCardConfig($status)
     // 1. ล็อคสีหลัก (แดง, เขียว, ฟ้า, เหลือง)
     if (preg_match('/ไม่ได้|ยกเลิก|แพ้/', $status))
         return ['color' => '#ef4444', 'icon' => 'fa-circle-xmark'];
-    if (preg_match('/ได้งาน|สำเร็จ|เรียบร้อย/', $status))
+    if (preg_match('/เซ็นสัญญา|สำเร็จ|เรียบร้อย/', $status))
         return ['color' => '#10b981', 'icon' => 'fa-circle-check'];
     if (preg_match('/เสนอ|เข้าพบ|ประมูล/', $status))
         return ['color' => '#3b82f6', 'icon' => 'fa-briefcase-clock'];

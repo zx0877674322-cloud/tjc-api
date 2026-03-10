@@ -241,13 +241,8 @@ function renderStatusBadge($status)
 
         .container-fluid {
             max-width: 1800px;
-            /* ขยายให้กว้างขึ้นเพื่อรองรับคอลัมน์ใหม่ */
             margin: 0 auto;
-            margin-left: 80px;
-            width: calc(100% - 80px);
-            padding: 30px;
-            padding-bottom: 80px;
-            box-sizing: border-box;
+            padding: 20px;
         }
 
         /* --- Header Section --- */
@@ -513,51 +508,57 @@ function renderStatusBadge($status)
         .status-badge {
             padding: 6px 12px;
             border-radius: 50px;
-            /* วงรีสวยๆ */
-            font-size: 0.75rem;
+            font-size: 0.8rem;
             font-weight: 700;
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            /* ระยะห่างไอคอน */
             letter-spacing: 0.3px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
-            /* เงาบางๆ ให้ดูลอย */
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            /* เงาให้ดูนูน */
             transition: all 0.2s ease;
             white-space: nowrap;
+            border: 1px solid transparent;
         }
 
         .status-badge:hover {
             transform: translateY(-1px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
-        /* ⚪ 1. รอสั่งซื้อ / ปกติ (สีเทาฟ้า) */
-        .st-wait {
-            background: linear-gradient(145deg, #f8fafc, #f1f5f9);
-            color: #64748b;
-            border: 1px solid #e2e8f0;
-        }
-
-        /* 🟠 2. สั่งซื้อบางส่วน (สีส้ม/ทอง) */
-        .st-partial {
-            background: linear-gradient(145deg, #fffbeb, #fef3c7);
-            color: #d97706;
-            border: 1px solid #fcd34d;
-        }
-
-        /* 🟢 3. สั่งซื้อครบแล้ว (สีเขียวมรกต) */
+        /* สีเขียว: ครบ */
         .st-full {
-            background: linear-gradient(145deg, #ecfdf5, #d1fae5);
-            color: #059669;
-            border: 1px solid #6ee7b7;
+            background: #d1fae5;
+            color: #065f46;
+            border-color: #6ee7b7;
         }
 
-        /* 🔴 4. ยกเลิก (สีแดงกุหลาบ) */
+        /* สีส้ม: บางรายการ */
+        .st-partial {
+            background: #ffedd5;
+            color: #c2410c;
+            border-color: #fdba74;
+        }
+
+        /* สีเทา: รอ */
+        .st-wait {
+            background: #f1f5f9;
+            color: #64748b;
+            border-color: #cbd5e1;
+        }
+
+        /* สีเหลือง: ค่าใช้จ่าย */
+        .st-expense {
+            background: #fef3c7;
+            color: #92400e;
+            border-color: #fcd34d;
+        }
+
+        /* สีแดง: ยกเลิก */
         .st-cancel {
-            background: linear-gradient(145deg, #fef2f2, #fee2e2);
-            color: #dc2626;
-            border: 1px solid #fecaca;
+            background: #fee2e2;
+            color: #991b1b;
+            border-color: #fca5a5;
         }
 
         .text-success {
@@ -842,6 +843,21 @@ function renderStatusBadge($status)
             vertical-align: top;
             line-height: 22px;
         }
+
+        .status-badge.st-expense {
+            background-color: #fef3c7;
+            /* สีเหลืองอ่อน */
+            color: #92400e;
+            /* สีน้ำตาลส้มเข้ม */
+            border: 1px solid #fcd34d;
+            /* ขอบเหลือง */
+        }
+
+        /* (แถม) เพื่อความสวยงามเวลาโฮเวอร์ */
+        .status-badge.st-expense:hover {
+            background-color: #fde68a;
+            transform: translateY(-1px);
+        }
     </style>
 </head>
 
@@ -914,9 +930,9 @@ function renderStatusBadge($status)
             </div>
             <div style="display:flex; gap:10px;">
                 <a href="create_item_entry.php?project_id=<?= $project_id ?>" class="btn-action btn-add"><i
-                        class="fas fa-plus-circle"></i> เพิ่มสินค้า</a>
+                        class="fas fa-plus-circle"></i> เพิ่มสินค้า (ลงทุน)</a>
                 <a href="create_purchase_order.php?project_id=<?= $project_id ?>" class="btn-action btn-po"><i
-                        class="fas fa-shopping-cart"></i> ทำใบสั่งซื้อ</a>
+                        class="fas fa-shopping-cart"></i> ทำใบสั่งซื้อ (PO)</a>
             </div>
         </div>
 
@@ -1097,15 +1113,30 @@ function renderStatusBadge($status)
 
                                     <td style="text-align:center; vertical-align: middle;">
                                         <?php
-                                        // 1. เช็คว่าเป็นค่าใช้จ่ายหรือไม่
+                                        // 1. เช็คว่าเป็น 'ค่าใช้จ่าย' หรือไม่
                                         if (isset($item['item_type']) && $item['item_type'] == 'expense') {
-                                            // 🟡 กรณีค่าใช้จ่าย: แสดงป้าย "ค่าใช้จ่าย" (สีเหลือง)
-                                            echo '<span class="badge rounded-pill bg-warning text-dark" style="font-weight:600; padding: 6px 12px; border:1px solid #f59e0b;">
-                <i class="fas fa-file-invoice-dollar"></i> ค่าใช้จ่าย
-              </span>';
+                                            echo '<span class="status-badge st-expense"><i class="fas fa-file-invoice-dollar"></i> ค่าใช้จ่าย</span>';
                                         } else {
-                                            // 🟢 กรณีสินค้า: ใช้ฟังก์ชันแสดงสถานะเดิม (รอสั่งซื้อ, สั่งซื้อครบแล้ว ฯลฯ)
-                                            echo renderStatusBadge($item['purchase_status']);
+                                            // 2. เตรียมตัวเลข และดึง "ข้อความสถานะ" จากฐานข้อมูลมาด้วย
+                                            $plan_qty = floatval($item['quantity']);                  // แผน
+                                            $bought_qty = floatval($item['purchased_quantity'] ?? 0); // ซื้อจริงตัวหลัก
+                                            $db_status = $item['purchase_status'] ?? '';              // สถานะที่เซฟใน DB
+                                
+                                            if ($db_status == 'ยกเลิก') {
+                                                echo '<span class="status-badge st-cancel"><i class="fas fa-ban"></i> ยกเลิก</span>';
+
+                                            } elseif ($db_status == 'สั่งซื้อครบแล้ว' || ($bought_qty >= $plan_qty && $plan_qty > 0)) {
+                                                // ✅ ครบแล้ว (เช็คทั้งคำใน DB หรือตัวเลขครบ)
+                                                echo '<span class="status-badge st-full"><i class="fas fa-check-circle"></i> สั่งซื้อครบแล้ว</span>';
+
+                                            } elseif ($db_status == 'สั่งซื้อบางรายการ' || $db_status == 'สั่งซื้อบางส่วน' || $bought_qty > 0) {
+                                                // 🟠 ซื้อบางส่วน (ถ้าใน DB เป็นบางรายการ หรือมียอดซื้อตัวหลัก > 0 ให้เข้าเงื่อนไขนี้เลย!)
+                                                echo '<span class="status-badge st-partial"><i class="fas fa-box-open"></i> สั่งซื้อบางรายการ</span>';
+
+                                            } else {
+                                                // ⚪ ยังไม่ซื้อ (สีเทา)
+                                                echo '<span class="status-badge st-wait"><i class="fas fa-clock"></i> รอสั่งซื้อ</span>';
+                                            }
                                         }
                                         ?>
                                     </td>
@@ -1306,20 +1337,20 @@ function renderStatusBadge($status)
                 try { res = JSON.parse(response); } catch (e) { res = { status: 'error' }; }
 
                 if (res.status === 'success') {
-                    // ✅ [สำคัญมาก] บันทึกสำเร็จ -> อัปเดตข้อมูลในกล่องลับ (Textarea) ทันที
+                    // ✅ [เพิ่ม] อัปเดตข้อมูลกลับเข้ากล่องลับ (เพื่อให้เปิดดูใหม่แล้วค่าไม่หาย)
                     if (currentOpenedItemId) {
                         const textArea = document.getElementById('data-history-' + currentOpenedItemId);
-                        let data = JSON.parse(textArea.value);
-
-                        // หา PO ตัวที่แก้ แล้วอัปเดตค่า
-                        const targetPO = data.find(p => p.po_id == poId);
-                        if (targetPO) {
-                            targetPO.has_tax_invoice = status; // อัปเดตค่าใหม่
-                            textArea.value = JSON.stringify(data); // ยัดกลับใส่กล่อง
+                        if (textArea) {
+                            let data = JSON.parse(textArea.value);
+                            // หา PO ตัวที่แก้ แล้วอัปเดตค่าใน Array
+                            const targetPO = data.find(p => p.po_id == poId);
+                            if (targetPO) {
+                                targetPO.has_tax_invoice = status; // อัปเดตค่า
+                                textArea.value = JSON.stringify(data); // ยัดกลับ
+                            }
                         }
                     }
 
-                    // Toast แจ้งเตือน
                     Swal.fire({
                         toast: true, position: 'top-end', showConfirmButton: false, timer: 1000,
                         icon: 'success', title: 'บันทึกแล้ว'
@@ -1618,22 +1649,22 @@ function renderStatusBadge($status)
                         }
 
                         if (res.status === 'success') {
-                            // ✅ อัปโหลดเสร็จ: เปลี่ยน Label เป็นปุ่ม PDF สีแดง
+                            // เปลี่ยนหน้าตาปุ่มเป็น PDF
                             const parentTd = label.parentElement;
                             parentTd.innerHTML = `
                             <a href="uploads/slips/${res.filename}" target="_blank" style="color: #ef4444; font-size: 1.2rem;">
                                 <i class="fas fa-file-pdf"></i>
                             </a>`;
 
-                            // อัปเดตกล่องลับ (Hidden Data) ด้วย เพื่อให้เปิดใหม่แล้วไฟล์ยังอยู่
+                            // ✅ [เพิ่ม] อัปเดตชื่อไฟล์กลับเข้ากล่องลับ
                             if (currentOpenedItemId) {
                                 const textArea = document.getElementById('data-history-' + currentOpenedItemId);
                                 if (textArea) {
                                     let data = JSON.parse(textArea.value);
                                     const targetPO = data.find(p => p.po_id == poId);
                                     if (targetPO) {
-                                        targetPO.slip_file = res.filename; // อัปเดตชื่อไฟล์ลง JSON
-                                        textArea.value = JSON.stringify(data);
+                                        targetPO.slip_file = res.filename; // อัปเดตชื่อไฟล์
+                                        textArea.value = JSON.stringify(data); // ยัดกลับ
                                     }
                                 }
                             }
