@@ -46,13 +46,13 @@ jobs:
         fi
 
     # 4. สแกนคุณภาพโค้ดและหาบั๊กที่อาจเกิดขึ้น (Static Analysis) ด้วย PHPStan
+    # 4. สแกนคุณภาพโค้ดและหาบั๊กที่อาจเกิดขึ้นด้วย PHPStan
     - name: Run PHPStan
       run: |
-        # เปลี่ยน 'src' เป็นชื่อโฟลเดอร์ที่เก็บโค้ด PHP ของคุณ (เช่น app, public_html หรือ .)
-        # level=5 คือระดับความเข้มงวดปานกลาง (ปรับได้ตั้งแต่ 0-9)
-        if [ -d "src" ]; then
-          phpstan analyse src --level=5
-        else
-          # หากไม่มีโฟลเดอร์ src ให้สแกนไฟล์ .php ทั้งหมดในโปรเจกต์
-          phpstan analyse . --level=5 --excludePaths=vendor
-        fi
+        # หากไฟล์ PHP ของคุณรวมอยู่ในหน้าแรกเลย ให้ใช้ . 
+        # (PHPStan จะข้ามโฟลเดอร์ vendor ให้โดยอัตโนมัติอยู่แล้ว)
+        phpstan analyse . --level=5
+        
+        # หมายเหตุ: แต่ถ้าโค้ดของคุณอยู่ในโฟลเดอร์อื่น เช่น 'public' หรือ 'app'
+        # ให้เปลี่ยนเครื่องหมายจุด (.) เป็นชื่อโฟลเดอร์นั้นแทน เช่น:
+        # phpstan analyse public --level=5
