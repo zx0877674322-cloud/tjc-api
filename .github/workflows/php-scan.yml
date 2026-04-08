@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [ "main" ]
   schedule:
-    # ตั้งเวลาสแกนอัตโนมัติ (เช่น ทุกวันพฤหัสบดี เวลา 08:36)
     - cron: '36 8 * * 4'
 
 jobs:
@@ -22,37 +21,28 @@ jobs:
     - name: Setup PHP
       uses: shivammathur/setup-php@v2
       with:
-        # กำหนดเวอร์ชัน PHP ให้ตรงกับโปรเจกต์ของคุณ
         php-version: '8.2' 
         tools: phpstan, composer
-        coverage: none # ปิด coverage เพื่อให้ทำงานเร็วขึ้น
+        coverage: none
 
-    # 2. ตรวจสอบว่ามีไฟล์ composer.json หรือไม่ และติดตั้ง Dependencies
+    # 2. ตรวจสอบและติดตั้ง Dependencies
     - name: Install Dependencies
       run: |
         if [ -f "composer.json" ]; then
           composer install --prefer-dist --no-progress
         else
-          echo "No composer.json found, skipping dependency installation."
+          echo "No composer.json found, skipping."
         fi
 
-    # 3. สแกนหาช่องโหว่ด้านความปลอดภัยของแพ็กเกจต่างๆ ที่ติดตั้งผ่าน Composer
+    # 3. สแกนหาช่องโหว่ความปลอดภัยใน Library
     - name: Check for Security Vulnerabilities (Composer Audit)
       run: |
         if [ -f "composer.json" ]; then
           composer audit
         else
-          echo "No composer.json found, skipping Composer Audit."
+          echo "No composer.json found, skipping."
         fi
 
-    # 4. สแกนคุณภาพโค้ดและหาบั๊กที่อาจเกิดขึ้น (Static Analysis) ด้วย PHPStan
-    # 4. สแกนคุณภาพโค้ดและหาบั๊กที่อาจเกิดขึ้นด้วย PHPStan
+    # 4. สแกนคุณภาพโค้ดด้วย PHPStan (เรียกใช้ไฟล์ Config)
     - name: Run PHPStan
-      run: |
-        # หากไฟล์ PHP ของคุณรวมอยู่ในหน้าแรกเลย ให้ใช้ . 
-        # (PHPStan จะข้ามโฟลเดอร์ vendor ให้โดยอัตโนมัติอยู่แล้ว)
-        phpstan analyse . --level=5
-        
-        # หมายเหตุ: แต่ถ้าโค้ดของคุณอยู่ในโฟลเดอร์อื่น เช่น 'public' หรือ 'app'
-        # ให้เปลี่ยนเครื่องหมายจุด (.) เป็นชื่อโฟลเดอร์นั้นแทน เช่น:
-        # phpstan analyse public --level=5
+      run: phpstan analyse -c phpstan.neon
