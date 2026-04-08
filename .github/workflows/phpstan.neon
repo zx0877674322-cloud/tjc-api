@@ -1,0 +1,22 @@
+parameters:
+    # ระดับความเข้มงวด (0-9)
+    level: 5
+
+    # โฟลเดอร์ที่ต้องการให้สแกน (. หมายถึงสแกนทั้งหมด)
+    paths:
+        - .
+
+    # โฟลเดอร์ที่ไม่ต้องสแกน
+    excludePaths:
+        - vendor
+
+    # กฎการละเว้น Error ที่เกิดจากการดึงไฟล์เชื่อมต่อฐานข้อมูลมาใช้
+    ignoreErrors:
+        - '#Variable \$conn might not be defined\.#'
+        - '#Variable \$dbname might not be defined\.#'
+        - '#Variable \$password might not be defined\.#'
+        - '#Variable \$servername might not be defined\.#'
+        - '#Variable \$username might not be defined\.#'
+        # ละเว้น Error ของตัวแปรอื่นๆ ที่คุณแน่ใจว่ามีค่าอยู่แล้วในไฟล์ include
+        - '#Variable \$amount might not be defined\.#'
+        - '#Variable \$real_table_name might not be defined\.#'
