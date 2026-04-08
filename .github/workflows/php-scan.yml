@@ -1,0 +1,58 @@
+name: "PHP Quality & Security Scan"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    # ตั้งเวลาสแกนอัตโนมัติ (เช่น ทุกวันพฤหัสบดี เวลา 08:36)
+    - cron: '36 8 * * 4'
+
+jobs:
+  analyze:
+    name: PHP Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # 1. ตั้งค่าสภาพแวดล้อม PHP
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        # กำหนดเวอร์ชัน PHP ให้ตรงกับโปรเจกต์ของคุณ
+        php-version: '8.2' 
+        tools: phpstan, composer
+        coverage: none # ปิด coverage เพื่อให้ทำงานเร็วขึ้น
+
+    # 2. ตรวจสอบว่ามีไฟล์ composer.json หรือไม่ และติดตั้ง Dependencies
+    - name: Install Dependencies
+      run: |
+        if [ -f "composer.json" ]; then
+          composer install --prefer-dist --no-progress
+        else
+          echo "No composer.json found, skipping dependency installation."
+        fi
+
+    # 3. สแกนหาช่องโหว่ด้านความปลอดภัยของแพ็กเกจต่างๆ ที่ติดตั้งผ่าน Composer
+    - name: Check for Security Vulnerabilities (Composer Audit)
+      run: |
+        if [ -f "composer.json" ]; then
+          composer audit
+        else
+          echo "No composer.json found, skipping Composer Audit."
+        fi
+
+    # 4. สแกนคุณภาพโค้ดและหาบั๊กที่อาจเกิดขึ้น (Static Analysis) ด้วย PHPStan
+    - name: Run PHPStan
+      run: |
+        # เปลี่ยน 'src' เป็นชื่อโฟลเดอร์ที่เก็บโค้ด PHP ของคุณ (เช่น app, public_html หรือ .)
+        # level=5 คือระดับความเข้มงวดปานกลาง (ปรับได้ตั้งแต่ 0-9)
+        if [ -d "src" ]; then
+          phpstan analyse src --level=5
+        else
+          # หากไม่มีโฟลเดอร์ src ให้สแกนไฟล์ .php ทั้งหมดในโปรเจกต์
+          phpstan analyse . --level=5 --excludePaths=vendor
+        fi
