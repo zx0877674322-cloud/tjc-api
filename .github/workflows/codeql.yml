@@ -1,0 +1,67 @@
+# สำหรับโปรเจกต์ส่วนใหญ่ ไฟล์เวิร์กโฟลว์นี้ไม่จำเป็นต้องเปลี่ยนแปลง 
+# เพียงแค่ commit ลงใน repository ของคุณก็พร้อมใช้งานทันที
+#
+# คุณสามารถปรับเปลี่ยนไฟล์นี้เพื่อกำหนดภาษาที่ต้องการวิเคราะห์ 
+# หรือเพิ่มคำสั่งการสร้าง (build logic) ที่กำหนดเองได้
+#
+name: "CodeQL Advanced"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    # สั่งให้ทำงานทุกวันพฤหัสบดี เวลา 08:36 UTC
+    - cron: '36 8 * * 4'
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    # เลือก Runner ตามภาษา (Swift ต้องใช้ macOS ส่วนที่เหลือใช้ Ubuntu)
+    runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: javascript-typescript
+            build-mode: none
+          - language: python
+            build-mode: none
+          # เพิ่มการตรวจภาษา PHP ตรงนี้
+          - language: php
+            build-mode: none
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # เริ่มต้นการทำงานของเครื่องมือ CodeQL
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v4
+      with:
+        languages: ${{ matrix.language }}
+        build-mode: ${{ matrix.build-mode }}
+        # หากต้องการเพิ่มการตรวจช่องโหว่แบบละเอียด (เช่น SQL Injection ใน PHP) 
+        # สามารถเปิดใช้งานบรรทัดด้านล่างนี้ได้:
+        # queries: security-extended,security-and-quality
+
+    # ขั้นตอนนี้จะทำงานเฉพาะเมื่อภาษาใน matrix ตั้งค่าเป็น build-mode: 'manual'
+    - name: Run manual build steps
+      if: matrix.build-mode == 'manual'
+      shell: bash
+      run: |
+        echo 'หากคุณใช้โหมด "manual" ให้แทนที่คำสั่งตรงนี้ด้วยขั้นตอนการ build โปรเจกต์ของคุณ'
+        exit 1
+
+    # เริ่มการวิเคราะห์โค้ด
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v4
+      with:
+        category: "/language:${{matrix.language}}"
